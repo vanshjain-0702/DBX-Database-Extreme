@@ -1,7 +1,6 @@
 package engine
 
 import (
-	"encoding/binary"
 	"math"
 	"testing"
 )
@@ -152,13 +151,3 @@ func TestCosineSimilarityRaw(t *testing.T) {
 	}
 }
 
-func float32ToBytes(f []float32) []byte {
-	if len(f) == 0 {
-		return nil
-	}
-	encoded := make([]byte, len(f)*4)
-	for i, value := range f {
-		binary.LittleEndian.PutUint32(encoded[i*4:], math.Float32bits(value))
-	}
-	return encoded
-}

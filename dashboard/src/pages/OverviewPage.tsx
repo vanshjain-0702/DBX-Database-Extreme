@@ -116,7 +116,7 @@ export default function OverviewPage({ clusterId }: { clusterId: string }) {
           };
         });
         setKeyspaceData(formattedKs.length > 0 ? formattedKs : [{ name: 'Empty', value: 1, color: '#444' }]);
-      } catch (e) { }
+      } catch (e) { console.error(e); }
     };
     fetchMetrics();
     const interval = setInterval(fetchMetrics, 2000);

@@ -1,14 +1,16 @@
-import sys
 import os
+import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'sdk', 'python'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "sdk", "python"))
 from dbx import DBXClient
 
-cert_dir = os.path.join(os.path.dirname(__file__), '..', 'certs')
-client = DBXClient(port=6399, 
-                   ca_cert=os.path.join(cert_dir, "ca.crt"), 
-                   client_cert=os.path.join(cert_dir, "client.crt"), 
-                   client_key=os.path.join(cert_dir, "client.key"))
+cert_dir = os.path.join(os.path.dirname(__file__), "..", "certs")
+client = DBXClient(
+    port=6399,
+    ca_cert=os.path.join(cert_dir, "ca.crt"),
+    client_cert=os.path.join(cert_dir, "client.crt"),
+    client_key=os.path.join(cert_dir, "client.key"),
+)
 
 client.ping()
 print("Ping OK")

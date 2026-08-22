@@ -10,18 +10,19 @@ function VectorGalaxy({ results }: { results: any[] }) {
   const mountRef = useRef<HTMLDivElement>(null);
   
   useEffect(() => {
-    if (!mountRef.current) return;
+    const currentMount = mountRef.current;
+    if (!currentMount) return;
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0f172a, 0.02);
 
-    const w = mountRef.current.clientWidth;
-    const h = mountRef.current.clientHeight;
+    const w = currentMount.clientWidth;
+    const h = currentMount.clientHeight;
     const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
     
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(w, h);
     renderer.setPixelRatio(window.devicePixelRatio);
-    mountRef.current.appendChild(renderer.domElement);
+    currentMount.appendChild(renderer.domElement);
 
     // Particles
     const geometry = new THREE.BufferGeometry();
@@ -71,18 +72,17 @@ function VectorGalaxy({ results }: { results: any[] }) {
     }
 
     const handleResize = () => {
-      if(!mountRef.current) return;
-      camera.aspect = mountRef.current.clientWidth / mountRef.current.clientHeight;
+      camera.aspect = currentMount.clientWidth / currentMount.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(mountRef.current.clientWidth, mountRef.current.clientHeight);
+      renderer.setSize(currentMount.clientWidth, currentMount.clientHeight);
     }
     window.addEventListener('resize', handleResize);
 
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(reqId);
-      if (mountRef.current && renderer.domElement.parentNode === mountRef.current) {
-        mountRef.current.removeChild(renderer.domElement);
+      if (currentMount && renderer.domElement.parentNode === currentMount) {
+        currentMount.removeChild(renderer.domElement);
       }
       geometry.dispose();
       material.dispose();
@@ -105,7 +105,7 @@ export default function VectorPlaygroundPage({ clusterId }: { clusterId: string 
   const [query, setQuery] = useState('');
   const [filterText, setFilterText] = useState('');
   const [k, setK] = useState(5);
-  const [indexName, setIndexName] = useState('test_index');
+  const [indexName, setIndexName] = useState('big_web_index');
   const [dimension, setDimension] = useState(384);
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -186,6 +186,7 @@ export default function VectorPlaygroundPage({ clusterId }: { clusterId: string 
                    const parsedMeta = JSON.parse(metaText);
                    metaText = parsedMeta.page_content || JSON.stringify(parsedMeta);
                } catch(e) {
+                   console.error(e);
                    // Ignore if not json
                }
                
@@ -230,6 +231,8 @@ export default function VectorPlaygroundPage({ clusterId }: { clusterId: string 
                   value={indexName}
                   onChange={e => setIndexName(e.target.value)}
                 >
+                  <option value="big_web_index">big_web_index (AG News)</option>
+                  <option value="concurrent_index">concurrent_index (Benchmark)</option>
                   <option value="test_index">test_index</option>
                   <option value="quant_knowledge">quant_knowledge</option>
                   <option value="star_output">star_output</option>

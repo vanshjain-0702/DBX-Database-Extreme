@@ -14,8 +14,6 @@ type LockManager struct {
 
 type keyLock struct {
 	mu      sync.RWMutex
-	writers int
-	readers int
 }
 
 // NewLockManager creates a lock manager with the given acquisition timeout.

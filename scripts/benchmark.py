@@ -1,23 +1,25 @@
-import sys
 import os
+import sys
 import time
-import uuid
+
 import numpy as np
 
 # Add SDK path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'sdk', 'python'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "sdk", "python"))
 from dbx import DBXClient
 
 print("========================================")
 print(" DBX Vector Search Benchmark Suite ")
 print("========================================\n")
 
-cert_dir = os.path.join(os.path.dirname(__file__), '..', 'certs')
-client = DBXClient(port=6399, 
-                   password=os.environ.get("DBX_DEFAULT_PASSWORD"),
-                   ca_cert=os.path.join(cert_dir, "ca.crt"), 
-                   client_cert=os.path.join(cert_dir, "client.crt"), 
-                   client_key=os.path.join(cert_dir, "client.key"))
+cert_dir = os.path.join(os.path.dirname(__file__), "..", "certs")
+client = DBXClient(
+    port=6399,
+    password=os.environ.get("DBX_DEFAULT_PASSWORD"),
+    ca_cert=os.path.join(cert_dir, "ca.crt"),
+    client_cert=os.path.join(cert_dir, "client.crt"),
+    client_key=os.path.join(cert_dir, "client.key"),
+)
 try:
     client.ping()
     print("✅ Connected to DBX Orchestrator")
@@ -45,12 +47,12 @@ start_time = time.time()
 # Batch insertion
 batch_size = 1000
 for i in range(0, NUM_VECTORS, batch_size):
-    batch = vectors[i:i+batch_size]
+    batch = vectors[i : i + batch_size]
     ids = [f"doc_{i+j}" for j in range(len(batch))]
     vecs = batch.tolist()
-    
+
     client.vadd_batch(INDEX_NAME, DIMENSION, ids, vecs)
-    
+
     if (i + batch_size) % 2000 == 0:
         print(f"  Inserted {i + batch_size}/{NUM_VECTORS}...")
 

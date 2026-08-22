@@ -11,7 +11,7 @@ export default function CommandPalette() {
   const { theme, setTheme } = useTheme();
 
   // Extract cluster ID from URL if present
-  const match = window.location.pathname.match(/\/cluster\/([^\/]+)/);
+  const match = window.location.pathname.match(/\/cluster\/([^/]+)/);
   const clusterId = match ? match[1] : 'bench-tenant';
 
   useEffect(() => {

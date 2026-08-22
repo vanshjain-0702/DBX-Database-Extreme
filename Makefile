@@ -47,9 +47,19 @@ test:
 test-bench:
 	go test -bench=. -benchmem ./...
 
-## lint: Run Go vet
+## lint: Run Go vet and strict linting if available
 lint:
 	go vet ./...
+	@if command -v golangci-lint >/dev/null; then \
+		echo "==> Running golangci-lint..."; \
+		golangci-lint run; \
+	else \
+		echo "==> golangci-lint not installed, skipping strict lint"; \
+	fi
+
+## helm-install: Install DBX via Helm locally
+helm-install:
+	helm upgrade --install dbx ./deploy/kubernetes/helm/dbx --namespace dbx-system --create-namespace
 
 ## clean: Remove build artifacts
 clean:

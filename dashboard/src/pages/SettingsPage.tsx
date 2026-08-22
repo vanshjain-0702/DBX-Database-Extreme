@@ -149,6 +149,7 @@ export default function SettingsPage() {
   useEffect(() => {
     const nextTab = getTabFromPath();
     if (nextTab !== activeTab) setActiveTab(nextTab);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   const onTabClick = (tabName: string) => {
@@ -207,14 +208,14 @@ export default function SettingsPage() {
         const data = await res.json();
         setApiKeys(data || []);
       }
-    } catch (e) {}
+    } catch (e) { console.error(e); }
   };
 
   const loadRaftStatus = async () => {
     try {
       const res = await fetchWithAuth('/api/admin/raft/status');
       if (res.ok) setRaftStatus(await res.json());
-    } catch (e) {}
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
@@ -247,7 +248,7 @@ export default function SettingsPage() {
         setNewKeyName('');
         loadApiKeys();
       }
-    } catch (e) {}
+    } catch (e) { console.error(e); }
   };
 
   const handleRevokeKey = async (id: string) => {
@@ -258,7 +259,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ id })
       });
       if (res.ok) loadApiKeys();
-    } catch (e) {}
+    } catch (e) { console.error(e); }
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {

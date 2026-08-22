@@ -102,7 +102,7 @@ func main() {
 			
             var vStr string
             for k:=0; k<128; k++ {
-                vStr += fmt.Sprintf("$4\r\n0.50\r\n")
+                vStr += "$4\r\n0.50\r\n"
             }
 			
 			for j := 0; j < vecPerRoutine; j++ {

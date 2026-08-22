@@ -2,7 +2,6 @@ package cache
 
 import (
 	"math/rand"
-	"sync"
 )
 
 // EvictionPolicy selects which keys to evict when memory is tight.
@@ -18,7 +17,6 @@ const (
 
 // EvictionManager decides which keys to evict.
 type EvictionManager struct {
-	mu      sync.Mutex
 	policy  EvictionPolicy
 	samples int
 	lru     *LRUCache

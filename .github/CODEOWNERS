@@ -1,0 +1,13 @@
+# Global owners
+*       @vanshjain-0702
+
+# Core Engine
+/internal/engine/       @vanshjain-0702
+/internal/protocol/     @vanshjain-0702
+/internal/orchestrator/ @vanshjain-0702
+
+# Frontend Dashboard
+/dashboard/             @vanshjain-0702
+
+# Python SDK
+/sdk/python/            @vanshjain-0702

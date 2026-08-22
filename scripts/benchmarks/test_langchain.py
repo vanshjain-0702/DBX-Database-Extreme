@@ -1,25 +1,30 @@
-import sys
 import os
+import sys
 
 # Add the sdk to PYTHONPATH so we can import dbx
-sys.path.append(os.path.join(os.path.dirname(__file__), 'sdk', 'python'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "sdk", "python"))
 
 from dbx import DBXClient
 from langchain_dbx import DBXVectorStore
 
+
 # Fake Embeddings class for testing
 class MockEmbeddings:
     def embed_documents(self, texts):
-        return [[len(t)*0.1, 0.5, 0.5, 0.5] for t in texts]
+        return [[len(t) * 0.1, 0.5, 0.5, 0.5] for t in texts]
+
     def embed_query(self, text):
-        return [len(text)*0.1, 0.5, 0.5, 0.5]
+        return [len(text) * 0.1, 0.5, 0.5, 0.5]
+
 
 print("Connecting to DBX...")
 # The orchestrator starts test-tenant on RESP 6401
-client = DBXClient(port=6401, 
-                   ca_cert="./certs/ca.crt", 
-                   client_cert="./certs/client.crt", 
-                   client_key="./certs/client.key")
+client = DBXClient(
+    port=6401,
+    ca_cert="./certs/ca.crt",
+    client_cert="./certs/client.crt",
+    client_key="./certs/client.key",
+)
 try:
     client.ping()
     print("Ping successful!")

@@ -91,7 +91,7 @@ export default function HostingPerformancePage({ clusterId }: { clusterId: strin
           return newData;
         });
 
-      } catch (_) {}
+      } catch (e) { console.error(e); }
     };
     
     poll();

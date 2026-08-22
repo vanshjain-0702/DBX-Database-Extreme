@@ -10,7 +10,7 @@ export default function NetworkPage({ clusterId }: { clusterId: string }) {
       try {
         const res = await fetchWithAuth(`/t/${clusterId}/metrics`);
         if (res.ok) setMetrics(await res.json());
-      } catch (_) {}
+      } catch (e) { console.error(e); }
     };
     poll();
     const id = setInterval(poll, 2000);

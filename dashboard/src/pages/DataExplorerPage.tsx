@@ -86,6 +86,7 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
 
   useEffect(() => {
     fetchKeys();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterId]);
 
   const loadKeyValue = async (key: string, type: string) => {
@@ -103,7 +104,7 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
            let val = match[1];
            try {
               val = JSON.stringify(JSON.parse(val), null, 2);
-           } catch(e){}
+           } catch(e) { console.error(e); }
            setKeyValue(val);
         } else {
            setKeyValue(data.response);
@@ -112,6 +113,7 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
         setKeyValue(`Cannot preview raw ${type} yet. Use terminal.`);
       }
     } catch(e) {
+       console.error(e);
        setKeyValue("Error loading data.");
     }
   };
@@ -153,6 +155,7 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
         }
       );
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keyFilter, keys.length]);
 
   return (

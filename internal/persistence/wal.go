@@ -230,10 +230,6 @@ func EncodeRecord(rec *WALRecord) []byte {
 	return (&WAL{}).encodeRecord(rec)
 }
 
-// maybeSync is obsolete with background flusher, but kept for legacy calls if any.
-func (w *WAL) maybeSync() error {
-	return nil
-}
 
 // Sync forces a sync to disk.
 func (w *WAL) Sync() error {
