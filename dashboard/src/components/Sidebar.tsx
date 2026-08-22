@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import gsap from 'gsap';
 import { Flip } from 'gsap/Flip';
 
@@ -311,7 +311,7 @@ export default function Sidebar({ clusterId }: SidebarProps) {
                             : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/80'}
                         `}
                       >
-                        {({ isActive }) => (
+                        {() => (
                           <>
                             <span className="transition-transform duration-300 group-hover:scale-110">
                               {item.icon}

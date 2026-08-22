@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Terminal, Database, Settings, Moon, Sun, X } from 'lucide-react';
+import { Search, Terminal, Database, Settings, Moon, Sun } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 
 export default function CommandPalette() {

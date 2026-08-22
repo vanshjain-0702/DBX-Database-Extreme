@@ -15,12 +15,18 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.23'
 
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+
+    - name: Build Dashboard
+      working-directory: ./dashboard
+      run: |
+        npm install
+        npm run build
 
     - name: Install dependencies
       run: go mod download
@@ -38,12 +44,6 @@ jobs:
 
     - name: Build DBX Orchestrator
       run: go build -o bin/dbx-orchestrator ./cmd/dbx-orchestrator
-
-    - name: Build Dashboard
-      working-directory: ./dashboard
-      run: |
-        npm install
-        npm run build
 
     - name: Docker Build Check
       run: |

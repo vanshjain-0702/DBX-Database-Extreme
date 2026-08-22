@@ -1,5 +1,5 @@
 import { useLocation, useParams } from 'react-router-dom';
-import { Search, Bell, ChevronRight, User } from 'lucide-react';
+import { Search, Bell, ChevronRight } from 'lucide-react';
 
 export default function Header() {
   const location = useLocation();

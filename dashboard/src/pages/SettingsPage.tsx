@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { Settings, ShieldAlert, CheckCircle2, Shield, Lock, Key, Users, Globe, Layout, Monitor, Copy, Plus, Server, Network, Activity, Trash2, Eye, ChevronDown } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, Shield, Lock, Key, Layout, Monitor, Plus, Server, Network, Trash2, ChevronDown } from 'lucide-react';
 import { fetchWithAuth } from '../api';
 import { useTheme } from '../components/ThemeProvider';
 import { useLocation, useNavigate } from 'react-router-dom';
