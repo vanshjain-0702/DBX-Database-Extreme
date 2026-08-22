@@ -1,0 +1,30 @@
+# Isolated local configuration for repeatable performance tests.
+server:
+  host: "127.0.0.1"
+  port: 6399
+  http_port: 8080
+
+persistence:
+  enabled: true
+  data_dir: "./data/perf"
+  wal_dir: "./data/perf/wal"
+  snapshot_dir: "./data/perf/snapshots"
+  backup_dir: "./data/perf/backups"
+  wal_sync: "everysec"
+
+auth:
+  enabled: true
+  default_user: "default"
+  require_password: true
+
+security:
+  rate_limit:
+    enabled: true
+    requests_per_second: 100000
+    burst: 10000
+  tls:
+    enabled: true
+    cert_file: "./certs/server.crt"
+    key_file: "./certs/server.key"
+    ca_file: "./certs/ca.crt"
+    require_client_cert: true

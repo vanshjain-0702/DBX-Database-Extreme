@@ -1,0 +1,93 @@
+auth:
+    default_user: default
+    enabled: true
+    require_password: true
+cluster:
+    enabled: false
+    node_id: node-01
+    nodes: []
+    rebalance_interval: 5m
+    slot_count: 16384
+engine:
+    default_ttl: 0
+    eviction_policy: lru
+    max_memory: 512mb
+events:
+    pubsub:
+        max_channels: 1000
+        max_subscribers_per_channel: 1000
+    streams:
+        max_length: 100000
+        retention: 7d
+observability:
+    logging:
+        format: json
+        level: info
+    metrics:
+        enabled: true
+        path: /metrics
+        port: 2112
+    profiling:
+        enabled: false
+        port: 6060
+    tracing:
+        enabled: false
+        endpoint: http://localhost:4317
+persistence:
+    backup_dir: data\tenants\prod-db-1\backups
+    compaction_interval: 24h
+    data_dir: ./data/tenants/prod-db-1
+    enabled: true
+    snapshot_dir: data\tenants\prod-db-1\snapshots
+    snapshot_interval: 1h
+    wal_dir: data\tenants\prod-db-1\wal
+    wal_sync: everysec
+policy:
+    eviction: lru
+    lazyfree: true
+    max_memory_samples: 5
+    retention:
+        default: 7d
+replication:
+    lag_threshold: 10s
+    listen_addr: 127.0.0.1:7400
+    quorum: 1
+    raft_bind_addr: 127.0.0.1:0
+    raft_bootstrap: true
+    raft_dir: data\tenants\prod-db-1\raft
+    raft_enabled: true
+    raft_node_id: prod-db-1
+    replicas: []
+    role: primary
+    sync_timeout: 5s
+security:
+    encryption:
+        enabled: false
+        key: ""
+    rate_limit:
+        burst: 1000
+        enabled: true
+        requests_per_second: 10000
+    tls:
+        ca_file: ./certs/ca.crt
+        cert_file: ./certs/server.crt
+        enabled: false
+        key_file: ./certs/server.key
+        require_client_cert: true
+server:
+    grpc_port: 9091
+    host: 127.0.0.1
+    http_port: 8081
+    max_connections: 10000
+    port: 6401
+    read_timeout: 30s
+    write_timeout: 30s
+tiering:
+    enabled: false
+    nvme_path: ./data/nvme
+    threshold_mb: 256
+workflow:
+    dlq_max_size: 10000
+    enabled: true
+    max_retries: 3
+    retry_backoff: 1s

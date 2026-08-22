@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  dbx-orchestrator:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: dbx-orchestrator
+    ports:
+      - "8000:8000"
+    environment:
+      - DBX_ADMIN_PASSWORD=${DBX_ADMIN_PASSWORD:-changeme_in_production}
+      - DBX_JWT_SECRET=${DBX_JWT_SECRET:-changeme_secret_must_be_32_chars_long}
+      - DBX_INTERNAL_API_TOKEN=${DBX_INTERNAL_API_TOKEN:-changeme_internal_token}
+    volumes:
+      - dbx-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  dbx-data:
+    driver: local

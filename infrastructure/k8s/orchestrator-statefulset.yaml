@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dbx-orchestrator
+  labels:
+    app: dbx-orchestrator
+spec:
+  serviceName: "dbx-internal"
+  # Single-node only. Multi-node Raft join and replicated data-plane storage
+  # are not production-ready yet.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dbx-orchestrator
+  template:
+    metadata:
+      labels:
+        app: dbx-orchestrator
+    spec:
+      serviceAccountName: dbx-orchestrator-sa
+      containers:
+      - name: orchestrator
+        image: dbx-cloud:latest
+        imagePullPolicy: Always
+        command:
+          - "./bin/orchestrator"
+          - "-id"
+          - "$(POD_NAME)"
+          - "-bind"
+          - "$(POD_NAME).dbx-internal:7000"
+          - "-raftdir"
+          - "/dbx/data/raft"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: AWS_S3_BUCKET
+          value: "dbx-backups-placeholder" # To be replaced by Terraform output
+        - name: DBX_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: jwt-secret
+        - name: DBX_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: admin-password
+        - name: DBX_DEFAULT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: engine-password
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 7000
+          name: raft
+        volumeMounts:
+        - name: data
+          mountPath: /dbx/data
+        - name: tls
+          mountPath: /dbx/certs
+          readOnly: true
+      volumes:
+      - name: tls
+        secret:
+          secretName: dbx-tls
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 100Gi

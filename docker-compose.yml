@@ -1,0 +1,20 @@
+services:
+  dbx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dbx
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DBX_JWT_SECRET: ${DBX_JWT_SECRET:?set DBX_JWT_SECRET in .env}
+      DBX_ADMIN_PASSWORD: ${DBX_ADMIN_PASSWORD:?set DBX_ADMIN_PASSWORD in .env}
+      DBX_DEFAULT_PASSWORD: ${DBX_DEFAULT_PASSWORD:?set DBX_DEFAULT_PASSWORD in .env}
+      DBX_INTERNAL_API_TOKEN: ${DBX_INTERNAL_API_TOKEN:?set DBX_INTERNAL_API_TOKEN in .env}
+    volumes:
+      - dbx-data:/dbx/data
+      - ./certs:/dbx/certs:ro
+
+volumes:
+  dbx-data:

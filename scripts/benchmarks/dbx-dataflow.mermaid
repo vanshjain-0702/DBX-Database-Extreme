@@ -1,0 +1,59 @@
+flowchart TD
+    C[Client / DBX SDK] --> API[API Layer: RESP Parser / HTTP / gRPC]
+    API --> SEC[Security: Rate Limit → ACL → Tenant Quota]
+    SEC --> QR[Query Router / Planner]
+    QR --> CL[Cluster Lookup: Consistent Hash Ring → Slot Allocator]
+    CL -->|wrong shard| RD[Redirect / MOVED]
+    RD --> C
+    CL -->|correct shard| TXN[Transaction Layer: WATCH/MULTI/EXEC → Lock Manager]
+    TXN --> MVCC[MVCC Version Manager]
+    MVCC --> ADM[Admission Control]
+    ADM --> ENG[Engine: In-Memory KV
+    string/hash/list/set/zset/stream/doc/bitmap/geo]
+
+    ENG --> WAL[Persistence: WAL Writer]
+    WAL --> SNAP[Snapshotter]
+    WAL --> CKSUM[Checksum + Recovery]
+    SNAP --> BACKUP[Backup Archive Store]
+
+    WAL --> REPL[Replication: Sync Stream]
+    REPL --> REPLICA[Replica Nodes]
+    REPLICA --> LAG[Lag Monitor / ACK]
+    REPLICA --> FAILOVER[Failover Coordinator]
+    FAILOVER --> RAFT[Raft Metadata Quorum]
+
+    RAFT --> MEMBER[Cluster Membership / Topology]
+    MEMBER --> REBAL[Rebalancer]
+    REBAL --> CL
+
+    ENG --> POLICY[Policy Engine: TTL / Eviction / Retention]
+    POLICY --> SCHED[Background Scheduler]
+    SCHED --> COMPACT[Compactor]
+    SCHED --> REAPER[Expiration Reaper]
+    SCHED --> TIER[Hot/Cold Tiering]
+    TIER --> NVME[NVMe Spillover Store]
+
+    ENG --> EVT[Events: Pub/Sub]
+    EVT --> DSTREAM[Durable Stream Store]
+    DSTREAM --> CGROUP[Consumer Group Coordinator]
+    CGROUP --> ACK[Stream Ack / Replay]
+
+    ENG --> WF[Workflow: Delayed Job Scheduler]
+    WF --> RETRY[Retry Queue]
+    RETRY --> DLQ[Dead Letter Queue]
+
+    ENG --> VER[Versioning: Time-Travel Index / History]
+
+    ENG --> AUDIT[Audit Logger — Immutable]
+    SEC --> AUDIT
+
+    API --> OBS[Observability]
+    ENG --> OBS
+    REPL --> OBS
+    EVT --> OBS
+    WF --> OBS
+    OBS --> METRICS[Metrics Collector]
+    OBS --> TRACE[Distributed Trace Service]
+    METRICS --> ALERT[Alert Manager]
+    TRACE --> ALERT
+    OBS --> PLUGIN[Plugin Hook Runtime]

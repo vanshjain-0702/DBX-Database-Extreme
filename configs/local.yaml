@@ -1,0 +1,103 @@
+# DBX Local Development Configuration
+
+server:
+  # The engine is private to the local machine/container. Publish the
+  # orchestrator (port 8000) instead of this data-plane listener.
+  host: "127.0.0.1"
+  port: 6399
+  http_port: 8080
+  grpc_port: 9090
+  max_connections: 10000
+  read_timeout: "30s"
+  write_timeout: "30s"
+
+engine:
+  max_memory: "512mb"
+  eviction_policy: "lru"
+  default_ttl: 0
+
+persistence:
+  enabled: true
+  data_dir: "./data"
+  wal_dir: "./data/wal"
+  snapshot_dir: "./data/snapshots"
+  backup_dir: "./data/backups"
+  wal_sync: "everysec"
+  snapshot_interval: "1h"
+  compaction_interval: "24h"
+
+replication:
+  role: "primary"
+  listen_addr: "127.0.0.1:7400"
+  replicas: []
+  quorum: 1
+  sync_timeout: "5s"
+  lag_threshold: "10s"
+
+cluster:
+  enabled: false
+  node_id: "node-01"
+  nodes: []
+  slot_count: 16384
+  rebalance_interval: "5m"
+
+auth:
+  enabled: true
+  default_user: "default"
+  require_password: true
+
+security:
+  rate_limit:
+    enabled: false
+    requests_per_second: 10000
+    burst: 200000
+  encryption:
+    enabled: false
+    key: ""
+  tls:
+    enabled: false
+    cert_file: "./certs/server.crt"
+    key_file: "./certs/server.key"
+    ca_file: "./certs/ca.crt"
+    require_client_cert: true
+
+policy:
+  eviction: "lru"
+  max_memory_samples: 5
+  lazyfree: true
+  retention:
+    default: "7d"
+
+tiering:
+  enabled: false
+  nvme_path: "./data/nvme"
+  threshold_mb: 256
+
+observability:
+  metrics:
+    enabled: true
+    port: 2112
+    path: "/metrics"
+  tracing:
+    enabled: false
+    endpoint: "http://localhost:4317"
+  logging:
+    level: "info"
+    format: "json"
+  profiling:
+    enabled: false
+    port: 6060
+
+workflow:
+  enabled: true
+  max_retries: 3
+  retry_backoff: "1s"
+  dlq_max_size: 10000
+
+events:
+  pubsub:
+    max_channels: 1000
+    max_subscribers_per_channel: 1000
+  streams:
+    max_length: 100000
+    retention: "7d"

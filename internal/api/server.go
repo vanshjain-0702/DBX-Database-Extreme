@@ -1,0 +1,491 @@
+// Package api provides the RESP, HTTP, and gRPC API servers for DBX.
+package api
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"crypto/subtle"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net"
+	"net/http"
+	"os"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/dbx/dbx/internal/auth"
+	"github.com/dbx/dbx/internal/config"
+	"github.com/dbx/dbx/internal/observability"
+	"github.com/dbx/dbx/internal/protocol"
+	"github.com/dbx/dbx/internal/query"
+	"github.com/dbx/dbx/internal/security"
+)
+
+// Client represents an active TCP connection.
+type Client struct {
+	ID         uint64
+	Conn       net.Conn
+	RemoteAddr string
+	User       *auth.User
+	reader     *bufio.Reader
+	writer     *protocol.Writer
+	createdAt  time.Time
+}
+
+// RESPServer is the main TCP RESP server.
+type RESPServer struct {
+	cfg       *config.ServerConfig
+	tlsCfg    *config.TLSConfig
+	executor  *query.Executor
+	acl       *auth.ACLStore
+	enforcer  *security.ACLEnforcer
+	rateLimit *security.RateLimiter
+	audit     *security.AuditGuard
+	metrics   *observability.Metrics
+	logger    *observability.Logger
+
+	mu       sync.RWMutex
+	clients  map[uint64]*Client
+	nextID   uint64
+	listener net.Listener
+	done     chan struct{}
+	connSem  chan struct{}
+}
+
+// NewRESPServer creates a new RESP server.
+func NewRESPServer(
+	cfg *config.ServerConfig,
+	tlsCfg *config.TLSConfig,
+	executor *query.Executor,
+	acl *auth.ACLStore,
+	enforcer *security.ACLEnforcer,
+	rateLimit *security.RateLimiter,
+	audit *security.AuditGuard,
+	metrics *observability.Metrics,
+	logger *observability.Logger,
+) *RESPServer {
+	var sem chan struct{}
+	if cfg.MaxConnections > 0 {
+		sem = make(chan struct{}, cfg.MaxConnections)
+	}
+	return &RESPServer{
+		cfg:       cfg,
+		tlsCfg:    tlsCfg,
+		executor:  executor,
+		acl:       acl,
+		enforcer:  enforcer,
+		rateLimit: rateLimit,
+		audit:     audit,
+		metrics:   metrics,
+		logger:    logger,
+		clients:   make(map[uint64]*Client),
+		done:      make(chan struct{}),
+		connSem:   sem,
+	}
+}
+
+// ListenAndServe starts the TCP listener.
+func (s *RESPServer) ListenAndServe(ctx context.Context) error {
+	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	var ln net.Listener
+	var err error
+
+	if s.tlsCfg != nil && s.tlsCfg.Enabled {
+		cert, err := tls.LoadX509KeyPair(s.tlsCfg.CertFile, s.tlsCfg.KeyFile)
+		if err != nil {
+			return fmt.Errorf("resp: load key pair: %w", err)
+		}
+
+		tlsConfig := &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}
+
+		if s.tlsCfg.RequireClientCert {
+			caCert, err := os.ReadFile(s.tlsCfg.CAFile)
+			if err != nil {
+				return fmt.Errorf("resp: load CA file: %w", err)
+			}
+			caCertPool := x509.NewCertPool()
+			caCertPool.AppendCertsFromPEM(caCert)
+
+			tlsConfig.ClientCAs = caCertPool
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+		}
+
+		ln, err = tls.Listen("tcp", addr, tlsConfig)
+		if err != nil {
+			return fmt.Errorf("resp: tls listen %s: %w", addr, err)
+		}
+		s.logger.Info("DBX RESP server listening on %s (mTLS ENABLED)", addr)
+	} else {
+		ln, err = net.Listen("tcp", addr)
+		if err != nil {
+			return fmt.Errorf("resp: listen %s: %w", addr, err)
+		}
+		s.logger.Info("DBX RESP server listening on %s (PLAINTEXT)", addr)
+	}
+
+	s.listener = ln
+
+	go func() {
+		select {
+		case <-ctx.Done():
+			ln.Close()
+		case <-s.done:
+		}
+	}()
+
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			select {
+			case <-s.done:
+				return nil
+			default:
+				s.logger.Error("accept error: %v", err)
+				continue
+			}
+		}
+		go s.handleConn(conn)
+	}
+}
+
+func (s *RESPServer) handleConn(conn net.Conn) {
+	if s.connSem != nil {
+		select {
+		case s.connSem <- struct{}{}:
+			defer func() { <-s.connSem }()
+		default:
+			conn.Write([]byte("-ERR max number of clients reached\r\n"))
+			conn.Close()
+			return
+		}
+	}
+
+	id := atomic.AddUint64(&s.nextID, 1)
+	client := &Client{
+		ID:         id,
+		Conn:       conn,
+		RemoteAddr: conn.RemoteAddr().String(),
+		User:       s.acl.GetUser("default"), // start as default user
+		reader:     bufio.NewReader(conn),
+		writer:     protocol.NewWriter(conn),
+		createdAt:  time.Now(),
+	}
+
+	s.mu.Lock()
+	s.clients[id] = client
+	s.mu.Unlock()
+	s.metrics.ActiveConns.Add(1)
+
+	defer func() {
+		conn.Close()
+		s.mu.Lock()
+		delete(s.clients, id)
+		s.mu.Unlock()
+		s.metrics.ActiveConns.Add(-1)
+	}()
+
+	parser := protocol.NewRESPParser(conn)
+	for {
+		conn.SetDeadline(time.Now().Add(s.cfg.ReadTimeout))
+		cmd, err := parser.ReadCommand()
+		if err != nil {
+			return // client disconnected or timeout
+		}
+		cmd.ClientID = id
+
+		// Rate limit check
+		if !s.rateLimit.Allow(client.RemoteAddr) {
+			client.writer.WriteErrorRaw("ERR rate limit exceeded")
+			continue
+		}
+
+		// Special handling for AUTH command
+		if cmd.Normalized() == "AUTH" {
+			s.handleAuth(client, cmd)
+			continue
+		}
+
+		// ACL enforcement
+		if err := s.enforcer.Enforce(client.User, cmd); err != nil {
+			s.audit.Log(security.AuditEvent{
+				ClientID:   id,
+				UserName:   userNameOrEmpty(client.User),
+				Command:    cmd.Name,
+				Result:     "denied",
+				Reason:     err.Error(),
+				RemoteAddr: client.RemoteAddr,
+			})
+			client.writer.WriteErrorRaw(err.Error())
+			continue
+		}
+
+		// Audit allowed commands
+		s.audit.Log(security.AuditEvent{
+			ClientID:   id,
+			UserName:   userNameOrEmpty(client.User),
+			Command:    cmd.Name,
+			Result:     "ok",
+			RemoteAddr: client.RemoteAddr,
+		})
+
+		conn.SetDeadline(time.Now().Add(s.cfg.WriteTimeout))
+		if err := s.executor.Execute(id, cmd, client.writer); err != nil {
+			if err.Error() == "quit" {
+				return
+			}
+		}
+	}
+}
+
+func (s *RESPServer) handleAuth(client *Client, cmd *protocol.Command) {
+	if cmd.NumArgs() < 1 {
+		client.writer.WriteError(protocol.WrongNumArgsError("AUTH"))
+		return
+	}
+	var username, password string
+	if cmd.NumArgs() == 1 {
+		username = "default"
+		password = cmd.Arg(0)
+	} else {
+		username = cmd.Arg(0)
+		password = cmd.Arg(1)
+	}
+	user := s.acl.GetUser(username)
+	if user == nil {
+		client.writer.WriteErrorRaw("WRONGPASS invalid username-password pair")
+		return
+	}
+	if err := auth.Authenticate(user, password); err != nil {
+		client.writer.WriteErrorRaw(err.Error())
+		return
+	}
+	client.User = user
+	client.writer.WriteOK()
+}
+
+// Shutdown gracefully stops the server.
+func (s *RESPServer) Shutdown() {
+	close(s.done)
+	if s.listener != nil {
+		s.listener.Close()
+	}
+	s.mu.RLock()
+	for _, c := range s.clients {
+		c.Conn.Close()
+	}
+	s.mu.RUnlock()
+}
+
+// ActiveConnections returns the count of active connections.
+func (s *RESPServer) ActiveConnections() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.clients)
+}
+
+func userNameOrEmpty(u *auth.User) string {
+	if u == nil {
+		return "anonymous"
+	}
+	return u.Name
+}
+
+// HTTPServer provides a minimal HTTP API for health checks and metrics.
+type HTTPServer struct {
+	cfg              *config.ServerConfig
+	metrics          *observability.Metrics
+	executor         *query.Executor
+	internalAPIToken string
+	enforcer         *security.ACLEnforcer
+	auditGuard       *security.AuditGuard
+}
+
+// NewHTTPServer creates an HTTP server.
+func NewHTTPServer(cfg *config.ServerConfig, metrics *observability.Metrics, executor *query.Executor, internalAPIToken string, enforcer *security.ACLEnforcer, auditGuard *security.AuditGuard) *HTTPServer {
+	return &HTTPServer{cfg: cfg, metrics: metrics, executor: executor, internalAPIToken: internalAPIToken, enforcer: enforcer, auditGuard: auditGuard}
+}
+
+// withCORS adds CORS headers to allow the dashboard to connect.
+func withCORS(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// internalAPIOnly protects engine control endpoints with a shared secret. It
+// works whether the orchestrator is colocated or deployed in another pod.
+func (h *HTTPServer) internalAPIOnly(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		provided := r.Header.Get("X-DBX-Internal-Token")
+		if h.internalAPIToken == "" || subtle.ConstantTimeCompare([]byte(provided), []byte(h.internalAPIToken)) != 1 {
+			http.Error(w, "engine HTTP API requires orchestrator authentication", http.StatusForbidden)
+			return
+		}
+		next(w, r)
+	}
+}
+
+// ListenAndServe starts the HTTP server.
+func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/api/keyspace", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		stats := h.executor.KV().KeyspaceStats()
+		json.NewEncoder(w).Encode(stats)
+	})))
+
+	mux.HandleFunc("/health", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
+	}))
+	mux.HandleFunc("/metrics", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		snap := h.metrics.Snapshot()
+		fmt.Fprintf(w, `{`)
+		first := true
+		for k, v := range snap {
+			if !first {
+				fmt.Fprintf(w, `,`)
+			}
+			fmt.Fprintf(w, `"%s":%d`, k, v)
+			first = false
+		}
+		fmt.Fprintf(w, `}`)
+	})))
+	mux.HandleFunc("/info", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"version":"1.0.0","engine":"DBX"}`)
+	}))
+	mux.HandleFunc("/vaddbin", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		
+		key := r.URL.Query().Get("key")
+		dim := r.URL.Query().Get("dim")
+		if key == "" || dim == "" {
+			http.Error(w, "Missing key or dim query parameters", http.StatusBadRequest)
+			return
+		}
+		
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		cmd := &protocol.Command{Name: "VADDBIN", Args: [][]byte{[]byte(key), []byte(dim), body}}
+		var buf bytes.Buffer
+		writer := protocol.NewWriter(&buf)
+
+		if err := h.executor.Execute(0, cmd, writer); err != nil {
+			if buf.Len() == 0 {
+				writer.WriteErrorRaw(err.Error())
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write(buf.Bytes())
+			return
+		}
+		
+		w.WriteHeader(http.StatusOK)
+		w.Write(buf.Bytes())
+	})))
+	mux.HandleFunc("/query", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		
+		// Enforce maximum payload size (512KB) to prevent DoS attacks
+		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
+		
+		var req struct {
+			Command []string `json:"command"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if err.Error() == "http: request body too large" {
+				http.Error(w, "Payload too large", http.StatusRequestEntityTooLarge)
+				return
+			}
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if len(req.Command) == 0 {
+			http.Error(w, "empty command", http.StatusBadRequest)
+			return
+		}
+		args := make([][]byte, len(req.Command)-1)
+		for i, arg := range req.Command[1:] {
+			args[i] = []byte(arg)
+		}
+		cmd := &protocol.Command{Name: req.Command[0], Args: args}
+		var buf bytes.Buffer
+		writer := protocol.NewWriter(&buf)
+
+		// For internal HTTP API proxy requests, we assume it's acting on behalf of the internal dashboard.
+		// We execute the command under the identity of "dashboard_internal" to ensure
+		// it is subjected to ACL rules and written to the audit log.
+		dummyUser := &auth.User{
+			Name:        "dashboard_internal",
+			Enabled:     true,
+			Permissions: auth.PermAll,
+			AllowedKeys: []string{"*"},
+		}
+		
+		if err := h.enforcer.Enforce(dummyUser, cmd); err != nil {
+			if buf.Len() == 0 {
+				writer.WriteErrorRaw(err.Error())
+			}
+		} else {
+			// Write to audit log
+			if h.auditGuard != nil {
+				clientIP := r.RemoteAddr
+				if host, _, err := net.SplitHostPort(clientIP); err == nil {
+					clientIP = host
+				}
+				h.auditGuard.Log(security.AuditEvent{
+					UserName:   dummyUser.Name,
+					RemoteAddr: clientIP,
+					Command:    cmd.Name,
+					Result:     "ok",
+				})
+			}
+			
+			// Execute command
+			if err := h.executor.Execute(0, cmd, writer); err != nil {
+				if buf.Len() == 0 {
+					writer.WriteErrorRaw(err.Error())
+				}
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"response": buf.String(),
+		})
+	})))
+
+	addr := fmt.Sprintf("%s:%d", h.cfg.Host, h.cfg.HTTPPort)
+	srv := &http.Server{Addr: addr, Handler: mux}
+	go func() {
+		<-ctx.Done()
+		srv.Shutdown(context.Background())
+	}()
+	return srv.ListenAndServe()
+}

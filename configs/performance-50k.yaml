@@ -1,0 +1,41 @@
+server:
+  host: "127.0.0.1"
+  port: 6500
+  http_port: 8500
+  grpc_port: 9500
+  max_connections: 2000
+  read_timeout: "60s"
+  write_timeout: "60s"
+
+engine:
+  num_shards: 256
+  max_vectors_per_tenant: 100000
+
+persistence:
+  enabled: true
+  data_dir: "./data/perf-50k"
+  wal_dir: "./data/perf-50k/wal"
+  snapshot_dir: "./data/perf-50k/snapshots"
+  backup_dir: "./data/perf-50k/backups"
+  wal_sync: "always"
+  snapshot_interval: "1h"
+
+auth:
+  enabled: true
+  default_user: "default"
+  require_password: true
+
+security:
+  rate_limit:
+    enabled: true
+    requests_per_second: 100000
+    burst: 10000
+  tls:
+    enabled: true
+    cert_file: "./certs/server.crt"
+    key_file: "./certs/server.key"
+    ca_file: "./certs/ca.crt"
+    require_client_cert: true
+
+replication:
+  role: "primary"

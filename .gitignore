@@ -1,0 +1,36 @@
+# Build artifacts
+/bin/
+*.exe
+
+# DBX runtime data
+/data/
+/bench/
+/certs/
+
+# Go
+vendor/
+
+# Node / Dashboard
+node_modules/
+dashboard/node_modules/
+dashboard/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+sdk/python/.venv/
+*.egg-info/
+
+# Environment & secrets
+.env
+.env.local
+data/secrets.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp

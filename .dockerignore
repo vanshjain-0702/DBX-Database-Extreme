@@ -1,0 +1,9 @@
+.git
+.env
+bin
+data
+certs
+dashboard/node_modules
+dashboard/dist
+*.exe
+*.exe~

@@ -1,0 +1,32 @@
+# Security Policy
+
+## Supported Versions
+
+| Version | Supported |
+|---------|-----------|
+| Latest  | ✅ Yes |
+| < 1.0   | ❌ No |
+
+## Reporting a Vulnerability
+
+**Please do NOT open a public GitHub issue for security vulnerabilities.**
+
+Report vulnerabilities privately via email to: **security@dbxdb.io**
+
+Include:
+- A clear description of the vulnerability
+- Steps to reproduce
+- Potential impact assessment
+- Any suggested mitigations
+
+We will acknowledge receipt within **48 hours** and provide a fix timeline within **7 days** for critical issues.
+
+## Security Best Practices
+
+When self-hosting DBX in production:
+
+1. **Never disable TLS** in production. Use `-tls-cert` and `-tls-key` flags.
+2. **Set strong secrets:** `DBX_ADMIN_PASSWORD` (min 12 chars), `DBX_JWT_SECRET` (min 32 chars).
+3. **Firewall internal ports** (8081+). Only expose port 8000 (Orchestrator) to the public.
+4. **Use environment variables** for secrets; never commit them to source control.
+5. **Enable S3 backups** to ensure data durability.
