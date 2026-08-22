@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="dashboard/src/assets/logo.svg" alt="DBX Logo" width="80" />
+  <img src="dashboard/src/assets/logo.jpg" alt="DBX Logo" width="80" />
 </p>
 
 <h1 align="center">DBX</h1>
@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/dbx/dbx/actions"><img src="https://github.com/dbx/dbx/actions/workflows/build.yml/badge.svg" alt="Build Status" /></a>
+  <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg" alt="Build Status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
-  <a href="https://github.com/dbx/dbx/releases"><img src="https://img.shields.io/github/v/release/dbx/dbx" alt="Release" /></a>
+  <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
 </p>
 
