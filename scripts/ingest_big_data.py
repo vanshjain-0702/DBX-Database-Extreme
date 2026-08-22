@@ -7,8 +7,8 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 # Add SDK path
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "sdk", "python"))
-from DBX import DBXClient
-from langchain_DBX import DBXVectorStore
+from dbx import DBXClient
+from langchain_dbx import DBXVectorStore
 
 
 def main():

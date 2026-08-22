@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "sdk", "python"))
-from DBX import DBXClient
+from dbx import DBXClient
 
 INDEX_NAME = "concurrent_index"
 NUM_VECTORS = 15000
@@ -19,12 +19,10 @@ print("========================================\n")
 
 cert_dir = os.path.join(os.path.dirname(__file__), "..", "certs")
 client_ingest = DBXClient(
-    port=6399,
-    password=os.environ.get("DBX_DEFAULT_PASSWORD", "adminadminadmin")
+    port=6399, password=os.environ.get("DBX_DEFAULT_PASSWORD", "adminadminadmin")
 )
 client_search = DBXClient(
-    port=6399,
-    password=os.environ.get("DBX_DEFAULT_PASSWORD", "adminadminadmin")
+    port=6399, password=os.environ.get("DBX_DEFAULT_PASSWORD", "adminadminadmin")
 )
 
 np.random.seed(42)
