@@ -16,6 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+         node-version: '20' # Or your preferred version
+
+      - name: Build Dashboard Frontend
+        working-directory: ./dashboard # Adjust this to where your package.json lives
+        run: |
+         npm install
+         npm run build 
+
+      - name: Archive server
+        run: |
+         tar -czf dbx-server-${{ matrix.os }}.tar.gz bin/dbx-server
+
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -42,17 +58,4 @@ jobs:
       - name: Build orchestrator
         run: go build -o bin/dbx-orchestrator ./cmd/dbx-orchestrator
       
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-         node-version: '20' # Or your preferred version
-
-      - name: Build Dashboard Frontend
-        working-directory: ./dashboard # Adjust this to where your package.json lives
-        run: |
-         npm install
-         npm run build 
-
-      - name: Archive server
-        run: |
-         tar -czf dbx-server-${{ matrix.os }}.tar.gz bin/dbx-server
+     
