@@ -1,5 +1,4 @@
 name: Lint
-
 on:
   push:
     branches: ["main"]
@@ -16,18 +15,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25"
-
       - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20' # Use the same version you used in the build job 
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Use the same version you used in the build job
       - name: Build Dashboard Frontend
-          run: |
+        run: |
           cd dashboard
           npm install
-          npm run build 
-          
-       - name: golangci-lint
+          npm run build
+      - name: golangci-lint
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
@@ -60,8 +57,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Install Flake8 & Black
-        run: pip install flake8 black
-      - name: Run Black Check
-        run: black --check sdk/python scripts/
-      - name: Run Flake8
-        run: flake8 .
+        run: |
+          pip install flake8 black
+          flake8 .
+          black --check .
