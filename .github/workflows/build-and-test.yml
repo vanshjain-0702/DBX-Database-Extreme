@@ -25,12 +25,7 @@ jobs:
         working-directory: ./dashboard # Adjust this to where your package.json lives
         run: |
          npm install
-         npm run build 
-
-      - name: Archive server
-        run: |
-         tar -czf dbx-server-${{ matrix.os }}.tar.gz bin/dbx-server
-
+         npm run build
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -57,5 +52,9 @@ jobs:
 
       - name: Build orchestrator
         run: go build -o bin/dbx-orchestrator ./cmd/dbx-orchestrator
+
+      - name: Archive server
+        run: |
+         tar -czf dbx-server-${{ matrix.os }}.tar.gz bin/dbx-server
       
      
