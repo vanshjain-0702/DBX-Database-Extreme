@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-         node-version: '20' # Or your preferred version
+         node-version: '24' # Or your preferred version
 
       - name: Build Dashboard Frontend
         working-directory: ./dashboard # Adjust this to where your package.json lives
