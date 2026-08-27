@@ -22,10 +22,6 @@ import (
 	"github.com/hashicorp/raft"
 )
 
-const (
-	walSnapshotThreshold = 64 * 1024 * 1024 // 64MB — trigger snapshot when WAL exceeds this
-)
-
 type Instance struct {
 	cfg           *config.Config
 	logger        *observability.Logger

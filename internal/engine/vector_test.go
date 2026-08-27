@@ -350,3 +350,23 @@ func TestVectorStoreRebuildsCorruptOrMismatchedGraph(t *testing.T) {
 		t.Fatalf("corrupt graph was not rebuilt: %#v, %v", results, err)
 	}
 }
+
+func TestReadSQ8RoundTrip(t *testing.T) {
+	src := []float32{0.2, -0.5, 0.8}
+	qVec, scale, reconNorm := quantizeVector(src)
+	if reconNorm <= 0 {
+		t.Fatalf("expected reconstructed norm, got %v", reconNorm)
+	}
+	buf := make([]byte, len(src)+8)
+	writeSQ8(buf, qVec, scale, reconNorm)
+	got := readSQ8(buf, len(src))
+	if len(got) != len(src) {
+		t.Fatalf("readSQ8 dim=%d want %d", len(got), len(src))
+	}
+	for i := range src {
+		recon := float32(qVec[i]) * scale
+		if math.Abs(float64(got[i]-recon)) > 1e-6 {
+			t.Fatalf("axis %d: got %v want %v", i, got[i], recon)
+		}
+	}
+}

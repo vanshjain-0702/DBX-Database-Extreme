@@ -189,7 +189,7 @@ func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) 
 		return nil, fmt.Errorf("invalid tenant id")
 	}
 	for _, c := range id {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-') {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != '-' {
 			return nil, fmt.Errorf("invalid tenant id: only alphanumeric and dashes allowed")
 		}
 	}

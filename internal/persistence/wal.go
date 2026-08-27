@@ -474,7 +474,13 @@ func (w *WAL) ReadAll() ([]*WALRecord, error) {
 		if openErr != nil {
 			return nil, openErr
 		}
-		records, readErr := decodeRecordsMode(f, filepath.Base(path) == "wal.log")
+		var records []*WALRecord
+		var readErr error
+		if filepath.Base(path) == "wal.log" {
+			records, readErr = decodeRecords(f)
+		} else {
+			records, readErr = decodeRecordsMode(f, false)
+		}
 		f.Close()
 		if readErr != nil {
 			return nil, fmt.Errorf("%s: %w", filepath.Base(path), readErr)

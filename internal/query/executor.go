@@ -449,9 +449,10 @@ func (e *Executor) prepareDurableEffects(cmd *protocol.Command) ([]persistence.W
 			}
 		}
 		by := int64(1)
-		if name == "DECR" {
+		switch name {
+		case "DECR":
 			by = -1
-		} else if name == "INCRBY" || name == "DECRBY" {
+		case "INCRBY", "DECRBY":
 			parsed, err := strconv.ParseInt(cmd.Arg(1), 10, 64)
 			if err != nil {
 				return nil, true

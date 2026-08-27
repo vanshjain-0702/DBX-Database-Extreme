@@ -19,7 +19,7 @@ import string
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 
 import requests
 import redis
@@ -311,7 +311,9 @@ def bench_vector_insert():
         pipe.execute()
     elapsed = time.perf_counter() - t0
     ops_sec = VECTOR_COUNT / elapsed
-    print(f"  Ingested : {VECTOR_COUNT:,}/{VECTOR_COUNT:,}  errors: 0  in {elapsed:.2f}s")
+    print(
+        f"  Ingested : {VECTOR_COUNT:,}/{VECTOR_COUNT:,}  errors: 0  in {elapsed:.2f}s"
+    )
     print(f"  Throughput  : {BOLD}{ops_sec:,.0f} vectors/sec{RESET}")
     compare(label="Vector VADD", actual=ops_sec, target=5_000, unit="vectors/sec")
     return ops_sec
@@ -546,7 +548,8 @@ def print_summary(set_ops, get_ops, hash_ops, vec_ops, mixed_ops, sec_issues):
         )
         bar = "#" * min(int(ratio * 15), 30)
         print(
-            f"  {BOLD}{name:<22}{RESET}  {dbx:>10,.0f} ops/s  [{bar:<30}]  {status}{RESET}  ({ratio:.2f}x target {target:,})"
+            f"  {BOLD}{name:<22}{RESET}  {dbx:>10,.0f} ops/s  "
+            f"[{bar:<30}]  {status}{RESET}  ({ratio:.2f}x target {target:,})"
         )
 
     print()

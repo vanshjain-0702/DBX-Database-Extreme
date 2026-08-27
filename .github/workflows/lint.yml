@@ -18,16 +18,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24' # Use the same version you used in the build job
+          node-version: "24"
       - name: Build Dashboard Frontend
+        working-directory: dashboard
         run: |
-          cd dashboard
           npm install
           npm run build
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: latest
+          version: v2.5.0
           args: --timeout=5m
 
   eslint:
@@ -44,7 +44,7 @@ jobs:
       - name: Install & Lint
         working-directory: dashboard
         run: |
-          npm ci
+          npm install
           npm run lint
 
   flake8:
