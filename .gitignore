@@ -2,11 +2,18 @@
 /bin/
 *.exe
 
-# DBX runtime data
-/data/
+# DBX runtime data (WAL, snapshots, local tenants)
+/data/*
 /bench/
 /certs/
 internal/orchestrator/data/
+
+# Checked-in dashboard demo assets (never commit live tokens/passwords)
+!/data/dashboard-demo/
+!/data/dashboard-demo/**
+/data/dashboard-demo/token.json
+/data/dashboard-demo/login.json
+/data/dashboard-demo/admin.json
 
 # Go
 vendor/
