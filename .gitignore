@@ -21,7 +21,8 @@ vendor/
 # Node / Dashboard
 node_modules/
 dashboard/node_modules/
-dashboard/dist/
+dashboard/dist/*
+!dashboard/dist/.gitkeep
 
 # Python
 __pycache__/
