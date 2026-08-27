@@ -87,41 +87,11 @@ jobs:
       - name: Race detector
         run: go test -race ./...
       - name: Coverage floors
-        run: |
-          set -euo pipefail
-          check() {
-            pkg="$1"
-            min="$2"
-            out=$(go test -cover "$pkg")
-            echo "$out"
-            pct=$(echo "$out" | sed -n 's/.*coverage: \([0-9.]*\)% of statements.*/\1/p' | tail -1)
-            python3 -c "import sys; pct=float(sys.argv[1]); minv=float(sys.argv[2]); pkg=sys.argv[3];
-print(f'{pkg} coverage={pct}% min={minv}%');
-sys.exit(0 if pct>=minv else 1)" "$pct" "$min" "$pkg"
-          }
-          check ./internal/protocol/ 80
-          check ./internal/persistence/ 70
-          check ./internal/query/ 65
-          check ./internal/engine/ 45
+        run: python3 scripts/ci/check-coverage.py
       - name: Density isolation
         run: go test -count=1 -timeout 2m ./internal/engine/ ./internal/query/ ./internal/security/ -run 'Density|NoisyNeighbor|Quota'
       - name: Vector certification harness
         run: |
           set -euo pipefail
           go run ./cmd/dbx-vector-benchmark -count 100000 -dim 128 -queries 25 -k 10 | tee bench.txt
-          python3 -c 'import re,sys
-text=open("bench.txt").read()
-def num(name):
-    m=re.search(name+r"=([0-9.]+)", text)
-    if not m: raise SystemExit("missing "+name)
-    return float(m.group(1))
-ingest,p50,p95,p99,recall,p05=num("ingest_vectors_per_sec"),num("search_p50"),num("search_p95"),num("search_p99"),num("recall_mean"),num("recall_p05")
-print("parsed",ingest,p50,p95,p99,recall,p05)
-failed=[]
-if ingest<1500: failed.append("ingest")
-if p50>12: failed.append("p50")
-if p95>20: failed.append("p95")
-if p99>30: failed.append("p99")
-if recall<0.90: failed.append("recall")
-if p05<0.70: failed.append("p05")
-if failed: raise SystemExit("failed gates: "+",".join(failed))'
+          python3 scripts/ci/check-vector-gates.py bench.txt
