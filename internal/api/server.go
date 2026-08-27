@@ -132,7 +132,16 @@ func (s *RESPServer) ListenAndServe(ctx context.Context) error {
 		s.logger.Info("DBX RESP server listening on %s (PLAINTEXT)", addr)
 	}
 
-	s.listener = ln
+	s.mu.Lock()
+	select {
+	case <-s.done:
+		s.mu.Unlock()
+		_ = ln.Close()
+		return nil
+	default:
+		s.listener = ln
+	}
+	s.mu.Unlock()
 
 	go func() {
 		select {
@@ -291,9 +300,16 @@ func (s *RESPServer) handleAuth(client *Client, cmd *protocol.Command) {
 
 // Shutdown gracefully stops the server.
 func (s *RESPServer) Shutdown() {
-	close(s.done)
-	if s.listener != nil {
-		s.listener.Close()
+	s.mu.Lock()
+	select {
+	case <-s.done:
+	default:
+		close(s.done)
+	}
+	ln := s.listener
+	s.mu.Unlock()
+	if ln != nil {
+		_ = ln.Close()
 	}
 	s.mu.RLock()
 	for _, c := range s.clients {

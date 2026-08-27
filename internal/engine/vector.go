@@ -266,36 +266,38 @@ func (idx *MMapVectorIndex) startSearchWorkers() {
 	if idx.searchJobs != nil {
 		return
 	}
-	idx.searchJobs = make(chan shardSearchJob, hnswShards)
+	jobs := make(chan shardSearchJob, hnswShards)
+	idx.searchJobs = jobs
 	idx.searchWG.Add(hnswShards)
 	for i := 0; i < hnswShards; i++ {
 		go func() {
 			defer idx.searchWG.Done()
-			idx.searchWorker()
+			for job := range jobs {
+				*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv)
+				job.wg.Done()
+			}
 		}()
-	}
-}
-
-func (idx *MMapVectorIndex) searchWorker() {
-	for job := range idx.searchJobs {
-		*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv)
-		job.wg.Done()
 	}
 }
 
 func (idx *MMapVectorIndex) Close() {
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	if idx.searchJobs != nil {
-		close(idx.searchJobs)
-		idx.searchJobs = nil
+	jobs := idx.searchJobs
+	idx.searchJobs = nil
+	if jobs != nil {
+		close(jobs)
+	}
+	idx.mu.Unlock()
+	if jobs != nil {
 		idx.searchWG.Wait()
 	}
+	idx.mu.Lock()
+	defer idx.mu.Unlock()
 	if idx.mmap != nil {
 		_ = idx.writeMetadata(true)
 		_ = idx.mmap.Flush()
 	}
-	if len(idx.graphs) > 0 {
+	if len(idx.graphs) > 0 && idx.file != nil {
 		_ = saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs)
 	}
 	if idx.mmap != nil {
