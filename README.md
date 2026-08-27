@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg" alt="Build Status" /></a>
+  <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg?branch=main&event=push" alt="Build Status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />

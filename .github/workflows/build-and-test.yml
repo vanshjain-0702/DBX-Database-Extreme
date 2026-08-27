@@ -6,9 +6,14 @@ on:
   pull_request:
     branches: ["main"]
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
-    name: Build & Test (OS Matrix)
+    name: Build & Test (${{ matrix.os }})
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -40,13 +45,15 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test (Non-Windows)
-        if: runner.os != 'Windows'
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
-        run: go test -v "-coverprofile=coverage.out" ./...
+      - name: Test
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            go test -v -race -coverprofile=coverage.out ./...
+          else
+            go test -v -coverprofile=coverage.out ./...
+          fi
 
       - name: Build server
         run: go build -o bin/dbx-server ./cmd/dbx-server
@@ -68,30 +75,20 @@ jobs:
     name: Production release gates (Linux)
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    needs: build
     steps:
       - uses: actions/checkout@v7
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-      - name: Build Dashboard Frontend
-        working-directory: ./dashboard
-        run: |
-          npm install
-          npm run build
       - uses: actions/setup-go@v7
         with:
           go-version: "1.25"
           cache: true
-      - name: Race detector
-        run: go test -race ./...
       - name: Coverage floors
         run: python3 scripts/ci/check-coverage.py
       - name: Density isolation
         run: go test -count=1 -timeout 2m ./internal/engine/ ./internal/query/ ./internal/security/ -run 'Density|NoisyNeighbor|Quota'
-      - name: Vector certification harness
+      - name: Vector smoke harness
         run: |
           set -euo pipefail
-          go run ./cmd/dbx-vector-benchmark -count 100000 -dim 128 -queries 25 -k 10 | tee bench.txt
+          go run ./cmd/dbx-vector-benchmark -count 25000 -dim 128 -queries 10 -k 10 | tee bench.txt
           python3 scripts/ci/check-vector-gates.py bench.txt

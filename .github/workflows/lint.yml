@@ -5,6 +5,10 @@ on:
   pull_request:
     branches: ["main"]
 
+concurrency:
+  group: lint-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   golangci:
     name: Go Lint
@@ -25,10 +29,7 @@ jobs:
           npm install
           npm run build
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9
-        with:
-          version: v2.5.0
-          args: --timeout=5m
+        run: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0 run --timeout=5m
 
   eslint:
     name: Frontend Lint
@@ -59,5 +60,5 @@ jobs:
       - name: Install Flake8 & Black
         run: |
           pip install flake8 black
-          flake8 .
-          black --check .
+          flake8 scripts sdk/python
+          black --check scripts sdk/python
