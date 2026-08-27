@@ -12,15 +12,18 @@ var StartTime = time.Now()
 // Metrics holds all server-level counters and gauges.
 type Metrics struct {
 	// Counters
-	TotalCommands  atomic.Int64
-	TotalReads     atomic.Int64
-	TotalWrites    atomic.Int64
-	TotalErrors    atomic.Int64
-	TotalExpired   atomic.Int64
-	TotalEvicted   atomic.Int64
-	TotalBytes     atomic.Int64
-	ActiveConns    atomic.Int64
-	PubSubMessages atomic.Int64
+	TotalCommands     atomic.Int64
+	TotalReads        atomic.Int64
+	TotalWrites       atomic.Int64
+	TotalErrors       atomic.Int64
+	TotalExpired      atomic.Int64
+	TotalEvicted      atomic.Int64
+	TotalBytes        atomic.Int64
+	ActiveConns       atomic.Int64
+	PubSubMessages    atomic.Int64
+	TenantMemoryUsed  atomic.Int64
+	TenantMemoryLimit atomic.Int64
+	TenantReady       atomic.Int64
 
 	// Latency histograms (simplified as sum + count)
 	CmdLatencySum   atomic.Int64
@@ -58,21 +61,24 @@ func (m *Metrics) Snapshot() map[string]int64 {
 	var memory runtime.MemStats
 	runtime.ReadMemStats(&memory)
 	return map[string]int64{
-		"total_commands":    m.TotalCommands.Load(),
-		"total_reads":       m.TotalReads.Load(),
-		"total_writes":      m.TotalWrites.Load(),
-		"total_errors":      m.TotalErrors.Load(),
-		"total_expired":     m.TotalExpired.Load(),
-		"total_evicted":     m.TotalEvicted.Load(),
-		"active_conns":      m.ActiveConns.Load(),
-		"pubsub_messages":   m.PubSubMessages.Load(),
-		"avg_latency_ns":    m.AvgLatencyNs(),
-		"memory_used_bytes": int64(memory.Alloc),
-		"memory_sys_bytes":  int64(memory.Sys),
-		"heap_objects":      int64(memory.HeapObjects),
-		"gc_pause_total_ns": int64(memory.PauseTotalNs),
-		"goroutines":        int64(runtime.NumGoroutine()),
-		"cpu_count":         int64(runtime.NumCPU()),
-		"uptime_seconds":    int64(time.Since(StartTime).Seconds()),
+		"total_commands":            m.TotalCommands.Load(),
+		"total_reads":               m.TotalReads.Load(),
+		"total_writes":              m.TotalWrites.Load(),
+		"total_errors":              m.TotalErrors.Load(),
+		"total_expired":             m.TotalExpired.Load(),
+		"total_evicted":             m.TotalEvicted.Load(),
+		"active_conns":              m.ActiveConns.Load(),
+		"pubsub_messages":           m.PubSubMessages.Load(),
+		"tenant_memory_used_bytes":  m.TenantMemoryUsed.Load(),
+		"tenant_memory_limit_bytes": m.TenantMemoryLimit.Load(),
+		"tenant_ready":              m.TenantReady.Load(),
+		"avg_latency_ns":            m.AvgLatencyNs(),
+		"memory_used_bytes":         int64(memory.Alloc),
+		"memory_sys_bytes":          int64(memory.Sys),
+		"heap_objects":              int64(memory.HeapObjects),
+		"gc_pause_total_ns":         int64(memory.PauseTotalNs),
+		"goroutines":                int64(runtime.NumGoroutine()),
+		"cpu_count":                 int64(runtime.NumCPU()),
+		"uptime_seconds":            int64(time.Since(StartTime).Seconds()),
 	}
 }

@@ -6,8 +6,6 @@ metadata:
     app: dbx-orchestrator
 spec:
   serviceName: "dbx-internal"
-  # Single-node only. Multi-node Raft join and replicated data-plane storage
-  # are not production-ready yet.
   replicas: 1
   selector:
     matchLabels:
@@ -20,23 +18,17 @@ spec:
       serviceAccountName: dbx-orchestrator-sa
       containers:
       - name: orchestrator
-        image: dbx-cloud:latest
-        imagePullPolicy: Always
-        command:
-          - "./bin/orchestrator"
-          - "-id"
-          - "$(POD_NAME)"
-          - "-bind"
-          - "$(POD_NAME).dbx-internal:7000"
-          - "-raftdir"
-          - "/dbx/data/raft"
+        image: ghcr.io/dbx/dbx:latest
+        imagePullPolicy: IfNotPresent
+        args:
+        - -insecure-http=true
+        - -state-file=/dbx/data/tenants.json
+        - -admin-file=/dbx/data/admin.json
         env:
-        - name: POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: AWS_S3_BUCKET
-          value: "dbx-backups-placeholder" # To be replaced by Terraform output
+        - name: DBX_DATA_DIR
+          value: /dbx/data
+        - name: DBX_NODE_MEMORY_BUDGET
+          value: "8gb"
         - name: DBX_JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -47,26 +39,31 @@ spec:
             secretKeyRef:
               name: dbx-control-plane
               key: admin-password
+        - name: DBX_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: internal-token
         - name: DBX_DEFAULT_PASSWORD
           valueFrom:
             secretKeyRef:
               name: dbx-control-plane
               key: engine-password
+              optional: true
         ports:
         - containerPort: 8000
           name: http
-        - containerPort: 7000
-          name: raft
+        - containerPort: 6380
+          name: resp
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
         volumeMounts:
         - name: data
           mountPath: /dbx/data
-        - name: tls
-          mountPath: /dbx/certs
-          readOnly: true
-      volumes:
-      - name: tls
-        secret:
-          secretName: dbx-tls
   volumeClaimTemplates:
   - metadata:
       name: data

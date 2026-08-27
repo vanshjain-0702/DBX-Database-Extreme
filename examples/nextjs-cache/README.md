@@ -1,6 +1,11 @@
 # Next.js Session Caching with DBX
 
-Use DBX as a high-performance session and API response cache in your Next.js app, replacing Redis with zero SDK changes (DBX is Redis-compatible).
+Use DBX as a session and API response cache in your Next.js app. DBX speaks RESP, so the
+standard `redis` npm client works without a custom driver.
+
+The reason to reach for DBX here rather than a plain cache is that the same tenant also holds
+your vector memory: session state and semantic recall for a customer live in one engine and one
+data directory, so there is no second system to keep in sync.
 
 ## Setup
 

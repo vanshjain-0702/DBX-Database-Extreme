@@ -27,9 +27,7 @@ func (e *ACLEnforcer) Enforce(user *auth.User, cmd *protocol.Command) error {
 		return fmt.Errorf("NOPERM this user has no permissions to run the '%s' command", cmd.Name)
 	}
 	// Check key permissions
-	info, ok := protocol.Lookup(cmd.Normalized())
-	if ok && info.KeyIndex > 0 && info.KeyIndex <= len(cmd.Args) {
-		key := cmd.Arg(info.KeyIndex - 1)
+	for _, key := range protocol.AffectedKeys(cmd) {
 		if key != "" && !e.acl.CanAccessKey(user, key) {
 			return fmt.Errorf("NOPERM no permissions to access key '%s'", key)
 		}

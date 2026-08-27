@@ -13,7 +13,9 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -156,6 +158,12 @@ func (s *RESPServer) ListenAndServe(ctx context.Context) error {
 }
 
 func (s *RESPServer) handleConn(conn net.Conn) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			s.logger.Error("connection panic isolated: %v", recovered)
+			_ = conn.Close()
+		}
+	}()
 	if s.connSem != nil {
 		select {
 		case s.connSem <- struct{}{}:
@@ -168,13 +176,14 @@ func (s *RESPServer) handleConn(conn net.Conn) {
 	}
 
 	id := atomic.AddUint64(&s.nextID, 1)
+	bw := bufio.NewWriterSize(conn, 32*1024)
 	client := &Client{
 		ID:         id,
 		Conn:       conn,
 		RemoteAddr: conn.RemoteAddr().String(),
 		User:       s.acl.GetUser("default"), // start as default user
 		reader:     bufio.NewReader(conn),
-		writer:     protocol.NewWriter(conn),
+		writer:     protocol.NewWriter(bw),
 		createdAt:  time.Now(),
 	}
 
@@ -193,26 +202,29 @@ func (s *RESPServer) handleConn(conn net.Conn) {
 
 	parser := protocol.NewRESPParser(conn)
 	for {
-		conn.SetDeadline(time.Now().Add(s.cfg.ReadTimeout))
 		cmd, err := parser.ReadCommand()
 		if err != nil {
-			return // client disconnected or timeout
+			return
 		}
 		cmd.ClientID = id
 
-		// Rate limit check
 		if !s.rateLimit.Allow(client.RemoteAddr) {
 			client.writer.WriteErrorRaw("ERR rate limit exceeded")
+			_ = client.writer.Flush()
 			continue
 		}
 
-		// Special handling for AUTH command
 		if cmd.Normalized() == "AUTH" {
 			s.handleAuth(client, cmd)
+			_ = client.writer.Flush()
 			continue
 		}
 
-		// ACL enforcement
+		if client.User != nil {
+			// Resolve on every command so revocation or role changes apply to
+			// already-authenticated connections immediately.
+			client.User = s.acl.GetUser(client.User.Name)
+		}
 		if err := s.enforcer.Enforce(client.User, cmd); err != nil {
 			s.audit.Log(security.AuditEvent{
 				ClientID:   id,
@@ -223,23 +235,30 @@ func (s *RESPServer) handleConn(conn net.Conn) {
 				RemoteAddr: client.RemoteAddr,
 			})
 			client.writer.WriteErrorRaw(err.Error())
+			_ = client.writer.Flush()
 			continue
 		}
 
-		// Audit allowed commands
-		s.audit.Log(security.AuditEvent{
-			ClientID:   id,
-			UserName:   userNameOrEmpty(client.User),
-			Command:    cmd.Name,
-			Result:     "ok",
-			RemoteAddr: client.RemoteAddr,
-		})
+		info, _ := protocol.Lookup(cmd.Normalized())
+		if !info.ReadOnly && protocol.ShouldAudit(cmd.Normalized()) {
+			s.audit.Log(security.AuditEvent{
+				ClientID:   id,
+				UserName:   userNameOrEmpty(client.User),
+				Command:    cmd.Name,
+				Result:     "ok",
+				RemoteAddr: client.RemoteAddr,
+			})
+		}
 
-		conn.SetDeadline(time.Now().Add(s.cfg.WriteTimeout))
 		if err := s.executor.Execute(id, cmd, client.writer); err != nil {
 			if err.Error() == "quit" {
+				_ = client.writer.Flush()
 				return
 			}
+		}
+		if parser.Buffered() == 0 {
+			_ = client.writer.Flush()
+			conn.SetDeadline(time.Now().Add(s.cfg.ReadTimeout))
 		}
 	}
 }
@@ -315,15 +334,55 @@ func NewHTTPServer(cfg *config.ServerConfig, metrics *observability.Metrics, exe
 // withCORS adds CORS headers to allow the dashboard to connect.
 func withCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if origin != "" && corsOriginAllowed(origin) {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, Authorization")
 		if r.Method == "OPTIONS" {
+			if origin != "" && !corsOriginAllowed(origin) {
+				http.Error(w, "origin not allowed", http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 		next(w, r)
 	}
+}
+
+func corsOriginAllowed(origin string) bool {
+	for _, configured := range strings.Split(os.Getenv("DBX_ALLOWED_ORIGINS"), ",") {
+		if strings.TrimSpace(configured) == origin {
+			return true
+		}
+	}
+	return loopbackDashboardOrigin(origin)
+}
+
+func loopbackDashboardOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return false
+	}
+	host := u.Hostname()
+	return host == "127.0.0.1" || host == "localhost" || host == "::1"
+}
+
+func recoverHTTP(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				http.Error(w, "internal request failure", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // internalAPIOnly protects engine control endpoints with a shared secret. It
@@ -350,6 +409,10 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 	})))
 
 	mux.HandleFunc("/health", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if h.metrics.TenantReady.Load() == 0 {
+			http.Error(w, `{"status":"not_ready"}`, http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
 	}))
@@ -376,20 +439,21 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		key := r.URL.Query().Get("key")
 		dim := r.URL.Query().Get("dim")
 		if key == "" || dim == "" {
 			http.Error(w, "Missing key or dim query parameters", http.StatusBadRequest)
 			return
 		}
-		
+
+		r.Body = http.MaxBytesReader(w, r.Body, 8*1024*1024)
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		
+
 		cmd := &protocol.Command{Name: "VADDBIN", Args: [][]byte{[]byte(key), []byte(dim), body}}
 		var buf bytes.Buffer
 		writer := protocol.NewWriter(&buf)
@@ -402,7 +466,7 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 			w.Write(buf.Bytes())
 			return
 		}
-		
+
 		w.WriteHeader(http.StatusOK)
 		w.Write(buf.Bytes())
 	})))
@@ -411,10 +475,10 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		
+
 		// Enforce maximum payload size (512KB) to prevent DoS attacks
 		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
-		
+
 		var req struct {
 			Command []string `json:"command"`
 		}
@@ -447,14 +511,14 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 			Permissions: auth.PermAll,
 			AllowedKeys: []string{"*"},
 		}
-		
+
 		if err := h.enforcer.Enforce(dummyUser, cmd); err != nil {
 			if buf.Len() == 0 {
 				writer.WriteErrorRaw(err.Error())
 			}
 		} else {
 			// Write to audit log
-			if h.auditGuard != nil {
+			if h.auditGuard != nil && protocol.ShouldAudit(cmd.Normalized()) {
 				clientIP := r.RemoteAddr
 				if host, _, err := net.SplitHostPort(clientIP); err == nil {
 					clientIP = host
@@ -466,7 +530,7 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 					Result:     "ok",
 				})
 			}
-			
+
 			// Execute command
 			if err := h.executor.Execute(0, cmd, writer); err != nil {
 				if buf.Len() == 0 {
@@ -482,7 +546,13 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 	})))
 
 	addr := fmt.Sprintf("%s:%d", h.cfg.Host, h.cfg.HTTPPort)
-	srv := &http.Server{Addr: addr, Handler: mux}
+	srv := &http.Server{
+		Addr:              addr,
+		Handler:           recoverHTTP(mux),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       h.cfg.ReadTimeout,
+		WriteTimeout:      h.cfg.WriteTimeout,
+	}
 	go func() {
 		<-ctx.Done()
 		srv.Shutdown(context.Background())

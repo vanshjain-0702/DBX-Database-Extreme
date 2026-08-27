@@ -1,4 +1,3 @@
-
 import { Routes, Route, Navigate, useParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import Header from '../components/Header';
@@ -18,7 +17,7 @@ export default function ClusterDashboard() {
     <div className="cluster-dashboard h-full flex w-full">
       <Sidebar clusterId={id || ''} />
 
-      <main className="main-content flex-1 flex flex-col min-w-0 overflow-hidden bg-[#f8fafc]">
+      <main className="main-content flex-1 flex flex-col min-w-0 overflow-hidden">
         <Header />
         <div className="flex-1 overflow-y-auto">
           <Routes>

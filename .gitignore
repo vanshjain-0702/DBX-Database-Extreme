@@ -6,6 +6,7 @@
 /data/
 /bench/
 /certs/
+internal/orchestrator/data/
 
 # Go
 vendor/

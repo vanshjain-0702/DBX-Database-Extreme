@@ -1,0 +1,50 @@
+server:
+  host: "127.0.0.1"
+  port: 6499
+  http_port: 8180
+  grpc_port: 0
+  max_connections: 10000
+  read_timeout: "30s"
+  write_timeout: "30s"
+
+engine:
+  max_memory: "512mb"
+  eviction_policy: "no-eviction"
+  num_shards: 256
+  max_vectors_per_tenant: 100000
+
+persistence:
+  enabled: true
+  data_dir: "./data/v1-benchmark-current"
+  wal_dir: "./data/v1-benchmark-current/wal"
+  snapshot_dir: "./data/v1-benchmark-current/snapshots"
+  backup_dir: "./data/v1-benchmark-current/backups"
+  wal_sync: "everysec"
+  snapshot_interval: "24h"
+
+replication:
+  role: ""
+  listen_addr: ""
+  raft_enabled: false
+
+cluster:
+  enabled: false
+
+tiering:
+  enabled: false
+
+auth:
+  enabled: true
+  default_user: "default"
+  require_password: true
+
+security:
+  rate_limit:
+    enabled: false
+  tls:
+    enabled: false
+
+observability:
+  logging:
+    level: "warn"
+    format: "text"

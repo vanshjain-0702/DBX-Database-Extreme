@@ -1,197 +1,58 @@
-import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { ShieldAlert, CheckCircle2, Shield, Lock, Key, Layout, Monitor, Plus, Server, Network, Trash2, ChevronDown } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { useState, useEffect } from 'react';
+import { ShieldAlert, CheckCircle2, Shield, Lock, Key, Layout, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { fetchWithAuth } from '../api';
 import { useTheme } from '../components/ThemeProvider';
 import { useLocation, useNavigate } from 'react-router-dom';
-import gsap from 'gsap';
-import { Flip } from 'gsap/Flip';
 
-gsap.registerPlugin(Flip);
+const TZ_KEY = 'dbx-timezone';
 
-// Custom GSAP Dropdown
-function GSAPDropdown({ options, value, onChange, label }: { options: string[], value: string, onChange: (v:string)=>void, label: string }) {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (open) {
-      gsap.fromTo(menuRef.current, 
-        { height: 0, opacity: 0, scale: 0.95 }, 
-        { height: 'auto', opacity: 1, scale: 1, duration: 0.3, ease: 'back.out(1.7)' }
-      );
-    } else if (menuRef.current) {
-      gsap.to(menuRef.current, { height: 0, opacity: 0, scale: 0.95, duration: 0.2, ease: 'power2.in' });
-    }
-  }, [open]);
-
-  return (
-    <div className="relative mb-6">
-      <label className="block text-xs font-bold text-slate-700/70 uppercase tracking-wider mb-2">{label}</label>
-      <div 
-        className="w-full bg-white/40 backdrop-blur-md border border-white/40 text-slate-900 text-sm rounded-xl px-4 py-3 cursor-pointer flex justify-between items-center shadow-sm hover:bg-white/60 transition-colors"
-        onClick={() => setOpen(!open)}
-      >
-        <span>{value}</span>
-        <ChevronDown size={16} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
-      </div>
-      
-      <div 
-        ref={menuRef}
-        className="absolute top-full left-0 w-full mt-2 bg-white/80 backdrop-blur-2xl border border-white/50 rounded-xl shadow-xl overflow-hidden z-20"
-        style={{ height: 0, opacity: 0 }}
-      >
-        {options.map(opt => (
-          <div 
-            key={opt}
-            className={`px-4 py-3 text-sm cursor-pointer transition-colors ${value === opt ? 'bg-indigo-50/50 text-indigo-700 font-medium' : 'hover:bg-slate-50/50'}`}
-            onClick={() => {
-              onChange(opt);
-              setOpen(false);
-            }}
-          >
-            {opt}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// 3D Tilt Card
-function TiltCard({ children, className }: { children: React.ReactNode, className?: string }) {
-  const cardRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const centerX = rect.width / 2;
-    const centerY = rect.height / 2;
-    
-    // Rotate max 10 degrees
-    const rotateX = ((y - centerY) / centerY) * -10;
-    const rotateY = ((x - centerX) / centerX) * 10;
-    
-    gsap.to(cardRef.current, {
-      rotateX,
-      rotateY,
-      transformPerspective: 1000,
-      ease: "power2.out",
-      duration: 0.4
-    });
-  };
-
-  const handleMouseLeave = () => {
-    if (!cardRef.current) return;
-    gsap.to(cardRef.current, {
-      rotateX: 0,
-      rotateY: 0,
-      ease: "elastic.out(1, 0.3)",
-      duration: 1
-    });
-  };
-
-  return (
-    <div 
-      ref={cardRef} 
-      className={className} 
-      onMouseMove={handleMouseMove} 
-      onMouseLeave={handleMouseLeave}
-      style={{ transformStyle: 'preserve-3d' }}
-    >
-      {children}
-    </div>
-  );
-}
+type ApiKeyRow = {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+};
 
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const pageRef = useRef<HTMLDivElement>(null);
-  const bgRef = useRef<HTMLDivElement>(null);
-  
-  // Background animation
-  useEffect(() => {
-    if (!bgRef.current) return;
-    const ctx = gsap.context(() => {
-      gsap.to(".bg-blob-1", {
-        x: "random(-200, 200)",
-        y: "random(-200, 200)",
-        duration: "random(10, 20)",
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut"
-      });
-      gsap.to(".bg-blob-2", {
-        x: "random(-200, 200)",
-        y: "random(-200, 200)",
-        duration: "random(12, 22)",
-        repeat: -1,
-        yoyo: true,
-        ease: "sine.inOut"
-      });
-    }, bgRef);
-    return () => ctx.revert();
-  }, []);
 
   const getTabFromPath = () => {
     const p = location.pathname;
-    if (p.includes('security')) return 'Security & TLS';
-    if (p.includes('keys')) return 'API Keys';
-    if (p.includes('replication')) return 'Replication (Raft)';
-    return 'General Settings';
+    if (p.includes('security')) return 'security';
+    if (p.includes('keys')) return 'keys';
+    if (p.includes('replication')) return 'replication';
+    return 'general';
   };
-  
+
   const [activeTab, setActiveTab] = useState(getTabFromPath());
-  
+
   useEffect(() => {
-    const nextTab = getTabFromPath();
-    if (nextTab !== activeTab) setActiveTab(nextTab);
+    setActiveTab(getTabFromPath());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const onTabClick = (tabName: string) => {
-    // Flip animation for the active pill indicator
-    const state = Flip.getState('.tab-pill');
-    setActiveTab(tabName);
-    requestAnimationFrame(() => {
-      Flip.from(state, {
-        duration: 0.5,
-        ease: 'power3.out',
-        absolute: true
-      });
-    });
-
-    if (tabName === 'Security & TLS') navigate('/settings/security');
-    else if (tabName === 'API Keys') navigate('/settings/keys');
-    else if (tabName === 'Replication (Raft)') navigate('/settings/replication');
+  const onTabClick = (tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'security') navigate('/settings/security');
+    else if (tab === 'keys') navigate('/settings/keys');
+    else if (tab === 'replication') navigate('/settings/replication');
     else navigate('/settings');
   };
 
-  useLayoutEffect(() => {
-    if (pageRef.current) {
-      gsap.fromTo('.settings-panel', 
-        { y: 30, opacity: 0, scale: 0.98 }, 
-        { y: 0, opacity: 1, scale: 1, duration: 0.6, stagger: 0.1, ease: 'power3.out' }
-      );
-    }
-  }, [activeTab]);
-
   const tabs = [
-    { name: 'General Settings', icon: <Layout size={16} /> },
-    { name: 'Security & TLS', icon: <Shield size={16} /> },
-    { name: 'API Keys', icon: <Key size={16} /> },
-    { name: 'Replication (Raft)', icon: <Network size={16} /> }
+    { id: 'general', name: 'General', icon: <Layout size={14} /> },
+    { id: 'security', name: 'Security', icon: <Shield size={14} /> },
+    { id: 'keys', name: 'API keys', icon: <Key size={14} /> },
+    { id: 'replication', name: 'Replication', icon: <AlertTriangle size={14} /> },
   ];
 
-  // Logic states
-  const [apiKeys, setApiKeys] = useState<any[]>([]);
+  const [apiKeys, setApiKeys] = useState<ApiKeyRow[]>([]);
   const [newKeyName, setNewKeyName] = useState('');
   const [showKeyModal, setShowKeyModal] = useState(false);
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
-  const [raftStatus, setRaftStatus] = useState<any>(null);
 
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -199,7 +60,12 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [timezone, setTimezone] = useState('UTC (Coordinated Universal Time)');
+  const [timezone, setTimezone] = useState(() => localStorage.getItem(TZ_KEY) || 'UTC');
+
+  const persistTimezone = (v: string) => {
+    setTimezone(v);
+    localStorage.setItem(TZ_KEY, v);
+  };
 
   const loadApiKeys = async () => {
     try {
@@ -211,29 +77,11 @@ export default function SettingsPage() {
     } catch (e) { console.error(e); }
   };
 
-  const loadRaftStatus = async () => {
-    try {
-      const res = await fetchWithAuth('/api/admin/raft/status');
-      if (res.ok) setRaftStatus(await res.json());
-    } catch (e) { console.error(e); }
-  };
-
   useEffect(() => {
-    if (activeTab === 'API Keys') loadApiKeys();
-    if (activeTab === 'Replication (Raft)') loadRaftStatus();
+    if (activeTab === 'keys') loadApiKeys();
   }, [activeTab]);
 
-  // Keys list staggering animation
-  useEffect(() => {
-    if (activeTab === 'API Keys' && apiKeys.length > 0) {
-      gsap.fromTo('.key-row', 
-        { opacity: 0, x: -20 },
-        { opacity: 1, x: 0, duration: 0.5, stagger: 0.05, ease: 'back.out(1.5)' }
-      );
-    }
-  }, [apiKeys, activeTab]);
-
-  const handleCreateKey = async (e: React.FormEvent) => {
+  const handleCreateKey = async (e: FormEvent) => {
     e.preventDefault();
     if (!newKeyName) return;
     try {
@@ -262,15 +110,15 @@ export default function SettingsPage() {
     } catch (e) { console.error(e); }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
+  const handlePasswordChange = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
     if (newPassword !== confirmPassword) {
-      setError("New passwords do not match."); return;
+      setError('New passwords do not match.'); return;
     }
     if (newPassword.length < 8) {
-      setError("Password must be at least 8 characters long."); return;
+      setError('Password must be at least 8 characters long.'); return;
     }
     setLoading(true);
     try {
@@ -279,46 +127,42 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
       });
-      if (!res.ok) throw new Error("Failed to update password");
-      setSuccess("Password successfully updated. Please use the new password on your next login.");
+      if (!res.ok) throw new Error('Failed to update password');
+      setSuccess('Password updated. Use it on the next login.');
       setOldPassword(''); setNewPassword(''); setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.message || "An error occurred");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="relative flex h-full w-full overflow-hidden bg-slate-50">
-      
-      {/* Animated Background Mesh */}
-      <div ref={bgRef} className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="bg-blob-1 absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] rounded-full bg-indigo-300/30 blur-[100px] mix-blend-multiply"></div>
-        <div className="bg-blob-2 absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] rounded-full bg-blue-300/30 blur-[120px] mix-blend-multiply"></div>
-        <div className="absolute inset-0 bg-white/40 backdrop-blur-[50px]"></div>
-      </div>
+  const titles: Record<string, { h: string; p: string }> = {
+    general: { h: 'General', p: 'Display theme and timezone for this operator session.' },
+    security: { h: 'Security', p: 'Control-plane credentials. TLS is configured outside this dashboard.' },
+    keys: { h: 'API keys', p: 'Programmatic access to the orchestrator.' },
+    replication: { h: 'Replication', p: 'Data-plane Raft status for this release.' },
+  };
 
-      {/* Settings Navigation Sidebar */}
-      <div className="w-64 border-r border-white/20 bg-white/20 backdrop-blur-3xl p-6 hidden md:block z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-        <h2 className="text-xl font-black bg-gradient-to-r from-slate-900 to-slate-600 bg-clip-text text-transparent tracking-tight mb-8">Settings</h2>
-        <nav className="space-y-2 relative">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.name;
+  return (
+    <div className="flex h-full w-full bg-[var(--bg-primary)]">
+      <div className="w-52 border-r border-[var(--border-color)] bg-[var(--bg-sidebar)] p-3 hidden md:block">
+        <div className="px-2 py-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Settings</div>
+        <nav className="space-y-0.5">
+          {tabs.map(tab => {
+            const isActive = activeTab === tab.id;
             return (
               <button
-                key={tab.name}
-                onClick={() => onTabClick(tab.name)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-colors relative z-10 ${
-                  isActive ? 'text-indigo-900' : 'text-slate-500 hover:text-slate-800'
+                key={tab.id}
+                type="button"
+                onClick={() => onTabClick(tab.id)}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] font-medium border-l-2 ${
+                  isActive
+                    ? 'border-[var(--accent-primary)] bg-[var(--accent-soft)] text-[var(--accent-primary)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
                 }`}
               >
-                {isActive && (
-                  <div className="tab-pill absolute inset-0 bg-white shadow-[0_4px_20px_rgba(0,0,0,0.05)] rounded-xl -z-10 border border-white/60"></div>
-                )}
-                <span className={`${isActive ? 'text-indigo-600' : 'text-slate-400'}`}>
-                  {tab.icon}
-                </span>
+                {tab.icon}
                 {tab.name}
               </button>
             );
@@ -326,198 +170,174 @@ export default function SettingsPage() {
         </nav>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto p-8 z-10" ref={pageRef}>
-        <div className="max-w-4xl mx-auto">
-          
-          <div className="mb-8 md:hidden">
-            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Settings</h2>
+      <div className="flex-1 overflow-y-auto p-7">
+        <div className="max-w-3xl">
+          <div className="mb-6">
+            <h3 className="text-[20px] font-semibold tracking-tight">{titles[activeTab].h}</h3>
+            <p className="text-[13px] text-[var(--text-muted)] mt-1">{titles[activeTab].p}</p>
           </div>
 
-          <div className="mb-10 settings-panel">
-            <h3 className="text-4xl font-black bg-gradient-to-br from-slate-900 to-slate-600 bg-clip-text text-transparent tracking-tight">{activeTab}</h3>
-            <p className="text-base text-slate-500 mt-2 font-medium">
-              Manage your {activeTab.toLowerCase().replace(' & tls', '').replace(' (raft)', '')} preferences and configurations.
-            </p>
-          </div>
-
-          {activeTab === 'General Settings' && (
-            <div className="settings-panel bg-white/40 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-xl overflow-hidden p-8">
-              <div className="flex items-center gap-6 mb-8">
-                <div className="w-20 h-20 bg-gradient-to-br from-white to-slate-100 border border-white shadow-lg rounded-2xl flex items-center justify-center">
-                  <Monitor size={32} className="text-indigo-500" />
-                </div>
-                <div>
-                  <h4 className="text-xl font-bold text-slate-900">Workspace Details</h4>
-                  <p className="text-sm text-slate-500 font-medium mt-1">Configure global dashboard preferences.</p>
-                </div>
+          {activeTab === 'general' && (
+            <div className="panel p-5 space-y-5">
+              <div>
+                <label className="block mb-1.5">Display theme</label>
+                <select
+                  className="input-field max-w-sm"
+                  value={theme}
+                  onChange={e => setTheme(e.target.value as 'light' | 'dark' | 'system')}
+                >
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                  <option value="system">System</option>
+                </select>
+                <p className="text-[12px] text-[var(--text-muted)] mt-1.5">Stored in this browser. Light is the default.</p>
               </div>
-              
-              <div className="space-y-2">
-                <GSAPDropdown 
-                  label="Display Theme"
-                  value={theme === 'system' ? 'System Default' : theme === 'light' ? 'Light Theme' : 'Dark Theme'}
-                  options={['System Default', 'Light Theme', 'Dark Theme']}
-                  onChange={(v) => {
-                    if(v==='System Default') setTheme('system');
-                    else if(v==='Light Theme') setTheme('light');
-                    else setTheme('dark');
-                  }}
-                />
-                
-                <GSAPDropdown 
-                  label="Timezone"
+              <div>
+                <label className="block mb-1.5">Timezone</label>
+                <select
+                  className="input-field max-w-sm"
                   value={timezone}
-                  options={['UTC (Coordinated Universal Time)', 'America/New_York (EST)', 'America/Los_Angeles (PST)']}
-                  onChange={(v) => setTimezone(v)}
-                />
+                  onChange={e => persistTimezone(e.target.value)}
+                >
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">America/New_York</option>
+                  <option value="America/Los_Angeles">America/Los_Angeles</option>
+                  <option value="Europe/London">Europe/London</option>
+                  <option value="Asia/Kolkata">Asia/Kolkata</option>
+                </select>
+                <p className="text-[12px] text-[var(--text-muted)] mt-1.5">Persisted locally as {timezone}.</p>
               </div>
             </div>
           )}
 
-          {activeTab === 'Security & TLS' && (
-            <div className="settings-panel bg-white/40 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-xl overflow-hidden">
-              <div className="px-8 py-6 border-b border-white/30 bg-white/20 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-red-100 text-red-600 rounded-lg shadow-sm border border-red-200">
-                    <Shield size={20} />
-                  </div>
-                  <h4 className="text-base font-bold text-slate-900 tracking-wide">Administrator Password</h4>
-                </div>
+          {activeTab === 'security' && (
+            <div className="space-y-4">
+              <div className="panel p-5">
+                <h4 className="text-[14px] font-semibold mb-1">TLS</h4>
+                <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                  TLS terminates at the control-plane reverse proxy or orchestrator bind. This dashboard does not issue certificates or persist TLS settings. Configure certificates in orchestrator / ingress config — not here.
+                </p>
               </div>
-              
-              <div className="p-8">
-                {error && (
-                  <div className="bg-red-50 text-red-600 p-4 rounded-2xl mb-8 text-sm font-semibold border border-red-100 flex items-center gap-3 shadow-sm">
-                    <ShieldAlert size={18} /> {error}
-                  </div>
-                )}
-                {success && (
-                  <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl mb-8 text-sm font-semibold border border-emerald-100 flex items-center gap-3 shadow-sm">
-                    <CheckCircle2 size={18} /> {success}
-                  </div>
-                )}
 
-                <form onSubmit={handlePasswordChange} className="space-y-6 max-w-xl">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700/70 uppercase tracking-wider mb-2">Current Password</label>
-                    <div className="relative">
-                      <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <div className="panel overflow-hidden">
+                <div className="panel-header">
+                  <div className="panel-title"><Lock size={14} /> Administrator password</div>
+                </div>
+                <div className="p-5">
+                  {error && (
+                    <div className="alert-error mb-4">
+                      <ShieldAlert size={14} /> {error}
+                    </div>
+                  )}
+                  {success && (
+                    <div className="flex items-center gap-2 p-3 rounded-md text-[13px] mb-4 bg-emerald-50 dark:bg-emerald-950/30 text-[var(--success)] border border-emerald-200 dark:border-emerald-900">
+                      <CheckCircle2 size={14} /> {success}
+                    </div>
+                  )}
+
+                  <form onSubmit={handlePasswordChange} className="space-y-4 max-w-xl">
+                    <div>
+                      <label className="block mb-1.5">Current password</label>
                       <input
                         type="password"
-                        className="w-full bg-white/50 border border-white/50 text-slate-900 text-sm rounded-2xl pl-12 pr-4 py-3.5 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all shadow-inner"
-                        placeholder="••••••••"
-                        value={oldPassword} onChange={e => setOldPassword(e.target.value)} required
+                        className="input-field"
+                        value={oldPassword}
+                        onChange={e => setOldPassword(e.target.value)}
+                        required
                       />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700/70 uppercase tracking-wider mb-2">New Password</label>
-                      <div className="relative">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block mb-1.5">New password</label>
                         <input
                           type="password"
-                          className="w-full bg-white/50 border border-white/50 text-slate-900 text-sm rounded-2xl pl-12 pr-4 py-3.5 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all shadow-inner"
-                          placeholder="••••••••"
-                          value={newPassword} onChange={e => setNewPassword(e.target.value)} required
+                          className="input-field"
+                          value={newPassword}
+                          onChange={e => setNewPassword(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1.5">Confirm</label>
+                        <input
+                          type="password"
+                          className="input-field"
+                          value={confirmPassword}
+                          onChange={e => setConfirmPassword(e.target.value)}
+                          required
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700/70 uppercase tracking-wider mb-2">Confirm Password</label>
-                      <div className="relative">
-                        <Lock size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="password"
-                          className="w-full bg-white/50 border border-white/50 text-slate-900 text-sm rounded-2xl pl-12 pr-4 py-3.5 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 transition-all shadow-inner"
-                          placeholder="••••••••"
-                          value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="pt-6">
-                    <button type="submit" className="bg-slate-900 hover:bg-slate-800 text-white px-8 py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50" disabled={loading}>
-                      {loading ? 'Updating...' : 'Update Password'}
+                    <button type="submit" className="btn-primary" disabled={loading}>
+                      {loading ? 'Updating…' : 'Update password'}
                     </button>
-                  </div>
-                </form>
+                  </form>
+                </div>
               </div>
             </div>
           )}
 
-          {activeTab === 'API Keys' && (
-            <div className="space-y-8 settings-panel">
-              
+          {activeTab === 'keys' && (
+            <div className="space-y-4">
               {showKeyModal && (
-                <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                  <div className="bg-white/80 backdrop-blur-2xl rounded-3xl p-8 max-w-md w-full shadow-2xl border border-white">
-                    <h3 className="text-2xl font-black text-slate-900 mb-6 tracking-tight">Create Secret Key</h3>
+                <div className="modal-overlay" onClick={() => setShowKeyModal(false)}>
+                  <div className="modal-content p-5" onClick={e => e.stopPropagation()}>
+                    <h3 className="text-[16px] font-semibold mb-4">Create API key</h3>
                     {!generatedKey ? (
                       <form onSubmit={handleCreateKey}>
-                        <label className="block text-xs font-bold text-slate-700/70 uppercase tracking-wider mb-2">Key Name (e.g. Production App)</label>
-                        <input autoFocus className="w-full bg-white/50 border border-white text-slate-900 text-sm rounded-2xl px-4 py-3.5 mb-8 outline-none focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 transition-all shadow-inner" value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} />
-                        <div className="flex justify-end gap-3">
-                          <button type="button" onClick={()=>setShowKeyModal(false)} className="px-6 py-3 bg-white border border-gray-200 shadow-sm rounded-xl font-bold text-slate-700 hover:bg-gray-50 transition-colors">Cancel</button>
-                          <button type="submit" className="px-6 py-3 bg-slate-900 text-white shadow-lg rounded-xl font-bold hover:-translate-y-0.5 transition-all">Generate Key</button>
+                        <label className="block mb-1.5">Name</label>
+                        <input autoFocus className="input-field mb-5" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
+                        <div className="flex justify-end gap-2">
+                          <button type="button" onClick={() => setShowKeyModal(false)} className="btn-secondary">Cancel</button>
+                          <button type="submit" className="btn-primary">Generate</button>
                         </div>
                       </form>
                     ) : (
                       <div>
-                        <div className="bg-amber-100/50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-sm mb-6 font-medium shadow-inner">
-                          <strong className="block mb-1 text-base">⚠️ Important:</strong> Copy this key now. For security reasons, you will never be able to see it again!
-                        </div>
-                        <div className="bg-slate-900 text-emerald-400 font-mono p-5 rounded-2xl break-all mb-8 select-all shadow-inner border border-slate-700 text-lg">
+                        <p className="text-[13px] text-[var(--warning)] mb-3">Copy this key now. It will not be shown again.</p>
+                        <div className="bg-zinc-950 text-emerald-400 font-mono p-3 rounded-md break-all mb-4 text-[13px] select-all">
                           {generatedKey}
                         </div>
-                        <button onClick={()=>{setShowKeyModal(false); setGeneratedKey(null);}} className="w-full py-3.5 bg-slate-900 text-white rounded-xl font-bold shadow-lg hover:-translate-y-0.5 transition-all">I have copied my key</button>
+                        <button type="button" onClick={() => { setShowKeyModal(false); setGeneratedKey(null); }} className="btn-primary w-full justify-center">
+                          I have copied the key
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
               )}
 
-              <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-                <div className="flex items-center gap-6">
-                  <div className="w-16 h-16 bg-gradient-to-br from-red-50 to-orange-50 text-red-600 border border-red-100 rounded-2xl flex items-center justify-center shadow-sm">
-                    <Key size={28} />
-                  </div>
-                  <div>
-                    <h4 className="text-xl font-bold text-slate-900">Manage Programmatic Access</h4>
-                    <p className="text-sm text-slate-500 mt-1 font-medium max-w-md">
-                      API keys allow programmatic access to the cluster. Keep keys secure and never commit them to client-side code repositories.
-                    </p>
-                  </div>
-                </div>
-                <button onClick={()=>setShowKeyModal(true)} className="shrink-0 flex items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 px-6 py-3.5 rounded-2xl font-bold text-sm transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5">
-                  <Plus size={18} /> Generate New Key
+              <div className="panel p-4 flex items-center justify-between gap-4">
+                <p className="text-[13px] text-[var(--text-secondary)]">
+                  Keys authenticate orchestrator API calls. Do not embed them in client-side apps.
+                </p>
+                <button type="button" onClick={() => setShowKeyModal(true)} className="btn-primary shrink-0">
+                  <Plus size={14} /> Generate
                 </button>
               </div>
-              
-              <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-xl overflow-hidden">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-white/40 border-b border-white/50 backdrop-blur-md">
+
+              <div className="panel overflow-hidden">
+                <table className="w-full text-left text-[13px]">
+                  <thead className="bg-[var(--bg-tertiary)] border-b border-[var(--border-color)]">
                     <tr>
-                      <th className="px-8 py-5 font-bold text-slate-700 uppercase tracking-wider text-xs">Name</th>
-                      <th className="px-8 py-5 font-bold text-slate-700 uppercase tracking-wider text-xs">Key Prefix</th>
-                      <th className="px-8 py-5 font-bold text-slate-700 uppercase tracking-wider text-xs">Created At</th>
-                      <th className="px-8 py-5 font-bold text-slate-700 uppercase tracking-wider text-xs text-right">Action</th>
+                      <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Name</th>
+                      <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Prefix</th>
+                      <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wider text-[var(--text-muted)]">Created</th>
+                      <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wider text-[var(--text-muted)] text-right"> </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/40">
+                  <tbody>
                     {apiKeys.length === 0 ? (
-                      <tr><td colSpan={4} className="px-8 py-12 text-center text-slate-500 font-medium">No API keys generated yet.</td></tr>
+                      <tr><td colSpan={4} className="px-4 py-10 text-center text-[var(--text-muted)]">No API keys yet.</td></tr>
                     ) : (
                       apiKeys.map(k => (
-                        <tr key={k.id} className="key-row hover:bg-white/60 transition-colors">
-                          <td className="px-8 py-5 font-bold text-slate-900">{k.name}</td>
-                          <td className="px-8 py-5 font-mono text-slate-500 font-medium bg-white/30 rounded inline-block mt-3 mb-3 ml-8">{k.prefix}••••••••••••</td>
-                          <td className="px-8 py-5 text-slate-500 font-medium">{new Date(k.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</td>
-                          <td className="px-8 py-5 text-right">
-                            <button onClick={()=>handleRevokeKey(k.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center">
-                              <Trash2 size={18} />
+                        <tr key={k.id} className="border-t border-[var(--border-color)]">
+                          <td className="px-4 py-2.5 font-medium">{k.name}</td>
+                          <td className="px-4 py-2.5 font-mono text-[var(--text-muted)]">{k.prefix}••••</td>
+                          <td className="px-4 py-2.5 text-[var(--text-muted)]">{new Date(k.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                          <td className="px-4 py-2.5 text-right">
+                            <button type="button" onClick={() => handleRevokeKey(k.id)} className="p-1.5 text-[var(--text-muted)] hover:text-[var(--error)]">
+                              <Trash2 size={14} />
                             </button>
                           </td>
                         </tr>
@@ -529,68 +349,19 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeTab === 'Replication (Raft)' && (
-            <div className="space-y-8 settings-panel">
-              <div className="bg-white/40 backdrop-blur-2xl border border-white/50 rounded-3xl shadow-xl overflow-hidden p-8">
-                <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-                  <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/30 rounded-2xl flex items-center justify-center">
-                      <Network size={28} />
-                    </div>
-                    <div>
-                      <h4 className="text-xl font-bold text-slate-900">Cluster Topology</h4>
-                      <p className="text-sm text-slate-500 font-medium mt-1">Live visualization of Raft consensus state</p>
-                    </div>
-                  </div>
-                  {raftStatus && (
-                    <div className="text-right bg-white/60 px-6 py-3 rounded-2xl border border-white shadow-sm">
-                      <div className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-1">Current Term</div>
-                      <div className="text-3xl font-black bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">{raftStatus.term}</div>
-                    </div>
-                  )}
+          {activeTab === 'replication' && (
+            <div className="panel p-5">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 text-[var(--warning)]"><AlertTriangle size={18} /></div>
+                <div>
+                  <h4 className="text-[14px] font-semibold mb-1">Data-plane Raft is disabled</h4>
+                  <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
+                    v1 runs a single-node engine per tenant. Consensus, replica add/remove, and a cluster builder are not available. Fail closed: do not assume multi-node durability from this control plane.
+                  </p>
                 </div>
-
-                {!raftStatus ? (
-                  <div className="text-center py-12 text-slate-400 font-medium">Loading distributed consensus state...</div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" style={{ perspective: '1000px' }}>
-                    {raftStatus.peers?.map((peer: any) => (
-                      <TiltCard key={peer.id} className={`p-6 border rounded-3xl relative overflow-hidden transition-colors ${peer.state === 'Leader' ? 'bg-gradient-to-br from-white/90 to-indigo-50/90 border-indigo-200 shadow-xl shadow-indigo-500/10' : 'bg-white/60 border-white shadow-lg'}`}>
-                        {peer.state === 'Leader' && (
-                          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-2xl rounded-full -mr-10 -mt-10 pointer-events-none"></div>
-                        )}
-                        <div className="flex items-center gap-3 mb-4 relative z-10">
-                          <div className={`p-2 rounded-xl ${peer.state === 'Leader' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                            <Server size={18} />
-                          </div>
-                          <span className={`text-lg font-black ${peer.state === 'Leader' ? 'text-indigo-900' : 'text-slate-700'}`}>{peer.id}</span>
-                        </div>
-                        <div className="text-sm text-slate-500 font-mono mb-5 relative z-10">{peer.address}</div>
-                        <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-bold tracking-wide relative z-10 ${
-                          peer.state === 'Leader' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 shadow-sm border border-slate-200'
-                        }`}>
-                          {peer.state === 'Leader' && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse mr-2"></div>}
-                          {peer.state}
-                        </span>
-                      </TiltCard>
-                    ))}
-                  </div>
-                )}
-                
-                {raftStatus && (
-                  <div className="bg-slate-900 rounded-2xl p-6 flex items-center justify-between text-sm shadow-xl relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/10 to-transparent pointer-events-none"></div>
-                    <span className="text-slate-400 font-medium relative z-10">Applied Index: <strong className="text-white font-mono text-lg ml-2">{raftStatus.applied_index}</strong></span>
-                    <div className="flex items-center gap-3 relative z-10 bg-black/30 px-4 py-2 rounded-xl">
-                      <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.8)] animate-pulse"></div>
-                      <span className="text-emerald-400 font-bold tracking-wide">Consensus Healthy</span>
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           )}
-
         </div>
       </div>
     </div>

@@ -5,6 +5,11 @@ import ClusterDashboard from './pages/ClusterDashboard';
 import LoginPage from './pages/LoginPage';
 import Sidebar from './components/Sidebar';
 import SettingsPage from './pages/SettingsPage';
+import Header from './components/Header';
+import { ThemeProvider } from './components/ThemeProvider';
+import { ToastProvider } from './components/Toaster';
+import { TenantProvider } from './components/TenantProvider';
+import CommandPalette from './components/CommandPalette';
 import './index.css';
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
@@ -15,16 +20,9 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   return children;
 };
 
-import Header from './components/Header';
-
-/**
- * GlobalLayout wraps pages that need the full sidebar+content layout
- * but are not inside a specific cluster (e.g. /settings).
- */
 function GlobalLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-full w-full bg-[#f8fafc]">
-      {/* Sidebar with empty clusterId for global pages */}
+    <div className="flex h-full w-full bg-[var(--bg-primary)]">
       <Sidebar clusterId="" />
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header />
@@ -36,44 +34,39 @@ function GlobalLayout({ children }: { children: ReactNode }) {
   );
 }
 
-import { ThemeProvider } from './components/ThemeProvider';
-import { ToastProvider } from './components/Toaster';
-import CommandPalette from './components/CommandPalette';
-
 export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
         <Router>
-          <div className="app-root text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-950 transition-colors duration-200">
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
+          <TenantProvider>
+            <div className="app-root">
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
 
-              {/* Landing / Org View — has its own internal layout (no sidebar) */}
-              <Route path="/" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
+                <Route path="/" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
 
-              {/* Global Settings — uses GlobalLayout with sidebar */}
-              <Route
-                path="/settings/*"
-                element={
-                  <ProtectedRoute>
-                    <GlobalLayout>
-                      <SettingsPage />
-                    </GlobalLayout>
-                  </ProtectedRoute>
-                }
-              />
+                <Route
+                  path="/settings/*"
+                  element={
+                    <ProtectedRoute>
+                      <GlobalLayout>
+                        <SettingsPage />
+                      </GlobalLayout>
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Specific Cluster Dashboard */}
-              <Route
-                path="/cluster/:id/*"
-                element={<ProtectedRoute><ClusterDashboard /></ProtectedRoute>}
-              />
+                <Route
+                  path="/cluster/:id/*"
+                  element={<ProtectedRoute><ClusterDashboard /></ProtectedRoute>}
+                />
 
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
-          </div>
-          <CommandPalette />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
+            <CommandPalette />
+          </TenantProvider>
         </Router>
       </ToastProvider>
     </ThemeProvider>

@@ -6,8 +6,7 @@ metadata:
     app: dbx-orchestrator
 spec:
   serviceName: "dbx-internal"
-  # Single-node only. Multi-node Raft join and replicated data-plane storage
-  # are not production-ready yet.
+  # The v1 runtime fails closed above one replica.
   replicas: 1
   selector:
     matchLabels:
@@ -22,21 +21,12 @@ spec:
       - name: orchestrator
         image: dbx-cloud:latest
         imagePullPolicy: Always
-        command:
-          - "./bin/orchestrator"
-          - "-id"
-          - "$(POD_NAME)"
-          - "-bind"
-          - "$(POD_NAME).dbx-internal:7000"
-          - "-raftdir"
-          - "/dbx/data/raft"
+        command: ["./bin/orchestrator"]
         env:
         - name: POD_NAME
           valueFrom:
             fieldRef:
               fieldPath: metadata.name
-        - name: AWS_S3_BUCKET
-          value: "dbx-backups-placeholder" # To be replaced by Terraform output
         - name: DBX_JWT_SECRET
           valueFrom:
             secretKeyRef:
@@ -55,8 +45,8 @@ spec:
         ports:
         - containerPort: 8000
           name: http
-        - containerPort: 7000
-          name: raft
+        - containerPort: 6380
+          name: resp
         volumeMounts:
         - name: data
           mountPath: /dbx/data

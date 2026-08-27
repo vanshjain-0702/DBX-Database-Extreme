@@ -19,8 +19,11 @@ type PrimaryStream struct {
 	nextID   uint64
 	listener net.Listener
 	done     chan struct{}
+	liveCh   chan []byte
 	stopOnce sync.Once
 }
+
+const liveReplicationBuffer = 4096
 
 const maxReplicationFrameSize = 64 << 20
 
@@ -34,6 +37,7 @@ func NewPrimaryStream() *PrimaryStream {
 	return &PrimaryStream{
 		replicas: make(map[uint64]*StreamReplicaConn),
 		done:     make(chan struct{}),
+		liveCh:   make(chan []byte, liveReplicationBuffer),
 	}
 }
 
@@ -49,6 +53,7 @@ func (p *PrimaryStream) Start(addr string, wal *persistence.WAL) error {
 	p.mu.Lock()
 	p.listener = listener
 	p.mu.Unlock()
+	go p.relay()
 	go func() {
 		for {
 			conn, acceptErr := listener.Accept()
@@ -106,9 +111,31 @@ func (p *PrimaryStream) replica(id uint64) *StreamReplicaConn {
 	return p.replicas[id]
 }
 
-// BroadcastRecord sends a durable WAL record to all replicas.
+// BroadcastRecord enqueues a WAL record for replicas. It never blocks the
+// caller: a full buffer drops the frame and the replica catches up on the
+// next reconnect bootstrap.
 func (p *PrimaryStream) BroadcastRecord(rec *persistence.WALRecord) {
-	p.Broadcast(persistence.EncodeRecord(rec))
+	if rec == nil {
+		return
+	}
+	data := persistence.EncodeRecord(rec)
+	select {
+	case <-p.done:
+		return
+	case p.liveCh <- data:
+	default:
+	}
+}
+
+func (p *PrimaryStream) relay() {
+	for {
+		select {
+		case <-p.done:
+			return
+		case data := <-p.liveCh:
+			p.Broadcast(data)
+		}
+	}
 }
 
 // Stop closes the listener and all replica connections.

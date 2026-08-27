@@ -3,9 +3,9 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
-	"os/signal"
-	"syscall"
+	"sync"
 	"time"
 
 	"github.com/dbx/dbx/internal/api"
@@ -13,18 +13,16 @@ import (
 	"github.com/dbx/dbx/internal/config"
 	"github.com/dbx/dbx/internal/engine"
 	"github.com/dbx/dbx/internal/events"
-	"github.com/hashicorp/raft"
-	"net"
 	"github.com/dbx/dbx/internal/observability"
 	"github.com/dbx/dbx/internal/persistence"
 	"github.com/dbx/dbx/internal/query"
 	"github.com/dbx/dbx/internal/replication"
 	"github.com/dbx/dbx/internal/security"
 	"github.com/dbx/dbx/internal/transaction"
+	"github.com/hashicorp/raft"
 )
 
 const (
-	shutdownTimeout     = 5 * time.Second
 	walSnapshotThreshold = 64 * 1024 * 1024 // 64MB — trigger snapshot when WAL exceeds this
 )
 
@@ -38,10 +36,16 @@ type Instance struct {
 	wal           *persistence.WAL
 	snapshotter   *persistence.Snapshotter
 	kv            *engine.KVStore
+	vecStore      *engine.VectorStore
+	executor      *query.Executor
 	auditGuard    *security.AuditGuard
 	primaryStream *replication.PrimaryStream
 	replicaStream *replication.ReplicaStream
 	serverErr     chan error
+	metrics       *observability.Metrics
+	stopOnce      sync.Once
+	aclStore      *auth.ACLStore
+	initialUsers  []*auth.User
 }
 
 func NewInstance(cfg *config.Config) (*Instance, error) {
@@ -56,7 +60,9 @@ func (i *Instance) Start(ctx context.Context) error {
 	i.ctx, i.cancel = context.WithCancel(ctx)
 	cfg := i.cfg
 	logger := i.logger
-	metrics := observability.Global
+	metrics := &observability.Metrics{}
+	i.metrics = metrics
+	i.serverErr = make(chan error, 1)
 
 	numShards := cfg.Engine.NumShards
 	if numShards <= 0 {
@@ -65,6 +71,7 @@ func (i *Instance) Start(ctx context.Context) error {
 	kv := engine.New(numShards)
 	i.kv = kv
 	vecStore := engine.NewVectorStore(kv, cfg.Persistence.DataDir, cfg.Engine.MaxVectorsPerTenant)
+	i.vecStore = vecStore
 	logger.Info("Engine initialized with %d shards", numShards)
 
 	var wal *persistence.WAL
@@ -94,13 +101,17 @@ func (i *Instance) Start(ctx context.Context) error {
 	multi := transaction.NewMultiManager()
 
 	aclStore := auth.NewACLStore()
+	aclStore.DisableDefault()
 	if cfg.Auth.Enabled && cfg.Auth.RequirePassword {
 		password := os.Getenv("DBX_DEFAULT_PASSWORD")
-		if password == "" {
-			return fmt.Errorf("DBX_DEFAULT_PASSWORD must be set when password authentication is enabled")
+		if password != "" {
+			aclStore.SetDefaultPassword(cfg.Auth.DefaultUser, password)
 		}
-		aclStore.SetDefaultPassword(cfg.Auth.DefaultUser, password)
 	}
+	for _, user := range i.initialUsers {
+		aclStore.AddUser(user)
+	}
+	i.aclStore = aclStore
 	enforcer := security.NewACLEnforcer(aclStore)
 	rateLimit := security.NewRateLimiter(
 		cfg.Security.RateLimit.RequestsPerSecond,
@@ -121,18 +132,30 @@ func (i *Instance) Start(ctx context.Context) error {
 	)
 
 	executor := query.NewExecutor(kv, vecStore, multi, watch, mvcc, pubsub, metrics, wal)
-	
+	i.executor = executor
+	if cfg.Replication.Role == "replica" {
+		executor.SetReadOnly(true)
+	}
+	maxMemory, err := config.ParseBytes(cfg.Engine.MaxMemory)
+	if err != nil {
+		return err
+	}
+	executor.SetMemoryLimit(maxMemory)
+	vecStore.SetMemoryLimit(maxMemory)
+	metrics.TenantMemoryLimit.Store(maxMemory)
+	metrics.TenantReady.Store(1)
+
 	// Raft Integration for Data Plane
 	if cfg.Replication.RaftEnabled {
 		logger.Info("Initializing Raft consensus for data plane on %s", cfg.Replication.RaftBindAddr)
-		
+
 		if err := os.MkdirAll(cfg.Replication.RaftDir, 0700); err != nil {
 			return fmt.Errorf("raft dir error: %w", err)
 		}
-		
+
 		raftCfg := raft.DefaultConfig()
 		raftCfg.LocalID = raft.ServerID(cfg.Replication.RaftNodeID)
-		
+
 		addr, err := net.ResolveTCPAddr("tcp", cfg.Replication.RaftBindAddr)
 		if err != nil {
 			return fmt.Errorf("raft resolve addr error: %w", err)
@@ -141,25 +164,25 @@ func (i *Instance) Start(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("raft transport error: %w", err)
 		}
-		
+
 		snapshots, err := raft.NewFileSnapshotStore(cfg.Replication.RaftDir, 2, os.Stderr)
 		if err != nil {
 			return fmt.Errorf("raft snapshot error: %w", err)
 		}
-		
-		// In-memory store for log and stable store (since we persist via WAL independently, 
+
+		// In-memory store for log and stable store (since we persist via WAL independently,
 		// but Raft requires its own log. In a real system we use boltDB)
 		// For MVP, we'll just use the memory store to avoid adding more boltDB dependencies.
 		logStore := raft.NewInmemStore()
 		stableStore := raft.NewInmemStore()
-		
+
 		fsm := query.NewEngineFSM(executor, snapshotter)
-		
+
 		r, err := raft.NewRaft(raftCfg, fsm, logStore, stableStore, snapshots, transport)
 		if err != nil {
 			return fmt.Errorf("raft init error: %w", err)
 		}
-		
+
 		if cfg.Replication.RaftBootstrap {
 			r.BootstrapCluster(raft.Configuration{
 				Servers: []raft.Server{
@@ -170,9 +193,9 @@ func (i *Instance) Start(ctx context.Context) error {
 				},
 			})
 		}
-		
+
 		// Wire raft into the executor
-		executor.SetRaft(r)
+		executor.SetRaft(&raftBridge{node: r})
 	}
 
 	if wal != nil && cfg.Replication.Role == "primary" && cfg.Replication.ListenAddr != "" && !cfg.Replication.RaftEnabled {
@@ -191,12 +214,13 @@ func (i *Instance) Start(ctx context.Context) error {
 	}
 
 	go func() {
+		defer i.recoverTenantTask("expiry")
 		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				n := kv.DeleteExpired()
+				n := kv.DeleteExpiredLimit(1000)
 				if n > 0 {
 					metrics.TotalExpired.Add(int64(n))
 				}
@@ -208,6 +232,7 @@ func (i *Instance) Start(ctx context.Context) error {
 
 	if cfg.Persistence.Enabled && snapshotter != nil {
 		go func() {
+			defer i.recoverTenantTask("checkpoint")
 			interval := cfg.Persistence.SnapshotInterval
 			if interval == 0 {
 				interval = time.Hour
@@ -217,14 +242,11 @@ func (i *Instance) Start(ctx context.Context) error {
 			for {
 				select {
 				case <-ticker.C:
-					path, err := snapshotter.Save(kv)
+					path, err := executor.Checkpoint(snapshotter)
 					if err != nil {
 						logger.Error("Snapshot failed: %v", err)
 					} else {
 						logger.Info("Snapshot saved to %s", path)
-						if wal != nil {
-							wal.Rotate()
-						}
 					}
 				case <-i.ctx.Done():
 					return
@@ -235,12 +257,15 @@ func (i *Instance) Start(ctx context.Context) error {
 
 	if cfg.Persistence.WALSync == "everysec" && wal != nil {
 		go func() {
+			defer i.recoverTenantTask("wal-sync")
 			ticker := time.NewTicker(time.Second)
 			defer ticker.Stop()
 			for {
 				select {
 				case <-ticker.C:
-					wal.Sync()
+					if err := wal.Sync(); err != nil {
+						metrics.TenantReady.Store(0)
+					}
 				case <-i.ctx.Done():
 					return
 				}
@@ -251,6 +276,7 @@ func (i *Instance) Start(ctx context.Context) error {
 	// WAL size threshold monitor — trigger snapshot when WAL grows beyond threshold
 	if cfg.Persistence.Enabled && wal != nil && snapshotter != nil {
 		go func() {
+			defer i.recoverTenantTask("wal-monitor")
 			ticker := time.NewTicker(30 * time.Second)
 			defer ticker.Stop()
 			for {
@@ -258,15 +284,10 @@ func (i *Instance) Start(ctx context.Context) error {
 				case <-ticker.C:
 					if wal.NeedsRotation() {
 						logger.Info("WAL exceeded size threshold, triggering emergency snapshot...")
-						if path, err := snapshotter.Save(kv); err != nil {
+						if path, err := executor.Checkpoint(snapshotter); err != nil {
 							logger.Error("Emergency snapshot failed: %v", err)
 						} else {
 							logger.Info("Emergency snapshot saved: %s", path)
-							wal.Rotate()
-							compactor := persistence.NewCompactor(cfg.Persistence.WALDir)
-							if n, err := compactor.Compact(); err == nil && n > 0 {
-								logger.Info("Compacted %d old WAL segments", n)
-							}
 						}
 					}
 				case <-i.ctx.Done():
@@ -277,6 +298,7 @@ func (i *Instance) Start(ctx context.Context) error {
 	}
 
 	go func() {
+		defer i.recoverTenantTask("rate-limit-cleanup")
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
 		for {
@@ -295,100 +317,105 @@ func (i *Instance) Start(ctx context.Context) error {
 	i.httpServer = api.NewHTTPServer(&cfg.Server, metrics, executor, os.Getenv("DBX_INTERNAL_API_TOKEN"), enforcer, auditGuard)
 
 	go func() {
+		defer i.recoverTenantTask("http-server")
 		if err := i.httpServer.ListenAndServe(i.ctx); err != nil {
 			logger.Info("HTTP server stopped: %v", err)
 		}
 	}()
 
-	i.serverErr = make(chan error, 1)
 	go func() {
+		defer i.recoverTenantTask("resp-server")
 		i.serverErr <- i.respServer.ListenAndServe(i.ctx)
 	}()
-
-	// Signal handler for graceful shutdown on crash/kill
-	go i.handleSignals()
 
 	return nil
 }
 
-// handleSignals listens for OS signals and performs emergency shutdown.
-func (i *Instance) handleSignals() {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-
-	select {
-	case sig := <-sigCh:
-		i.logger.Info("Received signal %v, initiating graceful shutdown...", sig)
-		i.emergencyShutdown()
-	case <-i.ctx.Done():
-		return
-	}
-}
-
-// emergencyShutdown flushes WAL, takes a final snapshot, then exits.
-func (i *Instance) emergencyShutdown() {
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-
-		// Step 1: Flush WAL to disk
-		if i.wal != nil {
-			i.logger.Info("Emergency: Flushing WAL to disk...")
-			if err := i.wal.Sync(); err != nil {
-				i.logger.Error("Emergency WAL sync failed: %v", err)
-			}
+func (i *Instance) recoverTenantTask(name string) {
+	if recovered := recover(); recovered != nil {
+		if i.metrics != nil {
+			i.metrics.TenantReady.Store(0)
 		}
-
-		// Step 2: Take emergency snapshot
-		if i.snapshotter != nil && i.kv != nil {
-			i.logger.Info("Emergency: Saving snapshot...")
-			if path, err := i.snapshotter.Save(i.kv); err != nil {
-				i.logger.Error("Emergency snapshot failed: %v", err)
-			} else {
-				i.logger.Info("Emergency snapshot saved: %s", path)
-			}
+		err := fmt.Errorf("tenant task %s panicked: %v", name, recovered)
+		i.logger.Error("%v", err)
+		select {
+		case i.serverErr <- err:
+		default:
 		}
-	}()
-
-	// Wait for shutdown to complete, but enforce a hard timeout
-	select {
-	case <-done:
-		i.logger.Info("Graceful shutdown complete.")
-	case <-time.After(shutdownTimeout):
-		i.logger.Warn("Shutdown timeout exceeded (%v), forcing exit.", shutdownTimeout)
 	}
-
-	i.Stop()
 }
 
 func (i *Instance) Stop() {
-	if i.cancel != nil {
-		i.cancel()
-	}
-	if i.respServer != nil {
-		i.respServer.Shutdown()
-	}
-	if i.replicaStream != nil {
-		i.replicaStream.Stop()
-	}
-	if i.primaryStream != nil {
-		i.primaryStream.Stop()
-	}
-	if i.cfg.Persistence.Enabled && i.snapshotter != nil && i.kv != nil {
-		if path, err := i.snapshotter.Save(i.kv); err == nil {
-			i.logger.Info("Final snapshot saved: %s", path)
+	i.stopOnce.Do(func() {
+		if i.metrics != nil {
+			i.metrics.TenantReady.Store(0)
 		}
-	}
-	if i.wal != nil {
-		i.wal.Close()
-	}
-	if i.auditGuard != nil {
-		i.auditGuard.Flush()
-		i.auditGuard.Close()
-	}
-	i.logger.Info("DBX instance shutdown complete")
+		if i.cancel != nil {
+			i.cancel()
+		}
+		if i.respServer != nil {
+			i.respServer.Shutdown()
+		}
+		if i.replicaStream != nil {
+			i.replicaStream.Stop()
+		}
+		if i.primaryStream != nil {
+			i.primaryStream.Stop()
+		}
+		if i.cfg.Persistence.Enabled && i.snapshotter != nil && i.executor != nil {
+			if path, err := i.executor.Checkpoint(i.snapshotter); err == nil {
+				i.logger.Info("Final snapshot saved: %s", path)
+			}
+		}
+		if i.vecStore != nil {
+			i.vecStore.CloseAll()
+		}
+		if i.wal != nil {
+			i.wal.Close()
+		}
+		if i.auditGuard != nil {
+			i.auditGuard.Flush()
+			i.auditGuard.Close()
+		}
+		i.logger.Info("DBX instance shutdown complete")
+	})
 }
 
 func (i *Instance) ErrorChannel() <-chan error {
 	return i.serverErr
+}
+
+// SetInitialUsers installs tenant-scoped credentials before listeners start.
+func (i *Instance) SetInitialUsers(users []*auth.User) {
+	i.initialUsers = append([]*auth.User(nil), users...)
+}
+
+// UpsertUser updates a live tenant credential.
+func (i *Instance) UpsertUser(user *auth.User) {
+	if i.aclStore != nil {
+		i.aclStore.AddUser(user)
+	}
+}
+
+// DeleteUser revokes a credential for new and existing connections.
+func (i *Instance) DeleteUser(name string) {
+	if i.aclStore != nil {
+		i.aclStore.DeleteUser(name)
+	}
+}
+
+// CreateBackup captures a mutation-consistent, checksummed tenant archive.
+func (i *Instance) CreateBackup(tenantID, outputPath string) (persistence.BackupManifest, error) {
+	var manifest persistence.BackupManifest
+	if i.executor == nil || i.snapshotter == nil {
+		return manifest, fmt.Errorf("tenant persistence is unavailable")
+	}
+	err := i.executor.WithMaintenanceCheckpoint(i.snapshotter, func(sequence uint64, snapshotPath string) error {
+		var err error
+		manifest, err = persistence.CreateBackupArchive(
+			tenantID, i.cfg.Persistence.DataDir, snapshotPath, outputPath, sequence,
+		)
+		return err
+	})
+	return manifest, err
 }

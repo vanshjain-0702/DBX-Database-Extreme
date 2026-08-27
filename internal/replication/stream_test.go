@@ -87,3 +87,38 @@ func TestReplicaStreamStopIsIdempotent(t *testing.T) {
 	rs.Stop()
 	rs.Stop()
 }
+
+func TestPrimaryStreamsLiveEverysecWrites(t *testing.T) {
+	wal, err := persistence.OpenWAL(filepath.Join(t.TempDir(), "wal"), "everysec", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wal.Close()
+
+	primary := NewPrimaryStream()
+	if err := primary.Start("127.0.0.1:0", wal); err != nil {
+		t.Fatal(err)
+	}
+	defer primary.Stop()
+	wal.Subscribe(primary.BroadcastRecord)
+
+	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, 4)}
+	replica := NewReplicaStream(primary.Addr(), engine)
+	replica.Start()
+	defer replica.Stop()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := wal.Write(&persistence.WALRecord{Type: persistence.RecordSet, Key: "live", Value: []byte("ok")}); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case record := <-engine.records:
+			if record.Key == "live" && string(record.Value) == "ok" {
+				return
+			}
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
+	t.Fatal("timed out waiting for live WAL stream")
+}

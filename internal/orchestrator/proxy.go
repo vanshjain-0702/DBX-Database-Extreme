@@ -2,9 +2,11 @@ package orchestrator
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +30,8 @@ func NewProxy(manager *Manager, internalAPIToken string) *Proxy {
 }
 
 func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
-	if cached, ok := p.proxies.Load(tenant.ID); ok {
+	cacheKey := tenant.ID + ":" + strconv.Itoa(tenant.HTTPPort)
+	if cached, ok := p.proxies.Load(cacheKey); ok {
 		return cached.(*httputil.ReverseProxy)
 	}
 
@@ -55,7 +58,8 @@ func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
 		req.Header.Set("X-DBX-Internal-Token", p.internalAPIToken)
 	}
 
-	p.proxies.Store(tenant.ID, proxy)
+	p.proxies.Store(cacheKey, proxy)
+	proxy.ModifyResponse = rewriteForeignTenantForbidden
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadGateway)
@@ -64,12 +68,29 @@ func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
 	return proxy
 }
 
-func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	// Enable CORS for dashboard
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "*")
+// rewriteForeignTenantForbidden maps engine 403s (wrong internal token / foreign
+// process bound to the tenant port) to 502 so the control plane can treat them
+// as down instead of leaking an auth error to the dashboard.
+func rewriteForeignTenantForbidden(resp *http.Response) error {
+	if resp.StatusCode != http.StatusForbidden {
+		return nil
+	}
+	if resp.Body != nil {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+	}
+	const body = `{"error":"tenant unavailable"}`
+	resp.StatusCode = http.StatusBadGateway
+	resp.Status = "502 Bad Gateway"
+	resp.Header.Set("Content-Type", "application/json")
+	resp.Header.Del("Www-Authenticate")
+	resp.Body = io.NopCloser(strings.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	return nil
+}
 
+func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
@@ -86,6 +107,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			w.Write([]byte(`{"error": "tenant not found"}`))
+			return
+		}
+		if !p.manager.TenantRunning(tenantID) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			w.Write([]byte(`{"error": "tenant unavailable"}`))
 			return
 		}
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"flag"
@@ -10,8 +11,10 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/dbx/dbx/dashboard"
@@ -19,11 +22,8 @@ import (
 )
 
 func main() {
-	nodeID := flag.String("id", "node1", "Node ID")
-	bindAddr := flag.String("bind", "127.0.0.1:8001", "Raft bind address")
-	raftDir := flag.String("raftdir", "./data/raft", "Raft data dir")
-	joinAddr := flag.String("join", "", "Join address of existing leader")
 	httpPort := flag.Int("port", 8000, "HTTP API port")
+	respAddr := flag.String("resp-addr", ":6380", "public authenticated RESP ingress address")
 	tlsCert := flag.String("tls-cert", "certs/server.crt", "TLS certificate for the control-plane API")
 	tlsKey := flag.String("tls-key", "certs/server.key", "TLS private key for the control-plane API")
 	insecureHTTP := flag.Bool("insecure-http", false, "Disable TLS for local development only")
@@ -87,24 +87,6 @@ func main() {
 		log.Fatalf("Failed to init admin store: %v", err)
 	}
 
-	// Initialize Raft Control Plane
-	raftNode, err := orchestrator.NewRaftNode(*nodeID, *bindAddr, *raftDir, manager)
-	if err != nil {
-		log.Fatalf("Failed to init Raft: %v", err)
-	}
-	manager.RaftNode = raftNode
-
-	if *joinAddr == "" {
-		// Bootstrap standalone
-		if err := raftNode.Bootstrap(*nodeID, *bindAddr); err != nil {
-			log.Printf("Bootstrap error (may already exist): %v", err)
-		}
-	} else {
-		// Attempt to join leader via HTTP API (omitted actual request logic for brevity in this MVP,
-		// but typically would make a POST to the leader's /api/raft/join)
-		log.Printf("Should join leader at %s", *joinAddr)
-	}
-
 	proxy := orchestrator.NewProxy(manager, os.Getenv("DBX_INTERNAL_API_TOKEN"))
 
 	mux := http.NewServeMux()
@@ -116,9 +98,6 @@ func main() {
 
 	// Login API (Unprotected)
 	mux.HandleFunc("/api/login", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
 			return
@@ -190,14 +169,15 @@ func main() {
 			return
 		}
 		var req struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Replicas int    `json:"replicas"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		t, err := manager.Provision(req.ID, req.Name)
+		t, err := manager.Provision(req.ID, req.Name, req.Replicas)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -211,7 +191,26 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		json.NewEncoder(w).Encode(manager.ListTenants())
+		json.NewEncoder(w).Encode(manager.ListTenantViews())
+	})
+
+	protectedMux.HandleFunc("/api/tenants/promote", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ReplicaID string `json:"replica_id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := manager.Promote(req.ReplicaID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "promoted", "replica_id": req.ReplicaID})
 	})
 
 	// Backup API
@@ -228,17 +227,63 @@ func main() {
 			return
 		}
 
-		tenant, ok := manager.GetTenant(req.ID)
-		if !ok {
-			http.Error(w, "tenant not found", http.StatusNotFound)
-			return
-		}
-
-		if err := orchestrator.RunBackup(tenant.DataDir, tenant.ID); err != nil {
+		path, manifest, err := manager.BackupTenant(req.ID)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "success", "path": path, "manifest": manifest,
+		})
+	})
+
+	protectedMux.HandleFunc("/api/tenants/restore", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := manager.RestoreTenant(req.ID, req.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "restored"})
+	})
+
+	// Off-boarding API: removes one tenant without touching any other tenant's data.
+	protectedMux.HandleFunc("/api/tenants/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID    string `json:"id"`
+			Purge bool   `json:"purge"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, ok := manager.GetTenant(req.ID); !ok {
+			http.Error(w, "tenant not found", http.StatusNotFound)
+			return
+		}
+		if err := manager.DeleteTenant(req.ID, req.Purge); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "deleted",
+			"id":     req.ID,
+			"purged": req.Purge,
+		})
 	})
 
 	// Password Change API
@@ -292,7 +337,7 @@ func main() {
 			}
 			// Return the full secret key only once!
 			json.NewEncoder(w).Encode(map[string]interface{}{
-				"api_key": fullKey,
+				"api_key":  fullKey,
 				"key_info": keyObj,
 			})
 		default:
@@ -319,26 +364,47 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 	})
 
-	// Raft Status API
-	protectedMux.HandleFunc("/api/admin/raft/status", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	protectedMux.HandleFunc("/api/v1/tenants/", func(w http.ResponseWriter, r *http.Request) {
+		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+		if len(parts) < 5 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "tenants" || parts[4] != "keys" {
+			http.NotFound(w, r)
 			return
 		}
-		
-		// Create a dummy status structure for now, representing cluster topology
-		status := map[string]interface{}{
-			"leader_id": "node-1",
-			"term": 42,
-			"state": "Leader",
-			"applied_index": 15024,
-			"peers": []map[string]string{
-				{"id": "node-1", "address": "localhost:8000", "state": "Leader"},
-				{"id": "node-2", "address": "localhost:8001", "state": "Follower"},
-				{"id": "node-3", "address": "localhost:8002", "state": "Follower"},
-			},
+		tenantID := parts[3]
+		switch {
+		case r.Method == http.MethodGet && len(parts) == 5:
+			keys, err := manager.ListTenantKeys(tenantID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			json.NewEncoder(w).Encode(keys)
+		case r.Method == http.MethodPost && len(parts) == 5:
+			var req struct {
+				Name        string   `json:"name"`
+				Role        string   `json:"role"`
+				KeyPatterns []string `json:"key_patterns"`
+			}
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
+				http.Error(w, "invalid request", http.StatusBadRequest)
+				return
+			}
+			secret, key, err := manager.CreateTenantKey(tenantID, req.Name, req.Role, req.KeyPatterns)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]interface{}{"secret": secret, "key": key})
+		case r.Method == http.MethodDelete && len(parts) == 6:
+			if err := manager.RevokeTenantKey(tenantID, parts[5]); err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
-		json.NewEncoder(w).Encode(status)
 	})
 
 	// Data Plane proxy
@@ -347,34 +413,15 @@ func main() {
 	// Apply middleware to protected routes
 	mux.Handle("/api/provision", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/tenants", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/promote", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/tenants/backup", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/restore", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/delete", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/admin/password", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/admin/keys", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/admin/keys/revoke", orchestrator.RequireAuth(jwtSecret, protectedMux))
-	mux.Handle("/api/admin/raft/status", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/v1/tenants/", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/t/", orchestrator.RequireAuth(jwtSecret, protectedMux))
-
-	// Raft Join API (Internal/Admin)
-	raftJoinHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var req struct {
-			NodeID string `json:"node_id"`
-			Addr   string `json:"addr"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid body", http.StatusBadRequest)
-			return
-		}
-		if err := raftNode.Join(req.NodeID, req.Addr); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	})
-	mux.Handle("/api/raft/join", orchestrator.RequireAuth(jwtSecret, raftJoinHandler))
 
 	// Static Dashboard Serving (SPA Handler)
 	subFS, err := fs.Sub(dashboard.DistFS, "dist")
@@ -399,15 +446,45 @@ func main() {
 
 	fmt.Printf("Control Plane Orchestrator running on :%d\n", *httpPort)
 	server := &http.Server{Addr: fmt.Sprintf(":%d", *httpPort), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
-	if *insecureHTTP {
-		log.Println("WARNING: control-plane TLS disabled by -insecure-http")
-		log.Fatal(server.ListenAndServe())
+	appCtx, appCancel := context.WithCancel(context.Background())
+	defer appCancel()
+	serverErr := make(chan error, 1)
+	go func() {
+		if *insecureHTTP {
+			log.Println("WARNING: control-plane TLS disabled by -insecure-http")
+			serverErr <- server.ListenAndServe()
+			return
+		}
+		if _, err := os.Stat(*tlsCert); err != nil {
+			serverErr <- fmt.Errorf("TLS certificate unavailable: %w", err)
+			return
+		}
+		if _, err := os.Stat(*tlsKey); err != nil {
+			serverErr <- fmt.Errorf("TLS private key unavailable: %w", err)
+			return
+		}
+		serverErr <- server.ListenAndServeTLS(*tlsCert, *tlsKey)
+	}()
+	ingress := orchestrator.NewRESPIngress(manager, *respAddr)
+	go func() {
+		if err := ingress.ListenAndServe(appCtx); err != nil {
+			serverErr <- fmt.Errorf("RESP ingress: %w", err)
+		}
+	}()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
+	select {
+	case sig := <-sigCh:
+		log.Printf("Received %v, stopping tenants", sig)
+	case err := <-serverErr:
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("Control-plane server stopped: %v", err)
+		}
 	}
-	if _, err := os.Stat(*tlsCert); err != nil {
-		log.Fatalf("TLS certificate unavailable: %v", err)
-	}
-	if _, err := os.Stat(*tlsKey); err != nil {
-		log.Fatalf("TLS private key unavailable: %v", err)
-	}
-	log.Fatal(server.ListenAndServeTLS(*tlsCert, *tlsKey))
+	appCancel()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	_ = server.Shutdown(ctx)
+	manager.StopAll()
 }

@@ -28,7 +28,12 @@ func NewEngineFSM(executor *Executor, snapshotter *persistence.Snapshotter) *Eng
 }
 
 // Apply executes a Raft log entry.
-func (f *EngineFSM) Apply(l *raft.Log) interface{} {
+func (f *EngineFSM) Apply(l *raft.Log) (result interface{}) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			result = []byte("-ERR internal server error\r\n")
+		}
+	}()
 	var cmd protocol.Command
 	if err := json.Unmarshal(l.Data, &cmd); err != nil {
 		return []byte(fmt.Sprintf("-ERR FSM Apply decode failed: %v\r\n", err))
@@ -40,8 +45,6 @@ func (f *EngineFSM) Apply(l *raft.Log) interface{} {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	// Dispatch the command locally. It will mutate the KV store.
-	// Since executor.raft != nil, it won't write to the local WAL disk again.
 	err := f.executor.Dispatch(0, &cmd, writer)
 	if err != nil {
 		if buf.Len() == 0 {

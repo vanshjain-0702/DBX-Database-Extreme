@@ -1,0 +1,11 @@
+1. Create the control-plane secret before first install:
+
+   kubectl -n {{ .Release.Namespace }} create secret generic dbx-control-plane \
+     --from-literal=jwt-secret='at-least-32-random-characters........' \
+     --from-literal=admin-password='at-least-12-chars' \
+     --from-literal=internal-token='at-least-32-random-characters........'
+
+2. Dashboard: port-forward svc/dbx-public 8000:{{ .Values.service.port }}
+   RESP ingress: port-forward svc/dbx-public 6380:6380
+
+3. AUTH on :6380 is AUTH <tenantID>:<keyID> <secret>

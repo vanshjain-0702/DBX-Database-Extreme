@@ -32,6 +32,9 @@ run-dev:
 	@export DBX_ADMIN_PASSWORD=adminadminadmin && \
 	 export DBX_JWT_SECRET=supersecretjwtsecret1234567890123456 && \
 	 export DBX_INTERNAL_API_TOKEN=internalapitoken1234567890123456 && \
+	export DBX_DEFAULT_PASSWORD=adminadminadmin && \
+	 export DBX_DATA_DIR=./data && \
+	 export DBX_NODE_MEMORY_BUDGET=8gb && \
 	 go run ./cmd/dbx-orchestrator -insecure-http=true
 
 ## run-dashboard: Start the Vite dev server for the dashboard

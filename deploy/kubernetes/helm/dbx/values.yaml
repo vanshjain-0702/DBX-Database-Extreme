@@ -1,4 +1,5 @@
-replicaCount: 3
+# v1 is a single orchestrator process. Do not scale this above 1.
+replicaCount: 1
 
 image:
   repository: ghcr.io/dbx/dbx
@@ -8,23 +9,15 @@ image:
 nameOverride: ""
 fullnameOverride: ""
 
+memoryBudget: "8gb"
+
+persistence:
+  size: 100Gi
+
 serviceAccount:
   create: true
   annotations: {}
   name: ""
-
-podAnnotations: {}
-
-podSecurityContext: {}
-  # fsGroup: 2000
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
 
 service:
   type: ClusterIP
@@ -40,21 +33,3 @@ resources:
 
 autoscaling:
   enabled: false
-  minReplicas: 1
-  maxReplicas: 10
-  targetCPUUtilizationPercentage: 80
-
-nodeSelector: {}
-tolerations: []
-affinity:
-  podAntiAffinity:
-    preferredDuringSchedulingIgnoredDuringExecution:
-    - weight: 100
-      podAffinityTerm:
-        labelSelector:
-          matchExpressions:
-          - key: app.kubernetes.io/name
-            operator: In
-            values:
-            - dbx
-        topologyKey: topology.kubernetes.io/zone

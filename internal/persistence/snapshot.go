@@ -21,6 +21,7 @@ type SnapshotHeader struct {
 	Timestamp time.Time
 	KeyCount  int
 	Checksum  uint32
+	Sequence  uint64
 }
 
 // Snapshotter creates and restores RDB-style snapshots.
@@ -36,6 +37,11 @@ func NewSnapshotter(dir string) *Snapshotter {
 
 // Save writes a snapshot of the KV store to disk atomically.
 func (s *Snapshotter) Save(kv *engine.KVStore) (string, error) {
+	return s.SaveAt(kv, 0)
+}
+
+// SaveAt writes a checkpoint covering all WAL transactions through sequence.
+func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error) {
 	snap := kv.Snapshot()
 	filename := fmt.Sprintf("snapshot-%d.rdb", time.Now().UnixNano())
 	tmpPath := filepath.Join(s.dir, filename+".tmp")
@@ -53,9 +59,10 @@ func (s *Snapshotter) Save(kv *engine.KVStore) (string, error) {
 		wire[k] = toWireEntry(e)
 	}
 	hdr := SnapshotHeader{
-		Version:   1,
+		Version:   2,
 		Timestamp: time.Now(),
 		KeyCount:  len(wire),
+		Sequence:  sequence,
 	}
 	if err := enc.Encode(hdr); err != nil {
 		f.Close()
@@ -65,49 +72,59 @@ func (s *Snapshotter) Save(kv *engine.KVStore) (string, error) {
 		f.Close()
 		return "", fmt.Errorf("snapshot data: %w", err)
 	}
-	
+
 	// Force sync to disk to prevent data corruption on power loss
 	if err := f.Sync(); err != nil {
 		f.Close()
 		return "", fmt.Errorf("snapshot sync: %w", err)
 	}
-	
+
 	f.Close()
-	
+
 	// Atomically rename to final path
 	if err := os.Rename(tmpPath, finalPath); err != nil {
 		return "", fmt.Errorf("snapshot rename: %w", err)
 	}
-	
+
 	return finalPath, nil
 }
 
 // Load restores a snapshot into the KV store.
 func (s *Snapshotter) Load(kv *engine.KVStore, path string) error {
+	_, err := s.LoadWithHeader(kv, path)
+	return err
+}
+
+// LoadWithHeader restores a checkpoint and returns its replay boundary.
+func (s *Snapshotter) LoadWithHeader(kv *engine.KVStore, path string) (SnapshotHeader, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("snapshot: open %s: %w", path, err)
+		return SnapshotHeader{}, fmt.Errorf("snapshot: open %s: %w", path, err)
 	}
 	defer f.Close()
 	dec := gob.NewDecoder(f)
 	var hdr SnapshotHeader
 	if err := dec.Decode(&hdr); err != nil {
-		return fmt.Errorf("snapshot header: %w", err)
+		return SnapshotHeader{}, fmt.Errorf("snapshot header: %w", err)
+	}
+	if hdr.Version != 2 {
+		return SnapshotHeader{}, fmt.Errorf("snapshot: unsupported version %d; use the offline v1 migration/reset tool", hdr.Version)
 	}
 	var wire map[string]*WireEntry
 	if err := dec.Decode(&wire); err != nil {
-		return fmt.Errorf("snapshot data: %w", err)
+		return SnapshotHeader{}, fmt.Errorf("snapshot data: %w", err)
 	}
 	for k, we := range wire {
-		kv.Set(k, we.Value, protocol.DataType(we.Type), 0)
+		remaining := int64(0)
 		if we.ExpiresAt > 0 {
-			remaining := we.ExpiresAt - time.Now().UnixNano()
-			if remaining > 0 {
-				kv.Expire(k, remaining/int64(time.Second))
+			remaining = we.ExpiresAt - time.Now().UnixNano()
+			if remaining <= 0 {
+				continue
 			}
 		}
+		kv.Set(k, we.Value, protocol.DataType(we.Type), remaining)
 	}
-	return nil
+	return hdr, nil
 }
 
 // Latest returns the path of the most recent snapshot.

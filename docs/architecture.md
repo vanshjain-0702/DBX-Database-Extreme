@@ -2,7 +2,12 @@
 
 ## Overview
 
-DBX is a multi-tenant, in-memory database engine combining a Redis-compatible Key-Value store with a native Vector Search engine.
+DBX is a per-tenant memory engine: every tenant gets its own isolated in-memory store holding
+both key-value working state and HNSW-indexed vector memory, with its own WAL and its own
+snapshot lineage. The orchestrator owns tenant lifecycle; each tenant owns its data.
+
+The wire protocol is RESP2-compatible, so existing clients connect without a custom driver. See
+[positioning.md](positioning.md) for what that does and does not imply.
 
 ## Components
 
@@ -11,23 +16,31 @@ The control plane. It is the single entry point for all clients and the admin da
 
 **Responsibilities:**
 - JWT-based authentication and authorization
-- Tenant provisioning and lifecycle management
-- Reverse-proxying data plane requests to the correct DBX node
-- Distributed consensus via HashiCorp Raft (for multi-node HA setups)
+- Tenant lifecycle: provision (`/api/provision`, optional `replicas`), promote
+  (`/api/tenants/promote`), back up (`/api/tenants/backup`), restore
+  (`/api/tenants/restore`), and delete (`/api/tenants/delete`, optionally purging)
+- One public RESP ingress on `:6380`, authenticated with tenant-scoped keys
+- Reverse-proxying data plane requests to the current primary
+- Atomic local control-plane state. Data-plane Raft and cluster mode fail closed.
+
+Because each tenant owns a separate data directory, every lifecycle operation affects exactly
+one customer. There is no cross-tenant scan and no shared keyspace to sweep.
 
 **Key Packages:**
 - `internal/orchestrator/manager.go` — Tenant state machine
-- `internal/orchestrator/raft_node.go` — Raft cluster membership
+- `internal/orchestrator/resp_proxy.go` — authenticated single-port RESP ingress
 - `internal/orchestrator/proxy.go` — HTTP reverse proxy to data nodes
 
 ### 2. DBX Server (`cmd/dbx-server`)
-The data plane. One instance runs per tenant (or per shard in cluster mode).
+The data plane. One instance runs per tenant member (primary or replica).
 
 **Responsibilities:**
-- Serving Redis RESP3 protocol commands over TCP
-- Managing the in-memory KV store (strings, hashes, lists, sets, sorted sets, streams)
+- Serving the supported RESP2-compatible v1 command surface over loopback TCP
+- Managing durable strings and TTLs; unsupported mutation families are rejected
 - Managing the HNSW Vector index
 - WAL logging and snapshotting for persistence
+- Optional async WAL streaming: a primary broadcasts committed records; a replica
+  applies them read-only. Writes are never acknowledged through Raft.
 
 **Key Packages:**
 - `internal/engine/kv.go` — Key-Value store operations
@@ -41,34 +54,42 @@ A React + Vite + TailwindCSS SPA compiled and embedded directly into the Orchest
 ## Data Flow
 
 ```
-Client Request
+Application Request
      │
      ▼
-Orchestrator (Port 8000)
-  1. Verify JWT
-  2. Identify tenant from path (/t/{tenantID}/...)
-  3. Look up tenant's data node port
-  4. Reverse proxy to DBX Server
+RESP Ingress (Port 6380)
+  1. Require AUTH tenantID:keyID secret
+  2. Verify the persistent scoped credential
+  3. Route to the tenant's loopback listener
+  4. Re-resolve the key on every command for immediate revocation
      │
      ▼
-DBX Server (Port 808X)
-  1. Parse Redis RESP command
-  2. Route to KV engine or Vector engine
-  3. Return RESP response
+Tenant DBX Server (loopback)
+  1. Enforce role and every affected-key pattern
+  2. Append one WAL v2 state-image transaction and ack locally
+  3. Apply to KV or vector engine
+  4. Return RESP response
+  5. Replicas receive WAL frames on a side channel (no extra write RTT)
 ```
 
 ## Persistence
 
 DBX uses a two-layer persistence model:
 
-1. **WAL (Write-Ahead Log):** Every write operation is logged to disk before being applied to memory. On crash recovery, the WAL is replayed.
-2. **Snapshots:** Periodic full memory snapshots are taken (configurable interval). On restart, the latest snapshot is loaded first, then the WAL is replayed from that checkpoint.
-3. **S3 Backup:** The orchestrator can trigger an upload of the snapshot to an S3-compatible bucket via the `/api/tenants/backup` endpoint.
+1. **WAL v2:** Length-framed, sequenced, CRC-protected state-image transactions are appended
+   before apply. `always` fsyncs before acknowledgement; `everysec` defines a one-second loss window.
+2. **Checkpoints:** A sequence-bearing KV snapshot is atomically installed before covered WAL
+   segments are removed. Only a final partial frame may be truncated; CRC corruption is fatal.
+3. **Vector files:** SQ8 rows, generation tombstones, metadata, and a rebuildable checksummed
+   HNSW cache live in the tenant directory.
+4. **Backup/restore:** A maintenance lock produces a manifest with SHA-256 checksums. Restore
+   validates into a sibling directory and swaps with rollback.
 
 ## Security Model
 
-- **Authentication:** JWT Bearer tokens issued by the orchestrator.
-- **Authorization:** Role-based, with `admin` having full access.
+- **Control-plane authentication:** JWT Bearer tokens issued to operators.
+- **Data-plane authentication:** 256-bit tenant keys stored only as hashes.
+- **Authorization:** `reader`, `writer`, and `tenant-admin` roles with key-pattern scopes.
 - **Rate Limiting:** Per-IP brute-force protection on the `/api/login` endpoint (5 failures = 60-second lockout).
 - **DoS Protection:** `http.MaxBytesReader` limits on all data plane request bodies.
 - **Admin Credentials:** Stored as bcrypt hashes; never in plaintext.

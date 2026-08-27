@@ -8,11 +8,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://localhost:8000',
+        target: 'http://[::1]:8001',
         secure: false,
       },
       '/t': {
-        target: 'https://localhost:8000',
+        target: 'http://[::1]:8001',
         secure: false,
       }
     }

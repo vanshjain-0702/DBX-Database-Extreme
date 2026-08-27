@@ -1,44 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Database, Plus, Settings, Server, Search, Globe, X, Loader2, AlertCircle, LogOut, ChevronDown } from 'lucide-react';
-import { fetchWithAuth } from '../api';
+import { Database, Plus, Settings, Search, X, Loader2, AlertCircle, LogOut, ChevronDown, Moon, Sun, Monitor } from 'lucide-react';
+import { fetchWithAuth, openCommandPalette, type Tenant } from '../api';
+import { useTenants } from '../components/TenantProvider';
+import { useTheme } from '../components/ThemeProvider';
+import { StatusBadge } from '../components/PageChrome';
 import logo from '../assets/logo.jpg';
-
-interface Cluster {
-  id: string;
-  name: string;
-  region?: string;
-  engine?: string;
-  status?: string;
-}
 
 export default function ProjectsPage() {
   const navigate = useNavigate();
-  const [clusters, setClusters] = useState<Cluster[]>([]);
+  const { tenants, loading: pageLoading, error: listError, refresh } = useTenants();
+  const { theme, setTheme, resolved } = useTheme();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newId, setNewId] = useState('');
   const [newName, setNewName] = useState('');
   const [loading, setLoading] = useState(false);
-  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState('');
+  const [newReplicas, setNewReplicas] = useState(0);
   const [search, setSearch] = useState('');
-  const [activeNav, setActiveNav] = useState('Overview');
   const [showUserMenu, setShowUserMenu] = useState(false);
-
-  useEffect(() => {
-    fetchWithAuth('/api/tenants')
-      .then(res => res.json())
-      .then(data => setClusters(Array.isArray(data) ? data : []))
-      .catch(err => {
-        console.error(err);
-        setClusters([]);
-      })
-      .finally(() => setPageLoading(false));
-  }, []);
 
   const handleNewCluster = async () => {
     if (!newId.trim() || !newName.trim()) {
-      setError('Deployment Name and Namespace ID are required.');
+      setError('Name and tenant ID are required.');
       return;
     }
     setLoading(true);
@@ -46,21 +30,20 @@ export default function ProjectsPage() {
     try {
       const res = await fetchWithAuth('/api/provision', {
         method: 'POST',
-        body: JSON.stringify({ id: newId.trim(), name: newName.trim() }),
+        body: JSON.stringify({ id: newId.trim(), name: newName.trim(), replicas: newReplicas }),
         headers: { 'Content-Type': 'application/json' },
       });
       if (res.ok) {
-        const newCluster = await res.json();
-        setClusters(prev => [...prev, newCluster]);
         setIsModalOpen(false);
         setNewId('');
-        setNewName('');
+        setNewReplicas(0);
+        await refresh();
       } else {
         const text = await res.text();
-        setError(text || 'Failed to create cluster. Please try again.');
+        setError(text || 'Failed to provision tenant.');
       }
-    } catch (e: any) {
-      setError(e.message || 'An error occurred while creating the cluster.');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'An error occurred while provisioning.');
     } finally {
       setLoading(false);
     }
@@ -71,95 +54,102 @@ export default function ProjectsPage() {
     navigate('/login');
   };
 
-  const filteredClusters = clusters.filter(c => {
+  const filtered = tenants.filter(c => {
+    if (c.replica_of) return false;
     const q = search.toLowerCase().trim();
     if (!q) return true;
-    return (
-      (c.name || '').toLowerCase().includes(q) ||
-      (c.id || '').toLowerCase().includes(q) ||
-      (c.region || '').toLowerCase().includes(q)
-    );
+    return (c.name || '').toLowerCase().includes(q) || (c.id || '').toLowerCase().includes(q);
   });
 
-  const navItems = ['Overview', 'Integrations', 'Activity', 'Domains', 'Usage'];
+  const cycleTheme = () => {
+    if (theme === 'light') setTheme('dark');
+    else if (theme === 'dark') setTheme('system');
+    else setTheme('light');
+  };
 
   return (
-    <div className="projects-page flex flex-col h-full bg-[#f4f4f5]">
-      {/* ── Top Navbar ── */}
-      <header className="flex items-center justify-between px-8 py-3.5 border-b border-gray-200 bg-white sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center gap-10">
-          {/* Brand */}
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-sm">
-              <img src={logo} alt="DBX Logo" className="w-full h-full object-cover" />
+    <div className="flex flex-col h-full bg-[var(--bg-primary)]">
+      <header className="flex items-center justify-between px-6 h-12 border-b border-[var(--border-color)] bg-[var(--bg-panel)] sticky top-0 z-10">
+        <div className="flex items-center gap-8">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded overflow-hidden border border-[var(--border-color)]">
+              <img src={logo} alt="" className="w-full h-full object-cover" />
             </div>
-            <div className="text-slate-900 font-bold text-[17px] tracking-tight">DBX Cloud</div>
+            <div className="text-[var(--text-primary)] font-semibold text-[14px] tracking-tight">DBX</div>
           </div>
-
-          {/* Nav links */}
-          <nav className="hidden md:flex items-center gap-1">
-            {navItems.map(item => (
-              <button
-                key={item}
-                onClick={() => setActiveNav(item)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  activeNav === item
-                    ? 'bg-red-50 text-red-600'
-                    : 'text-gray-500 hover:text-slate-900 hover:bg-gray-100'
-                }`}
-              >
-                {item}
-              </button>
-            ))}
+          <nav className="hidden md:flex items-center gap-0.5">
+            <button type="button" className="px-2.5 py-1 rounded text-[13px] font-medium bg-[var(--accent-soft)] text-[var(--accent-primary)]">
+              Tenants
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/settings')}
+              className="px-2.5 py-1 rounded text-[13px] font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]"
+            >
+              Settings
+            </button>
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
-          <button className="text-sm font-medium text-gray-500 hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-            Feedback
-          </button>
-          <div className="w-px h-5 bg-gray-200" />
+        <div className="flex items-center gap-1.5">
           <button
+            type="button"
+            onClick={() => openCommandPalette()}
+            className="h-7 px-2.5 border border-[var(--border-color)] rounded text-[12px] text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
+          >
+            Search <kbd className="ml-1.5 font-mono text-[10px] border border-[var(--border-color)] px-1 rounded">⌘K</kbd>
+          </button>
+          <button
+            type="button"
+            onClick={cycleTheme}
+            className="h-7 w-7 flex items-center justify-center rounded text-[var(--text-muted)] hover:bg-[var(--bg-tertiary)]"
+            title={`Theme: ${theme}`}
+          >
+            {theme === 'system' ? <Monitor size={15} /> : resolved === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+          </button>
+          <button
+            type="button"
             onClick={() => navigate('/settings')}
             title="Settings"
-            className="text-gray-500 hover:text-slate-900 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded hover:bg-[var(--bg-tertiary)]"
           >
-            <Settings size={17} />
+            <Settings size={16} />
           </button>
 
-          {/* User avatar dropdown */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setShowUserMenu(v => !v)}
-              className="flex items-center gap-2 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              className="flex items-center gap-1.5 p-1 rounded hover:bg-[var(--bg-tertiary)]"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center font-bold text-white text-sm shadow-inner">
+              <div className="w-7 h-7 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center font-semibold text-[11px]">
                 A
               </div>
-              <ChevronDown size={14} className="text-gray-400" />
+              <ChevronDown size={13} className="text-[var(--text-muted)]" />
             </button>
 
             {showUserMenu && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowUserMenu(false)} />
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden z-20">
-                  <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-                    <div className="text-sm font-semibold text-slate-900">Admin User</div>
-                    <div className="text-xs text-gray-500 mt-0.5">admin@dbx.local</div>
+                <div className="absolute right-0 top-full mt-1 w-52 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-md z-20 overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-[var(--border-color)]">
+                    <div className="text-[13px] font-semibold">Admin</div>
+                    <div className="text-[11px] text-[var(--text-muted)]">control plane</div>
                   </div>
-                  <div className="p-1.5">
+                  <div className="p-1">
                     <button
+                      type="button"
                       onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-slate-700 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] hover:bg-[var(--bg-tertiary)] rounded"
                     >
-                      <Settings size={14} /> Account Settings
+                      Settings
                     </button>
-                    <div className="border-t border-gray-100 my-1" />
                     <button
+                      type="button"
                       onClick={handleLogout}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-[13px] text-[var(--error)] hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded"
                     >
-                      <LogOut size={14} /> Sign Out
+                      <LogOut size={13} /> Sign out
                     </button>
                   </div>
                 </div>
@@ -169,177 +159,139 @@ export default function ProjectsPage() {
         </div>
       </header>
 
-      {/* ── Main Content ── */}
-      <main className="flex-1 w-full px-8 py-10 overflow-y-auto">
-        {/* Page Header */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8">
+      <main className="flex-1 w-full px-7 py-6 overflow-y-auto">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-1.5">Deployments</h1>
-            <p className="text-gray-500 text-[15px]">Manage and monitor your serverless database clusters.</p>
+            <h1 className="text-[20px] font-semibold tracking-tight mb-1">Tenants</h1>
+            <p className="text-[var(--text-muted)] text-[13px]">Isolated in-memory + vector engines. Status comes from the orchestrator, not a default Ready badge.</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <div className="relative">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" />
               <input
                 type="text"
-                placeholder="Search deployments…"
+                placeholder="Filter by name or id…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                className="w-64 bg-white border border-gray-200 rounded-xl pl-9 pr-4 py-2.5 text-sm text-slate-700 placeholder-gray-400 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
+                className="w-64 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-md pl-8 pr-3 py-2 text-[13px] outline-none focus:border-[var(--accent-primary)]"
               />
             </div>
             <button
-              className="bg-red-600 text-white hover:bg-red-700 px-4 py-2.5 rounded-xl font-semibold text-sm flex items-center gap-2 transition-colors shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
+              type="button"
+              className="btn-primary"
               onClick={() => setIsModalOpen(true)}
             >
-              <Plus size={16} /> Add New
+              <Plus size={15} /> Provision
             </button>
           </div>
         </div>
 
-        {/* Cluster Grid */}
+        {listError && (
+          <div className="alert-error mb-4">{listError}</div>
+        )}
+
         {pageLoading ? (
-          <div className="flex items-center justify-center py-24 text-gray-400">
-            <Loader2 size={28} className="animate-spin mr-3" />
-            <span className="text-sm font-medium">Loading deployments…</span>
+          <div className="flex items-center justify-center py-20 text-[var(--text-muted)]">
+            <Loader2 size={18} className="animate-spin mr-2" />
+            <span className="text-[13px]">Loading tenants…</span>
+          </div>
+        ) : tenants.filter(t => !t.replica_of).length === 0 ? (
+          <div className="border border-dashed border-[var(--border-color)] rounded-lg py-16 flex flex-col items-center text-center">
+            <Database size={28} className="text-[var(--text-muted)] mb-3" />
+            <div className="text-[14px] font-medium mb-1">No tenants in this fleet</div>
+            <p className="text-[13px] text-[var(--text-muted)] mb-4">Provision an isolated engine for a customer.</p>
+            <button type="button" className="btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={15} /> Provision tenant
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-            {filteredClusters.map(cluster => (
-              <div
-                key={cluster.id}
-                className="bg-white border border-gray-200 hover:border-red-300 rounded-2xl p-6 cursor-pointer transition-all hover:shadow-lg group flex flex-col"
-                onClick={() => navigate(`/cluster/${cluster.id}/overview`)}
-              >
-                <div className="flex items-start justify-between mb-5">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-11 h-11 rounded-xl bg-red-50 text-red-600 border border-red-100 flex items-center justify-center group-hover:scale-105 transition-transform">
-                      <Database size={20} />
-                    </div>
-                    <div>
-                      <h3 className="text-slate-900 font-semibold text-[15px] group-hover:text-red-600 transition-colors leading-tight">
-                        {cluster.name}
-                      </h3>
-                      <div className="text-gray-400 text-xs font-mono mt-1">{cluster.id}</div>
-                    </div>
-                  </div>
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs font-bold uppercase tracking-wider rounded-lg">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    {cluster.status || 'Ready'}
-                  </span>
-                </div>
-
-                <div className="mt-auto pt-4 border-t border-gray-100 grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Region</div>
-                    <div className="text-slate-700 text-sm flex items-center gap-1.5">
-                      <Globe size={12} className="text-gray-400" />
-                      {cluster.region || 'us-east-1'}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Engine</div>
-                    <div className="text-slate-700 text-sm flex items-center gap-1.5">
-                      <Server size={12} className="text-gray-400" />
-                      {cluster.engine || 'DBX v2.0'}
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map(cluster => (
+              <TenantCard key={cluster.id} tenant={cluster} onOpen={() => navigate(`/cluster/${cluster.id}/overview`)} />
             ))}
 
-            {/* No results */}
-            {!pageLoading && filteredClusters.length === 0 && search && (
-              <div className="col-span-full flex flex-col items-center justify-center py-16 text-gray-400">
-                <Search size={32} className="mb-3 opacity-40" />
-                <div className="text-sm font-medium">No deployments match "{search}"</div>
-                <button onClick={() => setSearch('')} className="mt-2 text-xs text-red-500 hover:underline">Clear search</button>
+            {!pageLoading && filtered.length === 0 && search && (
+              <div className="col-span-full flex flex-col items-center justify-center py-14 text-[var(--text-muted)]">
+                <Search size={24} className="mb-2 opacity-50" />
+                <div className="text-[13px] font-medium">No tenants match “{search}”</div>
+                <button type="button" onClick={() => setSearch('')} className="mt-2 text-[12px] text-[var(--accent-primary)]">
+                  Clear search
+                </button>
               </div>
             )}
-
-            {/* Add new card */}
-            <div
-              onClick={() => setIsModalOpen(true)}
-              className="border-2 border-dashed border-gray-200 hover:border-red-300 rounded-2xl p-6 cursor-pointer transition-all hover:bg-red-50/30 flex flex-col items-center justify-center text-center h-[152px] group"
-            >
-              <div className="w-10 h-10 rounded-full bg-gray-100 group-hover:bg-red-100 group-hover:text-red-600 flex items-center justify-center text-gray-400 mb-3 transition-colors">
-                <Plus size={22} />
-              </div>
-              <div className="text-slate-700 font-semibold text-sm group-hover:text-red-600 transition-colors">Create New Deployment</div>
-              <div className="text-gray-400 text-xs mt-1">Spin up a new serverless cluster</div>
-            </div>
           </div>
         )}
       </main>
 
-      {/* ── Create Deployment Modal ── */}
       {isModalOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-          onClick={() => setIsModalOpen(false)}
-        >
-          <div
-            className="bg-white border border-gray-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-              <h3 className="text-slate-900 font-bold text-base">Create Deployment</h3>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-slate-900 transition-colors p-1 rounded-lg hover:bg-gray-200"
-              >
-                <X size={18} />
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
+              <h3 className="font-semibold text-[14px]">Provision tenant</h3>
+              <button type="button" onClick={() => setIsModalOpen(false)} className="text-[var(--text-muted)] p-1 rounded hover:bg-[var(--bg-tertiary)]">
+                <X size={16} />
               </button>
             </div>
 
-            <div className="p-6 space-y-5">
+            <div className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                  Deployment Name
-                </label>
+                <label className="block mb-1.5">Name</label>
                 <input
                   type="text"
-                  className="w-full bg-gray-50 border border-gray-200 text-slate-900 text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
-                  placeholder="e.g. production-api"
+                  className="input-field"
+                  placeholder="e.g. acme-support"
                   value={newName}
                   onChange={e => setNewName(e.target.value)}
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
-                  Namespace ID
-                </label>
+                <label className="block mb-1.5">Tenant ID</label>
                 <input
                   type="text"
-                  className="w-full bg-gray-50 border border-gray-200 text-slate-900 text-sm rounded-xl px-3.5 py-2.5 outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all font-mono"
-                  placeholder="e.g. prod-db-1"
+                  className="input-field font-mono"
+                  placeholder="e.g. acme-support"
                   value={newId}
                   onChange={e => setNewId(e.target.value)}
                 />
-                <p className="text-gray-400 text-xs mt-1.5">Alphanumeric and dashes only. Used for routing.</p>
+                <p className="text-[var(--text-muted)] text-[12px] mt-1.5">Alphanumeric and dashes. Used for routing.</p>
+              </div>
+              <div>
+                <label className="block mb-1.5">Replicas</label>
+                <select
+                  className="input-field"
+                  value={newReplicas}
+                  onChange={e => setNewReplicas(Number(e.target.value))}
+                >
+                  <option value={0}>None (single-node, certified path)</option>
+                  <option value={1}>1 async WAL replica</option>
+                  <option value={2}>2 async WAL replicas</option>
+                </select>
+                <p className="text-[var(--text-muted)] text-[12px] mt-1.5">Replicas do not add write RTT. Failover is promote, not Raft.</p>
               </div>
 
               {error && (
-                <div className="flex items-start gap-2 p-3.5 bg-red-50 border border-red-100 rounded-xl text-red-600 text-sm">
-                  <AlertCircle size={15} className="mt-0.5 flex-shrink-0" />
+                <div className="flex items-start gap-2 p-3 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-md text-[var(--error)] text-[13px]">
+                  <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
                   {error}
                 </div>
               )}
 
-              <div className="pt-2 flex items-center justify-end gap-3">
+              <div className="pt-1 flex items-center justify-end gap-2">
                 <button
-                  className="px-4 py-2 text-sm font-medium text-gray-500 hover:text-slate-900 rounded-xl hover:bg-gray-100 transition-colors"
+                  type="button"
+                  className="btn-secondary"
                   onClick={() => { setIsModalOpen(false); setError(''); }}
                 >
                   Cancel
                 </button>
                 <button
-                  className="bg-red-600 text-white hover:bg-red-700 px-5 py-2 rounded-xl font-semibold text-sm transition-colors shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  type="button"
+                  className="btn-primary"
                   onClick={handleNewCluster}
                   disabled={loading}
                 >
-                  {loading ? <><Loader2 size={14} className="animate-spin" /> Deploying…</> : 'Deploy'}
+                  {loading ? <><Loader2 size={14} className="animate-spin" /> Provisioning…</> : 'Provision'}
                 </button>
               </div>
             </div>
@@ -347,5 +299,45 @@ export default function ProjectsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function TenantCard({ tenant, onOpen }: { tenant: Tenant; onOpen: () => void }) {
+  const down = tenant.status === 'down';
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className={`text-left bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-lg p-4 hover:border-[var(--accent-primary)] transition-colors ${down ? 'tenant-card-down' : ''}`}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-md bg-[var(--accent-soft)] text-[var(--accent-primary)] border border-[var(--border-color)] flex items-center justify-center flex-shrink-0">
+            <Database size={16} />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-medium text-[14px] truncate">{tenant.name}</h3>
+            <div className="text-[var(--text-muted)] text-[11px] font-mono mt-0.5 truncate">{tenant.id}</div>
+            {(tenant.replicas?.length || tenant.role === 'primary') && (
+              <div className="text-[11px] text-[var(--text-muted)] mt-1">
+                {tenant.replicas?.length ? `${tenant.replicas.length} replica${tenant.replicas.length === 1 ? '' : 's'}` : 'primary'}
+              </div>
+            )}
+          </div>
+        </div>
+        <StatusBadge tenant={tenant} />
+      </div>
+
+      <div className="pt-3 border-t border-[var(--border-color)] grid grid-cols-2 gap-3">
+        <div>
+          <div className="page-label mb-1">RESP</div>
+          <div className="text-[13px] font-mono">{tenant.resp_port ? `:${tenant.resp_port}` : '—'}</div>
+        </div>
+        <div>
+          <div className="page-label mb-1">HTTP</div>
+          <div className="text-[13px] font-mono">{tenant.http_port ? `:${tenant.http_port}` : '—'}</div>
+        </div>
+      </div>
+    </button>
   );
 }

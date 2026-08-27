@@ -13,7 +13,7 @@ server:
 
 engine:
   max_memory: "512mb"
-  eviction_policy: "lru"
+  eviction_policy: "no-eviction"
   default_ttl: 0
 
 persistence:
@@ -27,8 +27,12 @@ persistence:
   compaction_interval: "24h"
 
 replication:
-  role: "primary"
-  listen_addr: "127.0.0.1:7400"
+  # Async WAL streaming to replicas. Leave role empty for single-node
+  # (the certified write path). Set role=primary and listen_addr to stream
+  # WAL bytes after local ack; replicas never sit on the SET/VADD hot path.
+  # Data-plane Raft remains disabled.
+  role: ""
+  listen_addr: ""
   replicas: []
   quorum: 1
   sync_timeout: "5s"

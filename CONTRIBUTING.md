@@ -2,6 +2,18 @@
 
 Thank you for your interest in contributing! We welcome bug reports, feature requests, documentation improvements, and code contributions.
 
+## Before you propose a feature
+
+Read [docs/positioning.md](docs/positioning.md). DBX is deliberately narrow: it is the
+per-tenant memory engine for AI products, and there is an explicit list of things we do not
+try to be. A feature is much easier to get merged when the pull request says which of the four
+USPs it strengthens. Proposals that pull DBX toward being a general-purpose database, or that
+chase a benchmark against another product, will usually be declined — not because they are bad
+ideas, but because they belong in a different project.
+
+The same applies to documentation: please follow the language guide in §9 of that document.
+We do not describe DBX as a replacement for anything.
+
 ## Getting Started
 
 1. **Fork** the repository and clone your fork.

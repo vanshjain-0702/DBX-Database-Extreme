@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 	"unsafe"
 
@@ -25,24 +27,30 @@ var (
 
 // Executor executes commands against the engine.
 type Executor struct {
-	kv      *engine.KVStore
-	str     *engine.StringStore
-	hash    *engine.HashStore
-	list    *engine.ListStore
-	set     *engine.SetStore
-	zset    *engine.ZSetStore
-	stream  *engine.StreamStore
-	bitmap  *engine.BitmapStore
-	geo     *engine.GeoStore
-	doc     *engine.DocumentStore
-	vec     *engine.VectorStore
-	multi   *transaction.MultiManager
-	watch   *transaction.WatchSet
-	mvcc    *transaction.MVCCStore
-	pubsub  *events.PubSub
-	metrics *observability.Metrics
-	wal     *persistence.WAL
-	raft    interface{} // Use interface{} to avoid circular imports or direct dependency if possible, but actually we can just import "github.com/hashicorp/raft"
+	kv              *engine.KVStore
+	str             *engine.StringStore
+	hash            *engine.HashStore
+	list            *engine.ListStore
+	set             *engine.SetStore
+	zset            *engine.ZSetStore
+	stream          *engine.StreamStore
+	bitmap          *engine.BitmapStore
+	geo             *engine.GeoStore
+	doc             *engine.DocumentStore
+	vec             *engine.VectorStore
+	multi           *transaction.MultiManager
+	watch           *transaction.WatchSet
+	mvcc            *transaction.MVCCStore
+	pubsub          *events.PubSub
+	metrics         *observability.Metrics
+	wal             *persistence.WAL
+	raft            RaftNode
+	mutationMu      sync.Mutex
+	suppressWAL     bool
+	maxMemory       int64
+	accountedMemory atomic.Int64
+	readOnly        atomic.Bool
+	testHook        func()
 }
 
 // NewExecutor creates an executor with all stores wired.
@@ -83,23 +91,37 @@ func (e *Executor) KV() *engine.KVStore {
 }
 
 // SetRaft assigns the Raft node to the executor for write interception.
-func (e *Executor) SetRaft(raftNode interface{}) {
+func (e *Executor) SetRaft(raftNode RaftNode) {
 	e.raft = raftNode
 }
 
 func (e *Executor) writeWAL(rec *persistence.WALRecord) error {
-	if e.wal == nil {
-		return nil
-	}
-	// If Raft is enabled, the Raft log acts as the WAL. We don't write to the local WAL.
-	if e.raft != nil {
+	if e.wal == nil || e.suppressWAL {
 		return nil
 	}
 	return e.wal.Write(rec)
 }
 
+// SetReadOnly marks this executor as a replica. Client writes are rejected
+// before WAL; ApplyWALRecord still applies bytes from the primary.
+func (e *Executor) SetReadOnly(v bool) {
+	e.readOnly.Store(v)
+}
+
 // ApplyWALRecord applies a replicated record without writing it back to the WAL.
 func (e *Executor) ApplyWALRecord(rec *persistence.WALRecord) error {
+	if rec == nil {
+		return fmt.Errorf("replication: nil WAL record")
+	}
+	if len(rec.Effects) > 0 {
+		for _, effect := range rec.Effects {
+			if err := e.applyReplicatedEffect(effect); err != nil {
+				return err
+			}
+		}
+		e.accountedMemory.Store(e.measureMemoryUsage())
+		return nil
+	}
 	switch rec.Type {
 	case persistence.RecordSet:
 		e.kv.Set(rec.Key, rec.Value, protocol.TypeString, rec.TTLNano)
@@ -111,25 +133,90 @@ func (e *Executor) ApplyWALRecord(rec *persistence.WALRecord) error {
 		}
 	case persistence.RecordVAdd:
 		id, vector := persistence.DecodeVAddPayload(rec.Value)
-		return e.vec.VAdd(rec.Key, id, vector)
+		if err := e.vec.VAdd(rec.Key, id, vector); err != nil {
+			return err
+		}
 	case persistence.RecordVAddBatch:
 		dim, ids, vectors := persistence.DecodeVAddBatchPayload(rec.Value)
-		return e.vec.VAddBatch(rec.Key, dim, ids, vectors)
+		if err := e.vec.VAddBatch(rec.Key, dim, ids, vectors); err != nil {
+			return err
+		}
 	default:
 		return fmt.Errorf("replication: unsupported WAL record type %d", rec.Type)
+	}
+	e.accountedMemory.Store(e.measureMemoryUsage())
+	return nil
+}
+
+func (e *Executor) applyReplicatedEffect(effect persistence.WALEffect) error {
+	switch effect.Type {
+	case persistence.RecordSet:
+		remaining := int64(0)
+		if effect.ExpiresAt > 0 {
+			remaining = effect.ExpiresAt - time.Now().UnixNano()
+			if remaining <= 0 {
+				e.kv.Delete(effect.Key)
+				return nil
+			}
+		}
+		e.kv.Set(effect.Key, effect.Value, protocol.TypeString, remaining)
+	case persistence.RecordDelete, persistence.RecordDeleteIndex:
+		e.kv.Delete(effect.Key)
+	case persistence.RecordExpire:
+		if effect.ExpiresAt <= 0 {
+			e.kv.Persist(effect.Key)
+			return nil
+		}
+		remaining := effect.ExpiresAt - time.Now().UnixNano()
+		if remaining <= 0 {
+			e.kv.Delete(effect.Key)
+			return nil
+		}
+		if !e.kv.Expire(effect.Key, max(1, remaining/int64(time.Second))) {
+			return fmt.Errorf("replication: key %q not found for expire", effect.Key)
+		}
+	case persistence.RecordVAdd:
+		id, vector := persistence.DecodeVAddPayload(effect.Value)
+		return e.vec.VAdd(effect.Key, id, vector)
+	case persistence.RecordVAddBatch:
+		dim, ids, vectors := persistence.DecodeVAddBatchPayload(effect.Value)
+		return e.vec.VAddBatch(effect.Key, dim, ids, vectors)
+	case persistence.RecordVTombstone:
+		_, err := e.vec.VDel(effect.Key, string(effect.Value))
+		return err
+	default:
+		return fmt.Errorf("replication: unsupported WAL effect type %d", effect.Type)
 	}
 	return nil
 }
 
 // Execute processes a command and writes the response to writer.
-func (e *Executor) Execute(clientID uint64, cmd *protocol.Command, w *protocol.Writer) error {
+func (e *Executor) Execute(clientID uint64, cmd *protocol.Command, w *protocol.Writer) (err error) {
 	start := time.Now()
 	var execErr error
 	defer func() {
+		if recovered := recover(); recovered != nil {
+			execErr = fmt.Errorf("panic: %v", recovered)
+			if err == nil {
+				err = w.WriteError("ERR internal server error")
+			}
+		}
 		latency := time.Since(start).Nanoseconds()
-		info, _ := protocol.Lookup(cmd.Normalized())
+		name := ""
+		if cmd != nil {
+			name = cmd.Normalized()
+		}
+		info, _ := protocol.Lookup(name)
 		e.metrics.RecordCommand(!info.ReadOnly, latency, execErr)
+		e.metrics.TenantMemoryUsed.Store(e.accountedMemory.Load())
+		if e.wal != nil && e.wal.Failure() != nil {
+			e.metrics.TenantReady.Store(0)
+		}
 	}()
+
+	if e.testHook != nil {
+		e.testHook()
+	}
 
 	// If in MULTI block and this isn't EXEC/DISCARD/MULTI/WATCH, queue it
 	if e.multi.IsActive(clientID) {
@@ -144,47 +231,296 @@ func (e *Executor) Execute(clientID uint64, cmd *protocol.Command, w *protocol.W
 	if !ok {
 		return w.WriteError(fmt.Sprintf("ERR unknown command '%s'", cmd.Name))
 	}
-
-	// Intercept Write commands if Raft is enabled
-	if e.raft != nil && !info.ReadOnly {
-		// Import raft dynamically via type assertion to avoid coupling
-		type rafter interface {
-			Apply(cmd []byte, timeout time.Duration) interface{
-				Error() error
-				Response() interface{}
+	if e.wal != nil && !protocol.SupportedInDurableV1(cmd.Normalized()) {
+		return w.WriteError(fmt.Sprintf(
+			"ERR command '%s' is not supported by the durable DBX v1 profile",
+			cmd.Name,
+		))
+	}
+	if e.readOnly.Load() && !info.ReadOnly {
+		return w.WriteError("READONLY replica does not accept writes")
+	}
+	prepared := false
+	projectedMemory := e.accountedMemory.Load()
+	if e.wal != nil && info.DurableV1 && !info.ReadOnly {
+		e.mutationMu.Lock()
+		defer e.mutationMu.Unlock()
+		var effects []persistence.WALEffect
+		effects, prepared = e.prepareDurableEffects(cmd)
+		if prepared && len(effects) > 0 {
+			var fits bool
+			fits, projectedMemory = e.effectsFitQuota(effects)
+			if !fits {
+				return w.WriteError("OOM tenant quota exceeded")
 			}
-			State() int
+			if _, err := e.wal.WriteTransaction(effects); err != nil {
+				return w.WriteError("ERR WAL write failed: " + err.Error())
+			}
+			e.suppressWAL = true
+			defer func() { e.suppressWAL = false }()
 		}
-		
-		rn, isRaft := e.raft.(rafter)
-		if isRaft {
-			if rn.State() != 2 { // raft.Leader is 2
-				return w.WriteError("ERR node is not the Raft leader")
-			}
-			
-			// Serialize command
-			// Simple serialization: JSON
-			data, err := json.Marshal(cmd)
-			if err != nil {
-				return w.WriteError("ERR failed to serialize command for Raft: " + err.Error())
-			}
-			
-			future := rn.Apply(data, 10*time.Second)
-			if err := future.Error(); err != nil {
-				return w.WriteError("ERR Raft apply failed: " + err.Error())
-			}
-			
-			resp := future.Response().([]byte)
+	}
+
+	// Multi-node writes go through Raft. A single voter commits locally + WAL,
+	// so an isolated tenant never pays consensus cost on its hot path.
+	if e.raft != nil && !info.ReadOnly && !e.raft.SingleVoter() {
+		if e.raft.State() != 2 { // raft.Leader
+			return w.WriteError("ERR node is not the Raft leader")
+		}
+		data, err := json.Marshal(cmd)
+		if err != nil {
+			return w.WriteError("ERR failed to serialize command for Raft: " + err.Error())
+		}
+		future := e.raft.Apply(data, 10*time.Second)
+		if err := future.Error(); err != nil {
+			return w.WriteError("ERR Raft apply failed: " + err.Error())
+		}
+		if resp, ok := future.Response().([]byte); ok {
 			w.WriteRaw(resp)
 			return nil
 		}
 	}
 
 	execErr = e.Dispatch(clientID, cmd, w)
+	if execErr == nil && e.wal != nil && info.DurableV1 && !info.ReadOnly {
+		if prepared {
+			e.accountedMemory.Store(projectedMemory)
+		} else {
+			e.accountedMemory.Store(e.measureMemoryUsage())
+		}
+	}
 	return execErr
 }
 
-// Dispatch executes the command directly without Raft. 
+// SetMemoryLimit configures this tenant's no-eviction admission limit.
+func (e *Executor) SetMemoryLimit(bytes int64) {
+	e.maxMemory = bytes
+	e.accountedMemory.Store(e.measureMemoryUsage())
+}
+
+// MemoryUsage returns conservative tenant-owned KV and vector bytes.
+func (e *Executor) MemoryUsage() int64 {
+	return e.accountedMemory.Load()
+}
+
+func (e *Executor) measureMemoryUsage() int64 {
+	return e.kv.MemoryUsage() + e.vec.MemoryUsage()
+}
+
+func (e *Executor) effectsFitQuota(effects []persistence.WALEffect) (bool, int64) {
+	projected := e.accountedMemory.Load()
+	final := make(map[string]persistence.WALEffect)
+	for _, effect := range effects {
+		if effect.Type == persistence.RecordSet || effect.Type == persistence.RecordDelete {
+			final[effect.Key] = effect
+		}
+	}
+	for key, effect := range final {
+		entry := e.kv.Get(key)
+		if entry != nil {
+			projected -= int64(len(key) + 96)
+			if entry.Type == protocol.TypeString {
+				if value, ok := entry.Value.([]byte); ok {
+					projected -= int64(len(value))
+				}
+			}
+		}
+		if effect.Type == persistence.RecordSet {
+			projected += int64(len(key) + len(effect.Value) + 96)
+		}
+	}
+	return e.maxMemory <= 0 || projected <= e.maxMemory, projected
+}
+
+func (e *Executor) prepareDurableEffects(cmd *protocol.Command) ([]persistence.WALEffect, bool) {
+	name := cmd.Normalized()
+	now := time.Now().UnixNano()
+	stringState := func(key string) ([]byte, int64, bool, bool) {
+		entry := e.kv.Get(key)
+		if entry == nil {
+			return nil, 0, false, true
+		}
+		if entry.Type != protocol.TypeString {
+			return nil, 0, true, false
+		}
+		value, ok := entry.Value.([]byte)
+		if !ok {
+			return nil, 0, true, false
+		}
+		return append([]byte(nil), value...), entry.ExpiresAt, true, true
+	}
+	put := func(key string, value []byte, expiresAt int64) persistence.WALEffect {
+		return persistence.WALEffect{Type: persistence.RecordSet, Key: key, Value: value, ExpiresAt: expiresAt}
+	}
+
+	switch name {
+	case "SET":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		value, ttlSec, nx, xx, err := engine.ParseSetArgs(cmd.Args[1:])
+		if err != nil {
+			return nil, true
+		}
+		_, _, exists, valid := stringState(cmd.Arg(0))
+		if !valid || (nx && exists) || (xx && !exists) {
+			return nil, true
+		}
+		expiresAt := int64(0)
+		if ttlSec > 0 {
+			expiresAt = now + ttlSec*int64(time.Second)
+		}
+		return []persistence.WALEffect{put(cmd.Arg(0), append([]byte(nil), value...), expiresAt)}, true
+	case "SETNX":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		_, _, exists, valid := stringState(cmd.Arg(0))
+		if !valid || exists {
+			return nil, true
+		}
+		return []persistence.WALEffect{put(cmd.Arg(0), append([]byte(nil), cmd.ArgBytes(1)...), 0)}, true
+	case "GETSET":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		_, _, _, valid := stringState(cmd.Arg(0))
+		if !valid {
+			return nil, true
+		}
+		return []persistence.WALEffect{put(cmd.Arg(0), append([]byte(nil), cmd.ArgBytes(1)...), 0)}, true
+	case "MSET":
+		if cmd.NumArgs() < 2 || cmd.NumArgs()%2 != 0 {
+			return nil, true
+		}
+		effects := make([]persistence.WALEffect, 0, cmd.NumArgs()/2)
+		for idx := 0; idx < cmd.NumArgs(); idx += 2 {
+			effects = append(effects, put(cmd.Arg(idx), append([]byte(nil), cmd.ArgBytes(idx+1)...), 0))
+		}
+		return effects, true
+	case "DEL":
+		effects := make([]persistence.WALEffect, 0, cmd.NumArgs())
+		for idx := 0; idx < cmd.NumArgs(); idx++ {
+			if e.kv.Exists(cmd.Arg(idx)) {
+				effects = append(effects, persistence.WALEffect{Type: persistence.RecordDelete, Key: cmd.Arg(idx)})
+			}
+		}
+		return effects, true
+	case "EXPIRE":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		seconds, err := strconv.ParseInt(cmd.Arg(1), 10, 64)
+		if err != nil || !e.kv.Exists(cmd.Arg(0)) {
+			return nil, true
+		}
+		return []persistence.WALEffect{{
+			Type: persistence.RecordExpire, Key: cmd.Arg(0), ExpiresAt: now + seconds*int64(time.Second),
+		}}, true
+	case "PERSIST":
+		entry := e.kv.Get(cmd.Arg(0))
+		if entry == nil || entry.ExpiresAt == 0 {
+			return nil, true
+		}
+		return []persistence.WALEffect{{Type: persistence.RecordExpire, Key: cmd.Arg(0)}}, true
+	case "RENAME":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		value, expiresAt, exists, valid := stringState(cmd.Arg(0))
+		if !exists || !valid {
+			return nil, true
+		}
+		return []persistence.WALEffect{
+			put(cmd.Arg(1), value, expiresAt),
+			{Type: persistence.RecordDelete, Key: cmd.Arg(0)},
+		}, true
+	case "INCR", "INCRBY", "DECR", "DECRBY":
+		value, expiresAt, exists, valid := stringState(cmd.Arg(0))
+		if !valid {
+			return nil, true
+		}
+		current := int64(0)
+		if exists {
+			var err error
+			current, err = strconv.ParseInt(string(value), 10, 64)
+			if err != nil {
+				return nil, true
+			}
+		}
+		by := int64(1)
+		if name == "DECR" {
+			by = -1
+		} else if name == "INCRBY" || name == "DECRBY" {
+			parsed, err := strconv.ParseInt(cmd.Arg(1), 10, 64)
+			if err != nil {
+				return nil, true
+			}
+			by = parsed
+			if name == "DECRBY" {
+				by = -by
+			}
+		}
+		final := []byte(strconv.FormatInt(current+by, 10))
+		return []persistence.WALEffect{put(cmd.Arg(0), final, expiresAt)}, true
+	case "APPEND":
+		if cmd.NumArgs() < 2 {
+			return nil, true
+		}
+		value, expiresAt, _, valid := stringState(cmd.Arg(0))
+		if !valid {
+			return nil, true
+		}
+		value = append(value, cmd.ArgBytes(1)...)
+		return []persistence.WALEffect{put(cmd.Arg(0), value, expiresAt)}, true
+	}
+	return nil, false
+}
+
+// Checkpoint installs a sequence-aware KV snapshot and then rotates only the
+// WAL prefix covered by it. Mutations are excluded while the snapshot image is
+// captured so multi-key writes cannot be torn across a checkpoint.
+func (e *Executor) Checkpoint(snapshotter *persistence.Snapshotter) (string, error) {
+	e.mutationMu.Lock()
+	defer e.mutationMu.Unlock()
+	if e.wal == nil {
+		return snapshotter.SaveAt(e.kv, 0)
+	}
+	if err := e.wal.Sync(); err != nil {
+		return "", err
+	}
+	sequence := e.wal.Sequence()
+	path, err := snapshotter.SaveAt(e.kv, sequence)
+	if err != nil {
+		return "", err
+	}
+	if err := e.wal.Rotate(); err != nil {
+		return "", err
+	}
+	_, err = persistence.NewCompactor(e.wal.Dir()).CompactThrough(sequence)
+	return path, err
+}
+
+// WithMaintenanceCheckpoint blocks tenant mutations, syncs the WAL, writes a
+// checkpoint, and runs fn while vector and KV files are stable.
+func (e *Executor) WithMaintenanceCheckpoint(snapshotter *persistence.Snapshotter, fn func(uint64, string) error) error {
+	e.mutationMu.Lock()
+	defer e.mutationMu.Unlock()
+	sequence := uint64(0)
+	if e.wal != nil {
+		if err := e.wal.Sync(); err != nil {
+			return err
+		}
+		sequence = e.wal.Sequence()
+	}
+	path, err := snapshotter.SaveAt(e.kv, sequence)
+	if err != nil {
+		return err
+	}
+	return fn(sequence, path)
+}
+
+// Dispatch executes the command directly without Raft.
 // Exported so FSM can call it.
 func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.Writer) error {
 	name := cmd.Normalized()
@@ -344,9 +680,17 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		if cmd.NumArgs() < 2 {
 			return w.WriteError(protocol.WrongNumArgsError("SET"))
 		}
-		val, ttl, nx, xx, err := engine.ParseSetArgs(cmd.Args[1:])
-		if err != nil {
-			return w.WriteError(err.Error())
+		var val []byte
+		var ttl int64
+		var nx, xx bool
+		var err error
+		if cmd.NumArgs() == 2 {
+			val = cmd.ArgBytes(1)
+		} else {
+			val, ttl, nx, xx, err = engine.ParseSetArgs(cmd.Args[1:])
+			if err != nil {
+				return w.WriteError(err.Error())
+			}
 		}
 		ok, err := e.str.Set(cmd.Arg(0), val, ttl, nx, xx)
 		if err != nil {
@@ -359,7 +703,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			Type:    persistence.RecordSet,
 			Key:     cmd.Arg(0),
 			Value:   val,
-			TTLNano: ttl * 1000000,
+			TTLNano: ttl * 1e6,
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}
@@ -1077,8 +1421,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR unknown OBJECT subcommand")
 		}
 
-	// ── DBX-Exclusive: JSON Document Commands ────────────────────────────
-	// Not available in Redis OSS (requires RedisJSON module)
+	// ── JSON Document Commands ───────────────────────────────────────────
 	case "JSON.SET":
 		if cmd.NumArgs() < 3 {
 			return w.WriteError(protocol.WrongNumArgsError("JSON.SET"))
@@ -1144,8 +1487,8 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteBulkStringStr("null")
 		}
 
-	// ── DBX-Exclusive: Tenant Commands ────────────────────────────────────
-	// Multi-tenancy with per-tenant quotas — NOT available in Redis
+	// ── Tenant Commands ───────────────────────────────────────────────────
+	// Lets a client inspect the tenant it is actually connected to.
 	case "DBX.TENANT":
 		if cmd.NumArgs() < 1 {
 			return w.WriteError(protocol.WrongNumArgsError("DBX.TENANT"))
@@ -1156,8 +1499,8 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			// Return current tenant stats
 			m := e.metrics.Snapshot()
 			info := fmt.Sprintf(
-				"# Tenant\r\ntenant_id:default\r\nmax_memory_mb:512\r\nmax_ops_per_sec:10000\r\ncurrent_ops:%d\r\n",
-				m["total_commands"],
+				"# Tenant\r\nmemory_used_bytes:%d\r\nmemory_limit_bytes:%d\r\nready:%d\r\ncurrent_ops:%d\r\n",
+				e.MemoryUsage(), e.maxMemory, m["tenant_ready"], m["total_commands"],
 			)
 			return w.WriteBulkStringStr(info)
 		case "LIST":
@@ -1166,8 +1509,8 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR unknown DBX.TENANT subcommand")
 		}
 
-	// ── DBX-Exclusive: MVCC Snapshot ─────────────────────────────────────
-	// Point-in-time consistent reads — NOT available in Redis
+	// ── MVCC Snapshot ────────────────────────────────────────────────────
+	// Point-in-time consistent reads.
 	case "DBX.MVCC":
 		if cmd.NumArgs() < 1 {
 			return w.WriteError(protocol.WrongNumArgsError("DBX.MVCC"))
@@ -1183,8 +1526,8 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR unknown DBX.MVCC subcommand")
 		}
 
-	// ── DBX-Exclusive: Snapshot Control ──────────────────────────────────
-	// Client-triggered snapshots — NOT available in Redis (BGSAVE is different)
+	// ── Snapshot Control ─────────────────────────────────────────────────
+	// Client-triggered snapshots of this tenant's state.
 	case "DBX.SNAPSHOT":
 		if cmd.NumArgs() < 1 {
 			return w.WriteError(protocol.WrongNumArgsError("DBX.SNAPSHOT"))
@@ -1198,8 +1541,8 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR unknown DBX.SNAPSHOT subcommand")
 		}
 
-	// ── DBX-Exclusive: Keyspace Analytics ────────────────────────────────
-	// Per-type key count analytics — NOT available in Redis
+	// ── Keyspace Analytics ───────────────────────────────────────────────
+	// Per-type key counts for this tenant.
 	case "DBX.KEYSPACE":
 		stats := e.kv.KeyspaceStats()
 		var out strings.Builder
@@ -1224,8 +1567,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			}
 			vec[i-2] = float32(val)
 		}
-		err := e.vec.VAdd(key, id, vec)
-		if err != nil {
+		if err := e.vec.ValidateAdd(key, id, vec); err != nil {
 			return w.WriteError(err.Error())
 		}
 		if err := e.writeWAL(&persistence.WALRecord{
@@ -1234,6 +1576,10 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			Value: persistence.EncodeVAddPayload(id, vec),
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
+		}
+		if err := e.vec.VAdd(key, id, vec); err != nil {
+			e.metrics.TenantReady.Store(0)
+			return w.WriteError("ERR vector apply failed after WAL append: " + err.Error())
 		}
 		return w.WriteInteger(1)
 
@@ -1253,7 +1599,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR incorrect number of arguments for the given dimension")
 		}
 		numVectors := argsRemaining / (dim + 1)
-		
+
 		if numVectors > 1000 {
 			return w.WriteError("ERR batch size too large, maximum is 1000 vectors per command")
 		}
@@ -1278,17 +1624,19 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			vecs[i] = vec
 		}
 
-		err = e.vec.VAddBatch(key, dim, ids, vecs)
-		if err != nil {
+		if err = e.vec.ValidateAddBatch(key, dim, ids, vecs); err != nil {
 			return w.WriteError(err.Error())
 		}
-
 		if err := e.writeWAL(&persistence.WALRecord{
 			Type:  persistence.RecordVAddBatch,
 			Key:   key,
 			Value: persistence.EncodeVAddBatchPayload(dim, ids, vecs),
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
+		}
+		if err = e.vec.VAddBatch(key, dim, ids, vecs); err != nil {
+			e.metrics.TenantReady.Store(0)
+			return w.WriteError("ERR vector apply failed after WAL append: " + err.Error())
 		}
 		return w.WriteInteger(int64(numVectors))
 
@@ -1338,11 +1686,9 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			offset += vectorByteSize
 		}
 
-		err = e.vec.VAddBatch(key, dim, ids, vecs)
-		if err != nil {
+		if err = e.vec.ValidateAddBatch(key, dim, ids, vecs); err != nil {
 			return w.WriteError(err.Error())
 		}
-
 		if err := e.writeWAL(&persistence.WALRecord{
 			Type:  persistence.RecordVAddBatch,
 			Key:   key,
@@ -1350,49 +1696,89 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}
+		if err = e.vec.VAddBatch(key, dim, ids, vecs); err != nil {
+			e.metrics.TenantReady.Store(0)
+			return w.WriteError("ERR vector apply failed after WAL append: " + err.Error())
+		}
 		return w.WriteInteger(int64(len(ids)))
+
+	case "VDEL":
+		if cmd.NumArgs() != 2 {
+			return w.WriteError(protocol.WrongNumArgsError("VDEL"))
+		}
+		key, id := cmd.Arg(0), cmd.Arg(1)
+		exists, err := e.vec.HasLiveVector(key, id)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		if !exists {
+			return w.WriteInteger(0)
+		}
+		if err := e.writeWAL(&persistence.WALRecord{
+			Type: persistence.RecordVTombstone, Key: key, Value: []byte(id),
+		}); err != nil {
+			return w.WriteError("ERR WAL write failed: " + err.Error())
+		}
+		deleted, err := e.vec.VDel(key, id)
+		if err != nil {
+			e.metrics.TenantReady.Store(0)
+			return w.WriteError("ERR vector tombstone apply failed after WAL append: " + err.Error())
+		}
+		if ratio, ratioErr := e.vec.TombstoneRatio(key); ratioErr == nil && ratio > 0.20 {
+			if _, compactErr := e.vec.VCompact(key); compactErr != nil {
+				e.metrics.TenantReady.Store(0)
+				return w.WriteError("ERR vector compaction failed: " + compactErr.Error())
+			}
+		}
+		if deleted {
+			return w.WriteInteger(1)
+		}
+		return w.WriteInteger(0)
+
+	case "VCOMPACT":
+		if cmd.NumArgs() != 1 {
+			return w.WriteError(protocol.WrongNumArgsError("VCOMPACT"))
+		}
+		removed, err := e.vec.VCompact(cmd.Arg(0))
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		return w.WriteInteger(int64(removed))
 
 	case "VSEARCH":
 		if cmd.NumArgs() < 3 {
 			return w.WriteError(protocol.WrongNumArgsError("VSEARCH"))
 		}
 
-		var args []string
-		for i := 0; i < cmd.NumArgs(); i++ {
-			args = append(args, cmd.Arg(i))
-		}
-
+		end := cmd.NumArgs()
 		var withDocsPrefix string
 		var filterContains string
-
-		for {
-			hasFlag := false
-			if len(args) >= 3 && strings.ToUpper(args[len(args)-2]) == "WITHDOCS" {
-				withDocsPrefix = args[len(args)-1]
-				args = args[:len(args)-2]
-				hasFlag = true
+		for end >= 3 {
+			flag := strings.ToUpper(cmd.Arg(end - 2))
+			if flag == "WITHDOCS" {
+				withDocsPrefix = cmd.Arg(end - 1)
+				end -= 2
+				continue
 			}
-			if len(args) >= 3 && strings.ToUpper(args[len(args)-2]) == "FILTER_CONTAINS" {
-				filterContains = args[len(args)-1]
-				args = args[:len(args)-2]
-				hasFlag = true
+			if flag == "FILTER_CONTAINS" {
+				filterContains = cmd.Arg(end - 1)
+				end -= 2
+				continue
 			}
-			if !hasFlag {
-				break
-			}
+			break
 		}
 
-		key := args[0]
-		k, err := strconv.Atoi(args[len(args)-1])
+		key := cmd.Arg(0)
+		k, err := strconv.Atoi(cmd.Arg(end - 1))
 		if err != nil {
 			return w.WriteError("ERR k is not a valid integer")
 		}
 
-		query := make([]float32, len(args)-2)
-		for i := 1; i < len(args)-1; i++ {
-			val, err := strconv.ParseFloat(args[i], 32)
+		query := make([]float32, end-2)
+		for i := 1; i < end-1; i++ {
+			val, err := strconv.ParseFloat(cmd.Arg(i), 32)
 			if err != nil {
-				return w.WriteError(fmt.Sprintf("ERR query is not a valid float: '%s'", args[i]))
+				return w.WriteError(fmt.Sprintf("ERR query is not a valid float: '%s'", cmd.Arg(i)))
 			}
 			query[i-1] = float32(val)
 		}

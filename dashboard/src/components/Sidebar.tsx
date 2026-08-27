@@ -1,17 +1,16 @@
+import type { ReactNode } from 'react';
 import { useState, useRef } from 'react';
-import gsap from 'gsap';
-import { Flip } from 'gsap/Flip';
-
-gsap.registerPlugin(Flip);
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   Activity, Database, Settings, Terminal, Network,
-  ChevronDown, ChevronRight, BarChart2, Cpu, Server,
-  Shield, Bell, Search, LogOut, User,
-  MonitorDot, Gauge, Globe, HardDrive,
-  Layers, X, Menu, Command
+  ChevronDown, ChevronRight, BarChart2, Cpu,
+  Shield, LogOut, User, MonitorDot, Gauge, Globe, HardDrive,
+  Layers, Menu, PanelLeft
 } from 'lucide-react';
 import logo from '../assets/logo.jpg';
+import { openCommandPalette } from '../api';
+import { useTenant } from './TenantProvider';
+import { StatusBadge } from './PageChrome';
 
 interface SidebarProps {
   clusterId: string;
@@ -19,8 +18,8 @@ interface SidebarProps {
 
 interface NavGroup {
   label: string;
-  icon: React.ReactNode;
-  items: { path: string; label: string; icon: React.ReactNode }[];
+  icon: ReactNode;
+  items: { path: string; label: string; icon: ReactNode }[];
 }
 
 export default function Sidebar({ clusterId }: SidebarProps) {
@@ -31,61 +30,56 @@ export default function Sidebar({ clusterId }: SidebarProps) {
     config: true,
   });
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showCommandPalette, setShowCommandPalette] = useState(false);
-  const [cmdSearch, setCmdSearch] = useState('');
   const navigate = useNavigate();
   const sidebarRef = useRef<HTMLElement>(null);
+  const { tenant } = useTenant(clusterId || undefined);
 
-  const toggleCollapsed = () => {
-    if (!sidebarRef.current) return;
-    const state = Flip.getState(sidebarRef.current.querySelectorAll('*'), { props: "width,height,padding,opacity" });
-    setCollapsed(prev => !prev);
-    
-    // We must wait for React to render the new state, so we use requestAnimationFrame
-    requestAnimationFrame(() => {
-      Flip.from(state, {
-        duration: 0.5,
-        ease: 'power3.inOut',
-        absolute: true,
-        nested: true,
-      });
-    });
-  };
+  const groups: NavGroup[] = clusterId
+    ? [
+        {
+          label: 'Tenant',
+          icon: <MonitorDot size={13} />,
+          items: [
+            { path: `/cluster/${clusterId}/overview`, label: 'Overview', icon: <Activity size={15} /> },
+            { path: `/cluster/${clusterId}/explorer`, label: 'Data Explorer', icon: <Database size={15} /> },
+            { path: `/cluster/${clusterId}/vector`, label: 'Vector Playground', icon: <Network size={15} /> },
+            { path: `/cluster/${clusterId}/terminal`, label: 'Console', icon: <Terminal size={15} /> },
+          ],
+        },
+        {
+          label: 'Runtime',
+          icon: <Cpu size={13} />,
+          items: [
+            { path: `/cluster/${clusterId}/hardware`, label: 'Hardware', icon: <Cpu size={15} /> },
+            { path: `/cluster/${clusterId}/storage`, label: 'Storage', icon: <HardDrive size={15} /> },
+            { path: `/cluster/${clusterId}/network`, label: 'Network', icon: <Globe size={15} /> },
+            { path: `/cluster/${clusterId}/hosting`, label: 'Hosting', icon: <Gauge size={15} /> },
+          ],
+        },
+        {
+          label: 'Control plane',
+          icon: <Layers size={13} />,
+          items: [
+            { path: `/settings`, label: 'Settings', icon: <Settings size={15} /> },
+            { path: `/settings/security`, label: 'Security', icon: <Shield size={15} /> },
+            { path: `/settings/replication`, label: 'Replication', icon: <BarChart2 size={15} /> },
+          ],
+        },
+      ]
+    : [
+        {
+          label: 'Control plane',
+          icon: <Layers size={13} />,
+          items: [
+            { path: `/`, label: 'Tenants', icon: <Database size={15} /> },
+            { path: `/settings`, label: 'Settings', icon: <Settings size={15} /> },
+            { path: `/settings/security`, label: 'Security', icon: <Shield size={15} /> },
+            { path: `/settings/replication`, label: 'Replication', icon: <BarChart2 size={15} /> },
+          ],
+        },
+      ];
 
-  const groups: NavGroup[] = [
-    {
-      label: 'Product Monitoring',
-      icon: <MonitorDot size={14} />,
-      items: [
-        { path: `/cluster/${clusterId}/hosting`, label: 'Hosting Performance', icon: <Gauge size={15} /> },
-        { path: `/cluster/${clusterId}/overview`, label: 'Metrics Overview', icon: <Activity size={15} /> },
-        { path: `/cluster/${clusterId}/explorer`, label: 'Data Explorer', icon: <Database size={15} /> },
-        { path: `/cluster/${clusterId}/vector`, label: 'Vector Playground', icon: <Network size={15} /> },
-      ],
-    },
-    {
-      label: 'Server Analytics',
-      icon: <Server size={14} />,
-      items: [
-        { path: `/cluster/${clusterId}/terminal`, label: 'Interactive Console', icon: <Terminal size={15} /> },
-        { path: `/cluster/${clusterId}/hardware`, label: 'Hardware & Load', icon: <Cpu size={15} /> },
-        { path: `/cluster/${clusterId}/storage`, label: 'Disk & Storage', icon: <HardDrive size={15} /> },
-        { path: `/cluster/${clusterId}/network`, label: 'Network I/O', icon: <Globe size={15} /> },
-      ],
-    },
-    {
-      label: 'Configuration',
-      icon: <Layers size={14} />,
-      items: [
-        { path: `/settings`, label: 'General Settings', icon: <Settings size={15} /> },
-        { path: `/settings/security`, label: 'Security & TLS', icon: <Shield size={15} /> },
-        { path: `/settings/replication`, label: 'Replication (Raft)', icon: <BarChart2 size={15} /> },
-      ],
-    },
-  ];
-
-  const groupKeys = ['product', 'server', 'config'];
+  const groupKeys = clusterId ? ['product', 'server', 'config'] : ['config'];
 
   const toggleGroup = (key: string) => {
     setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
@@ -96,93 +90,20 @@ export default function Sidebar({ clusterId }: SidebarProps) {
     navigate('/login');
   };
 
-  // All navigable items for command palette
-  const allItems = groups.flatMap(g => g.items);
-  const filteredCmdItems = allItems.filter(item =>
-    item.label.toLowerCase().includes(cmdSearch.toLowerCase())
-  );
+  const linkClass = ({ isActive }: { isActive: boolean }) =>
+    `flex items-center gap-3 px-3 py-[7px] text-[13px] font-medium transition-colors duration-150 border-l-2 ${
+      collapsed ? 'justify-center border-l-0 px-0' : ''
+    } ${
+      isActive
+        ? 'border-[var(--accent-primary)] text-[var(--accent-primary)] bg-[var(--accent-soft)]'
+        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--border-highlight)]'
+    }`;
 
   return (
     <>
-      {/* Command Palette Modal */}
-      {showCommandPalette && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-start justify-center pt-24 px-4"
-          onClick={() => { setShowCommandPalette(false); setCmdSearch(''); }}
-        >
-          <div
-            className="w-full max-w-lg bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-gray-100">
-              <Search size={16} className="text-gray-400 flex-shrink-0" />
-              <input
-                autoFocus
-                type="text"
-                placeholder="Search pages and actions…"
-                value={cmdSearch}
-                onChange={e => setCmdSearch(e.target.value)}
-                className="flex-1 text-sm text-slate-900 placeholder-gray-400 outline-none bg-transparent"
-              />
-              <button
-                onClick={() => { setShowCommandPalette(false); setCmdSearch(''); }}
-                className="text-gray-400 hover:text-slate-900 transition-colors p-1"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="py-2 max-h-80 overflow-y-auto">
-              {filteredCmdItems.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-gray-400">No results for "{cmdSearch}"</div>
-              ) : (
-                filteredCmdItems.map(item => (
-                  <button
-                    key={item.path}
-                    onClick={() => { navigate(item.path); setShowCommandPalette(false); setCmdSearch(''); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-700 hover:bg-gray-50 hover:text-slate-900 transition-colors text-left"
-                  >
-                    <span className="text-gray-400">{item.icon}</span>
-                    {item.label}
-                  </button>
-                ))
-              )}
-            </div>
-            <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-400">
-              <span><kbd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">↑↓</kbd> navigate</span>
-              <span><kbd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">↵</kbd> select</span>
-              <span><kbd className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">Esc</kbd> close</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Notifications panel */}
-      {showNotifications && (
-        <div
-          className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
-          onClick={() => setShowNotifications(false)}
-        >
-          <div
-            className="absolute left-[280px] top-0 h-full w-80 bg-white border-r border-gray-200 shadow-2xl flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-              <h3 className="font-bold text-slate-900 text-sm">Notifications</h3>
-              <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-slate-900 transition-colors">
-                <X size={16} />
-              </button>
-            </div>
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">
-              No new notifications
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile overlay */}
       {!collapsed && (
         <div
-          className="fixed inset-0 bg-black/40 z-10 lg:hidden backdrop-blur-sm"
+          className="fixed inset-0 bg-black/40 z-10 lg:hidden"
           onClick={() => setCollapsed(true)}
         />
       )}
@@ -190,134 +111,94 @@ export default function Sidebar({ clusterId }: SidebarProps) {
       <aside
         ref={sidebarRef}
         className={`
-          flex flex-col bg-white border-r border-gray-200
-          z-20 flex-shrink-0 h-full overflow-hidden
-          ${collapsed ? 'w-[68px]' : 'w-[272px]'}
+          flex flex-col z-20 flex-shrink-0 h-full overflow-hidden
+          bg-[var(--bg-sidebar)] border-r border-[var(--border-color)]
+          transition-[width] duration-150 ease-linear
+          ${collapsed ? 'w-[56px]' : 'w-[240px]'}
         `}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+        <div className={`flex items-center border-b border-[var(--border-color)] h-12 ${collapsed ? 'justify-center px-1' : 'justify-between px-3'}`}>
           {!collapsed && (
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('/')}>
-              <div className="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-sm flex-shrink-0">
-                <img src={logo} alt="DBX Logo" className="w-full h-full object-cover" />
-              </div>
-              <div>
-                <div className="font-extrabold text-lg tracking-tight leading-none mb-0.5" style={{ background: 'linear-gradient(90deg, #111827 0%, #3b82f6 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>DBX Cloud</div>
-                <div className="text-[10px] text-red-600 font-bold tracking-widest uppercase">Enterprise</div>
-              </div>
-            </div>
-          )}
-          {collapsed && (
-            <div
-              className="w-8 h-8 rounded-lg overflow-hidden border border-gray-200 shadow-sm mx-auto cursor-pointer"
+            <button
+              type="button"
+              className="flex items-center gap-2.5 min-w-0"
               onClick={() => navigate('/')}
             >
-              <img src={logo} alt="DBX Logo" className="w-full h-full object-cover" />
-            </div>
+              <div className="w-7 h-7 rounded overflow-hidden border border-[var(--border-color)] flex-shrink-0">
+                <img src={logo} alt="" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-left min-w-0">
+                <div className="font-semibold text-[13px] tracking-tight leading-none text-[var(--text-primary)]">DBX</div>
+                <div className="text-[10px] text-[var(--accent-primary)] font-semibold tracking-[0.14em] uppercase mt-0.5">Control plane</div>
+              </div>
+            </button>
+          )}
+          {collapsed && (
+            <button
+              type="button"
+              className="w-7 h-7 rounded overflow-hidden border border-[var(--border-color)]"
+              onClick={() => navigate('/')}
+            >
+              <img src={logo} alt="DBX" className="w-full h-full object-cover" />
+            </button>
           )}
           <button
-            onClick={toggleCollapsed}
-            className="text-gray-400 hover:text-slate-900 transition-colors p-1.5 rounded-lg hover:bg-gray-100 flex-shrink-0 ml-auto"
+            type="button"
+            onClick={() => setCollapsed(v => !v)}
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded hover:bg-[var(--bg-tertiary)] flex-shrink-0"
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <Menu size={16} /> : <X size={16} />}
+            {collapsed ? <Menu size={15} /> : <PanelLeft size={15} />}
           </button>
         </div>
 
-        {/* Search / Command Palette Trigger */}
-        {!collapsed && (
-          <div className="px-4 py-3 border-b border-gray-100">
-            <button
-              onClick={() => setShowCommandPalette(true)}
-              className="w-full flex items-center justify-between gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 hover:border-gray-300 hover:bg-gray-100 transition-all group"
-            >
-              <div className="flex items-center gap-2 text-gray-400 group-hover:text-gray-600">
-                <Search size={14} />
-                <span className="text-sm">Search DBX…</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <kbd className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] font-mono text-gray-400">⌘</kbd>
-                <kbd className="bg-white border border-gray-200 rounded px-1.5 py-0.5 text-[10px] font-mono text-gray-400">K</kbd>
-              </div>
-            </button>
-          </div>
-        )}
-
-        {/* Nav Groups */}
-        <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-8">
+        <nav className="flex-1 overflow-y-auto py-3 space-y-5">
           {groups.map((group, gi) => {
             const key = groupKeys[gi];
             const isOpen = openGroups[key];
             return (
               <div key={key}>
                 <button
+                  type="button"
                   onClick={() => toggleGroup(key)}
                   className={`
-                    w-full flex items-center gap-2 px-1 mb-2 text-[12px] font-bold uppercase tracking-[0.2em]
-                    transition-colors text-slate-400 hover:text-slate-600
-                    ${collapsed ? 'justify-center' : 'justify-between'}
+                    w-full flex items-center gap-2 px-3 mb-1 text-[11px] font-semibold uppercase tracking-[0.08em]
+                    text-[var(--text-muted)] hover:text-[var(--text-secondary)]
+                    ${collapsed ? 'justify-center px-0' : 'justify-between'}
                   `}
                   title={collapsed ? group.label : undefined}
                 >
-                  <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-2">
                     {group.icon}
                     {!collapsed && group.label}
                   </span>
                   {!collapsed && (isOpen
-                    ? <ChevronDown size={14} className="text-gray-400" />
-                    : <ChevronRight size={14} className="text-gray-400" />
+                    ? <ChevronDown size={12} />
+                    : <ChevronRight size={12} />
                   )}
                 </button>
 
-                {!collapsed && isOpen && (
-                  <div className="space-y-2 mt-2">
+                {(!collapsed && isOpen) && (
+                  <div>
                     {group.items.map(item => (
-                      <NavLink
-                        key={item.label + item.path}
-                        to={item.path}
-                        className={({ isActive }) => `
-                          flex items-center gap-4 px-4 py-3 rounded-2xl text-[15px] font-medium transition-all duration-300 group relative
-                          ${isActive
-                            ? 'bg-gradient-to-r from-slate-900 to-slate-800 text-white shadow-lg shadow-slate-900/25 translate-x-1 border border-slate-700/50'
-                            : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 hover:shadow-sm hover:translate-x-1 border border-transparent'
-                          }
-                        `}
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <span className={`transition-transform duration-300 ${isActive ? 'text-white scale-110' : 'text-slate-400 group-hover:scale-110 group-hover:text-slate-700'}`}>
-                              {item.icon}
-                            </span>
-                            {item.label}
-                          </>
-                        )}
+                      <NavLink key={item.path} to={item.path} className={linkClass}>
+                        {item.icon}
+                        {item.label}
                       </NavLink>
                     ))}
                   </div>
                 )}
 
-                {/* Collapsed: just icons */}
                 {collapsed && (
-                  <div className="space-y-2 mt-2">
+                  <div className="mt-1 space-y-0.5">
                     {group.items.map(item => (
                       <NavLink
-                        key={item.label}
+                        key={item.path}
                         to={item.path}
                         title={item.label}
-                        className={({ isActive }) => `
-                          flex items-center justify-center p-3.5 rounded-2xl transition-all duration-300 group relative
-                          ${isActive 
-                            ? 'bg-slate-900 text-white shadow-md shadow-slate-900/20' 
-                            : 'text-slate-400 hover:text-slate-900 hover:bg-slate-100/80'}
-                        `}
+                        className={linkClass}
                       >
-                        {() => (
-                          <>
-                            <span className="transition-transform duration-300 group-hover:scale-110">
-                              {item.icon}
-                            </span>
-                          </>
-                        )}
+                        {item.icon}
                       </NavLink>
                     ))}
                   </div>
@@ -327,88 +208,69 @@ export default function Sidebar({ clusterId }: SidebarProps) {
           })}
         </nav>
 
-        {/* Footer / User Menu */}
-        <div className="border-t border-gray-100 p-3 bg-gray-50 space-y-1">
-          {/* Quick action buttons */}
-          {!collapsed && (
-            <div className="flex items-center gap-1 mb-2">
-              <button
-                onClick={() => setShowNotifications(true)}
-                title="Notifications"
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-gray-500 hover:text-slate-900 hover:bg-white hover:border hover:border-gray-200 transition-all text-xs font-medium"
-              >
-                <Bell size={14} />
-                Alerts
-              </button>
-              <button
-                onClick={() => setShowCommandPalette(true)}
-                title="Command Menu"
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-gray-500 hover:text-slate-900 hover:bg-white hover:border hover:border-gray-200 transition-all text-xs font-medium"
-              >
-                <Command size={14} />
-                ⌘K
-              </button>
+        <div className="border-t border-[var(--border-color)] p-2">
+          {!collapsed && clusterId && tenant && (
+            <div className="px-2 py-2 mb-1 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-mono text-[var(--text-secondary)] truncate" title={clusterId}>
+                {clusterId}
+              </span>
+              <StatusBadge tenant={tenant} />
             </div>
           )}
 
-          {/* User button */}
           <div className="relative">
             <button
+              type="button"
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white hover:border hover:border-gray-200 transition-all group border border-transparent"
+              className="w-full flex items-center gap-2.5 p-2 rounded hover:bg-[var(--bg-tertiary)]"
             >
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center font-bold text-white text-sm flex-shrink-0 shadow-sm">
+              <div className="w-7 h-7 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center font-semibold text-xs flex-shrink-0">
                 A
               </div>
               {!collapsed && (
                 <>
                   <div className="text-left flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-slate-700 leading-tight">Admin</div>
-                    <div className="text-[11px] text-gray-400 font-mono truncate mt-0.5">{clusterId}</div>
+                    <div className="text-[13px] font-medium text-[var(--text-primary)] leading-tight">Admin</div>
+                    <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">operator</div>
                   </div>
-                  <ChevronDown size={13} className="text-gray-400" />
+                  <ChevronDown size={12} className="text-[var(--text-muted)]" />
                 </>
               )}
             </button>
 
             {showUserMenu && !collapsed && (
-              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-                <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-                  <div className="text-sm font-bold text-slate-900">Admin User</div>
-                  <div className="text-xs text-gray-500 mt-0.5">admin@dbx.local</div>
+              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-md overflow-hidden z-30">
+                <div className="px-3 py-2.5 border-b border-[var(--border-color)]">
+                  <div className="text-[13px] font-semibold text-[var(--text-primary)]">Admin</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">control plane</div>
                 </div>
-                <div className="p-1.5 space-y-0.5">
+                <div className="p-1">
                   <button
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-700 hover:bg-gray-100 hover:text-slate-900 transition-colors"
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
                     onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
                   >
-                    <User size={14} /> Profile & Settings
+                    <User size={13} /> Settings
                   </button>
-                  <div className="border-t border-gray-100 my-1" />
                   <button
-                    onClick={handleLogout}
-                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    type="button"
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                    onClick={() => { openCommandPalette(); setShowUserMenu(false); }}
                   >
-                    <LogOut size={14} /> Sign Out
+                    Command palette
+                    <kbd className="ml-auto font-mono text-[10px] border border-[var(--border-color)] px-1 rounded">⌘K</kbd>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--error)] hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                  >
+                    <LogOut size={13} /> Sign out
                   </button>
                 </div>
               </div>
             )}
           </div>
-
-          {/* Status indicator */}
-          {!collapsed && (
-            <div className="px-2 py-1.5 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                </div>
-                <span className="text-[11px] text-gray-500 font-medium">Orchestrator Connected</span>
-              </div>
-              <span className="text-[10px] text-gray-400 font-mono">v2.0</span>
-            </div>
-          )}
         </div>
       </aside>
     </>

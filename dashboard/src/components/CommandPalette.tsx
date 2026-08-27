@@ -1,22 +1,25 @@
+import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Terminal, Database, Settings, Moon, Sun } from 'lucide-react';
+import { Search, Terminal, Database, Settings, Moon, Sun, LayoutGrid, Network } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
+import { useTenants } from './TenantProvider';
 
 export default function CommandPalette() {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
+  const { tenants } = useTenants();
 
-  // Extract cluster ID from URL if present
   const match = window.location.pathname.match(/\/cluster\/([^/]+)/);
-  const clusterId = match ? match[1] : 'bench-tenant';
+  const clusterId = match?.[1] || tenants[0]?.id;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsOpen(prev => !prev);
       }
@@ -24,14 +27,20 @@ export default function CommandPalette() {
         setIsOpen(false);
       }
     };
+    const handleOpen = () => setIsOpen(true);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('dbx:open-palette', handleOpen);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('dbx:open-palette', handleOpen);
+    };
   }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
       setTimeout(() => inputRef.current?.focus(), 10);
       setSearch('');
+      setActive(0);
     }
   }, [isOpen]);
 
@@ -43,60 +52,91 @@ export default function CommandPalette() {
   };
 
   const commands = [
-    { name: 'Go to Data Explorer', icon: <Database size={16}/>, action: () => navigate(`/cluster/${clusterId}/explorer`) },
-    { name: 'Go to Vector Playground', icon: <Search size={16}/>, action: () => navigate(`/cluster/${clusterId}/vector`) },
-    { name: 'Go to Terminal Console', icon: <Terminal size={16}/>, action: () => navigate(`/cluster/${clusterId}/terminal`) },
-    { name: 'Settings & API Keys', icon: <Settings size={16}/>, action: () => navigate(`/settings`) },
-    { name: 'Toggle Dark Mode', icon: theme === 'dark' ? <Sun size={16}/> : <Moon size={16}/>, action: () => setTheme(theme === 'dark' ? 'light' : 'dark') },
+    { name: 'Go to tenants', icon: <LayoutGrid size={15} />, action: () => navigate('/') },
+    ...(clusterId
+      ? [
+          { name: 'Go to Overview', icon: <LayoutGrid size={15} />, action: () => navigate(`/cluster/${clusterId}/overview`) },
+          { name: 'Go to Data Explorer', icon: <Database size={15} />, action: () => navigate(`/cluster/${clusterId}/explorer`) },
+          { name: 'Go to Vector Playground', icon: <Network size={15} />, action: () => navigate(`/cluster/${clusterId}/vector`) },
+          { name: 'Go to Console', icon: <Terminal size={15} />, action: () => navigate(`/cluster/${clusterId}/terminal`) },
+        ]
+      : []),
+    { name: 'Settings', icon: <Settings size={15} />, action: () => navigate('/settings') },
+    {
+      name: 'Toggle dark mode',
+      icon: theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />,
+      action: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+    },
+    ...tenants.map(t => ({
+      name: `Open tenant ${t.name}`,
+      icon: <Database size={15} />,
+      action: () => navigate(`/cluster/${t.id}/overview`),
+    })),
   ];
 
   const filtered = commands.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
+  const onKeyDown = (e: ReactKeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActive(i => Math.min(filtered.length - 1, i + 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActive(i => Math.max(0, i - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = filtered[active];
+      if (cmd) handleSelect(cmd.action);
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-start justify-center pt-[15vh] p-4" onClick={() => setIsOpen(false)}>
-      <div 
-        className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-slide-down"
+    <div
+      className="fixed inset-0 bg-zinc-950/40 z-[100] flex items-start justify-center pt-[12vh] p-4"
+      onClick={() => setIsOpen(false)}
+    >
+      <div
+        className="bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-lg w-full max-w-xl overflow-hidden"
         onClick={e => e.stopPropagation()}
-        style={{ animation: 'slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1)' }}
+        role="dialog"
+        aria-label="Command palette"
       >
-        <div className="flex items-center px-4 py-4 border-b border-gray-100 dark:border-slate-800">
-          <Search size={20} className="text-gray-400 dark:text-slate-500 mr-3 shrink-0" />
+        <div className="flex items-center px-3 py-2.5 border-b border-[var(--border-color)]">
+          <Search size={16} className="text-[var(--text-muted)] mr-2.5 shrink-0" />
           <input
             ref={inputRef}
             type="text"
-            className="flex-1 bg-transparent text-slate-900 dark:text-white outline-none placeholder-gray-400 dark:placeholder-slate-500 text-lg"
-            placeholder="Type a command or search..."
+            className="flex-1 bg-transparent text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] text-[14px]"
+            placeholder="Jump to a page or tenant…"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setActive(0); }}
+            onKeyDown={onKeyDown}
           />
-          <button onClick={() => setIsOpen(false)} className="bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 text-xs px-2 py-1 rounded font-mono font-bold hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">ESC</button>
+          <kbd className="text-[10px] font-mono text-[var(--text-muted)] border border-[var(--border-color)] px-1.5 py-0.5 rounded">ESC</kbd>
         </div>
-        
-        <div className="max-h-80 overflow-y-auto p-2">
+
+        <div className="max-h-80 overflow-y-auto p-1">
           {filtered.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-500 dark:text-slate-400">No commands found.</div>
+            <div className="py-8 text-center text-[13px] text-[var(--text-muted)]">No matches.</div>
           ) : (
-            <div className="space-y-1">
-              {filtered.map((cmd, i) => (
-                <button
-                  key={i}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-red-50 dark:hover:bg-red-900/20 hover:text-red-600 dark:hover:text-red-400 transition-colors text-left"
-                  onClick={() => handleSelect(cmd.action)}
-                >
-                  <span className="text-gray-400 dark:text-slate-500">{cmd.icon}</span>
-                  {cmd.name}
-                </button>
-              ))}
-            </div>
+            filtered.map((cmd, i) => (
+              <button
+                key={`${cmd.name}-${i}`}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded text-[13px] font-medium text-left ${
+                  i === active
+                    ? 'bg-[var(--accent-soft)] text-[var(--accent-primary)]'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]'
+                }`}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => handleSelect(cmd.action)}
+              >
+                <span className="text-[var(--text-muted)]">{cmd.icon}</span>
+                {cmd.name}
+              </button>
+            ))
           )}
         </div>
       </div>
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes slideDown {
-          from { opacity: 0; transform: translateY(-16px) scale(0.98); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}} />
     </div>
   );
 }

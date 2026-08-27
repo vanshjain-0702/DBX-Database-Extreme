@@ -12,16 +12,19 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-# Copy the pre-built dashboard into the Go build context
 COPY --from=dashboard-builder /app/dashboard/dist ./dashboard/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /dbx-orchestrator ./cmd/dbx-orchestrator
 
 # Stage 3: Minimal production image
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata wget
-WORKDIR /app
+WORKDIR /data
+ENV DBX_DATA_DIR=/data
 COPY --from=go-builder /dbx-orchestrator /usr/local/bin/dbx-orchestrator
 RUN mkdir -p /data /certs
-EXPOSE 8000
+EXPOSE 8000 6380
 VOLUME ["/data"]
-ENTRYPOINT ["dbx-orchestrator", "-insecure-http=true", "-state-file=/data/tenants.json", "-admin-file=/data/admin.json", "-raftdir=/data/raft"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8000/ || exit 1
+ENTRYPOINT ["dbx-orchestrator"]
+CMD ["-insecure-http=true", "-state-file=/data/tenants.json", "-admin-file=/data/admin.json"]

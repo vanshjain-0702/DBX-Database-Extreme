@@ -189,14 +189,15 @@ func main() {
 			return
 		}
 		var req struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
+			ID       string `json:"id"`
+			Name     string `json:"name"`
+			Replicas int    `json:"replicas"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		t, err := manager.Provision(req.ID, req.Name)
+		t, err := manager.Provision(req.ID, req.Name, req.Replicas)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -210,7 +211,26 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		json.NewEncoder(w).Encode(manager.ListTenants())
+		json.NewEncoder(w).Encode(manager.ListTenantViews())
+	})
+
+	protectedMux.HandleFunc("/api/tenants/promote", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ReplicaID string `json:"replica_id"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := manager.Promote(req.ReplicaID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "promoted", "replica_id": req.ReplicaID})
 	})
 
 	// Backup API
@@ -272,6 +292,7 @@ func main() {
 	// Apply middleware to protected routes
 	mux.Handle("/api/provision", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/tenants", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/promote", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/tenants/backup", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/admin/password", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/t/", orchestrator.RequireAuth(jwtSecret, protectedMux))

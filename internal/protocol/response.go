@@ -6,6 +6,8 @@ import (
 	"strconv"
 )
 
+var okRESP = []byte("+OK\r\n")
+
 // Writer writes RESP2 responses.
 type Writer struct {
 	w io.Writer
@@ -83,7 +85,17 @@ func (w *Writer) WriteNull() error {
 
 // WriteOK writes +OK\r\n.
 func (w *Writer) WriteOK() error {
-	return w.WriteSimpleString("OK")
+	_, err := w.w.Write(okRESP)
+	return err
+}
+
+// Flush flushes a buffered underlying writer, if any.
+func (w *Writer) Flush() error {
+	type flusher interface{ Flush() error }
+	if f, ok := w.w.(flusher); ok {
+		return f.Flush()
+	}
+	return nil
 }
 
 // WriteStrings writes an array of strings as bulk strings.

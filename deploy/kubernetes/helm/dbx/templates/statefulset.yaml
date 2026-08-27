@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: dbx-orchestrator
+  labels:
+    app: dbx-orchestrator
+    app.kubernetes.io/name: '{{ include "dbx.name" . }}'
+    app.kubernetes.io/instance: '{{ .Release.Name }}'
+spec:
+  serviceName: dbx-internal
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: dbx-orchestrator
+  template:
+    metadata:
+      labels:
+        app: dbx-orchestrator
+        app.kubernetes.io/name: '{{ include "dbx.name" . }}'
+        app.kubernetes.io/instance: '{{ .Release.Name }}'
+    spec:
+      serviceAccountName: dbx-orchestrator-sa
+      containers:
+      - name: orchestrator
+        image: '{{ .Values.image.repository }}:{{ .Values.image.tag }}'
+        imagePullPolicy: '{{ .Values.image.pullPolicy }}'
+        args:
+        - -insecure-http=true
+        - -state-file=/dbx/data/tenants.json
+        - -admin-file=/dbx/data/admin.json
+        env:
+        - name: DBX_DATA_DIR
+          value: /dbx/data
+        - name: DBX_NODE_MEMORY_BUDGET
+          value: '{{ .Values.memoryBudget }}'
+        - name: DBX_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: jwt-secret
+        - name: DBX_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: admin-password
+        - name: DBX_INTERNAL_API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: internal-token
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 6380
+          name: resp
+        resources:
+          limits:
+            cpu: '{{ .Values.resources.limits.cpu }}'
+            memory: '{{ .Values.resources.limits.memory }}'
+          requests:
+            cpu: '{{ .Values.resources.requests.cpu }}'
+            memory: '{{ .Values.resources.requests.memory }}'
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /dbx/data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: '{{ .Values.persistence.size }}'

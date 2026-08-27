@@ -1,6 +1,11 @@
 # LangChain RAG with DBX
 
-This example demonstrates how to use DBX as a vector store backend for a LangChain Retrieval-Augmented Generation (RAG) pipeline.
+This example demonstrates how to use DBX as a vector store backend for a LangChain
+Retrieval-Augmented Generation (RAG) pipeline.
+
+Note the `tenant_id` below: in DBX each customer's corpus lives in its own isolated engine, so
+a multi-tenant RAG app points at a different tenant per customer rather than filtering a
+shared index.
 
 ## Prerequisites
 
@@ -40,9 +45,9 @@ db = DBXVectorStore(
 
 # Add documents
 db.add_texts([
-    "DBX is an AI-native in-memory database.",
-    "It supports both Redis-compatible KV and Vector Search.",
-    "You can use it as a drop-in replacement for Redis + Pinecone.",
+    "DBX is a per-tenant memory engine for AI products.",
+    "Each tenant gets an isolated store holding both KV state and vector memory.",
+    "Backup, export, and deletion operate on one customer at a time.",
 ])
 
 # Ask a question

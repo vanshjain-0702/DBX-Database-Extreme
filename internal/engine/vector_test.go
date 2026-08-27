@@ -2,6 +2,10 @@ package engine
 
 import (
 	"math"
+	"os"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"testing"
 )
 
@@ -92,6 +96,45 @@ func TestVectorStore_RestoresMetadataAndReplacesID(t *testing.T) {
 	idx.Close()
 }
 
+// A crash never gives the index a chance to write its .hnsw file. The rows are
+// still in the mmap and the ids are still in the metadata, so the store must
+// rebuild the graph on open — otherwise every vector is silently unsearchable
+// while VSEARCH keeps returning success.
+func TestVectorStoreRebuildsGraphAfterCrash(t *testing.T) {
+	dir := t.TempDir()
+	key := "tenant/memories"
+
+	first := NewVectorStore(New(16), dir, 0)
+	ids := []string{"doc1", "doc2", "doc3"}
+	vecs := [][]float32{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+	for i, id := range ids {
+		if err := first.VAdd(key, id, vecs[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Release the mmap handles, then delete the graph file to reproduce what a
+	// SIGKILL leaves behind: populated .vec and .meta, no .hnsw.
+	first.CloseAll()
+	graphPath := filepath.Join(dir, vectorIndexFilename(key)+".hnsw")
+	if err := os.Remove(graphPath); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing graph file: %v", err)
+	}
+
+	second := NewVectorStore(New(16), dir, 0)
+	defer second.CloseAll()
+	results, err := second.VSearch(key, []float32{0, 1, 0}, 3, nil)
+	if err != nil {
+		t.Fatalf("VSearch after crash: %v", err)
+	}
+	if len(results) != len(ids) {
+		t.Fatalf("graph was not rebuilt: got %d results, want %d: %#v", len(results), len(ids), results)
+	}
+	if results[0].ID != "doc2" {
+		t.Fatalf("rebuilt graph ranked wrong vector first: %#v", results)
+	}
+}
+
 func TestVectorStoreExactSearchRecall(t *testing.T) {
 	store := NewVectorStore(New(16), t.TempDir(), 0)
 	ids := []string{"a", "b", "c", "d"}
@@ -151,3 +194,159 @@ func TestCosineSimilarityRaw(t *testing.T) {
 	}
 }
 
+func TestVectorTombstoneAndCompaction(t *testing.T) {
+	store := NewVectorStore(New(8), t.TempDir(), 0)
+	defer store.CloseAll()
+	if err := store.VAddBatch("idx", 3,
+		[]string{"a", "b", "c"},
+		[][]float32{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	deleted, err := store.VDel("idx", "a")
+	if err != nil || !deleted {
+		t.Fatalf("delete = %v, %v", deleted, err)
+	}
+	results, err := store.VSearch("idx", []float32{1, 0, 0}, 3, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range results {
+		if result.ID == "a" {
+			t.Fatal("tombstoned ID was returned")
+		}
+	}
+	if removed, err := store.VCompact("idx"); err != nil || removed != 1 {
+		t.Fatalf("compact = %d, %v", removed, err)
+	}
+	if err := store.VAdd("idx", "a", []float32{1, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	results, err = store.VSearch("idx", []float32{1, 0, 0}, 1, nil)
+	if err != nil || len(results) != 1 || results[0].ID != "a" {
+		t.Fatalf("reinserted ID unavailable: %#v, %v", results, err)
+	}
+}
+
+func TestVectorSearchRecallMatchesBruteForce(t *testing.T) {
+	const (
+		count   = 4000
+		dim     = 32
+		queries = 20
+		k       = 10
+	)
+	store := NewVectorStore(New(32), t.TempDir(), count)
+	defer store.CloseAll()
+	vectors := make([][]float32, count)
+	ids := make([]string, count)
+	src := uint64(42)
+	for i := 0; i < count; i++ {
+		vectors[i] = deterministicUnitVector(src+uint64(i)*0x9e3779b97f4a7c15, dim)
+		ids[i] = "v" + strconv.Itoa(i)
+	}
+	const batch = 500
+	for start := 0; start < count; start += batch {
+		end := start + batch
+		if end > count {
+			end = count
+		}
+		if err := store.VAddBatch("recall", dim, ids[start:end], vectors[start:end]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var sum float64
+	recalls := make([]float64, 0, queries)
+	for i := 0; i < queries; i++ {
+		queryRow := (i * 7919) % count
+		query := vectors[queryRow]
+		expected := bruteForceTopK(query, vectors, k)
+		results, err := store.VSearch("recall", query, k, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hits := 0
+		for _, result := range results {
+			row, convErr := strconv.Atoi(result.ID[1:])
+			if convErr == nil && expected[row] {
+				hits++
+			}
+		}
+		recall := float64(hits) / float64(k)
+		recalls = append(recalls, recall)
+		sum += recall
+	}
+	sort.Float64s(recalls)
+	mean := sum / float64(len(recalls))
+	p05 := recalls[int(math.Floor(float64(len(recalls)-1)*0.05))]
+	if mean < 0.90 {
+		t.Fatalf("mean recall@10 = %.3f, want >= 0.90", mean)
+	}
+	if p05 < 0.70 {
+		t.Fatalf("p05 recall@10 = %.3f, want >= 0.70", p05)
+	}
+}
+
+func deterministicUnitVector(seed uint64, dim int) []float32 {
+	vec := make([]float32, dim)
+	var norm float64
+	x := seed
+	for i := range vec {
+		x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9
+		x = (x ^ (x >> 27)) * 0x94d049bb133111eb
+		x ^= x >> 31
+		vec[i] = float32(int64(x%2001)-1000) / 1000
+		norm += float64(vec[i] * vec[i])
+	}
+	scale := float32(1 / math.Sqrt(norm))
+	for i := range vec {
+		vec[i] *= scale
+	}
+	return vec
+}
+
+func bruteForceTopK(query []float32, vectors [][]float32, k int) map[int]bool {
+	type scored struct {
+		row   int
+		score float32
+	}
+	top := make([]scored, 0, k)
+	for row, vector := range vectors {
+		var score float32
+		for i := range query {
+			score += query[i] * vector[i]
+		}
+		if len(top) < k {
+			top = append(top, scored{row: row, score: score})
+			sort.Slice(top, func(i, j int) bool { return top[i].score > top[j].score })
+		} else if score > top[len(top)-1].score {
+			top[len(top)-1] = scored{row: row, score: score}
+			sort.Slice(top, func(i, j int) bool { return top[i].score > top[j].score })
+		}
+	}
+	result := make(map[int]bool, len(top))
+	for _, item := range top {
+		result[item.row] = true
+	}
+	return result
+}
+
+func TestVectorStoreRebuildsCorruptOrMismatchedGraph(t *testing.T) {
+	dir := t.TempDir()
+	key := "idx"
+	first := NewVectorStore(New(8), dir, 0)
+	if err := first.VAddBatch(key, 2, []string{"a", "b"}, [][]float32{{1, 0}, {0, 1}}); err != nil {
+		t.Fatal(err)
+	}
+	first.CloseAll()
+	graphPath := filepath.Join(dir, vectorIndexFilename(key)+".hnsw")
+	if err := os.WriteFile(graphPath, []byte("corrupt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	second := NewVectorStore(New(8), dir, 0)
+	defer second.CloseAll()
+	results, err := second.VSearch(key, []float32{1, 0}, 2, nil)
+	if err != nil || len(results) != 2 || results[0].ID != "a" {
+		t.Fatalf("corrupt graph was not rebuilt: %#v, %v", results, err)
+	}
+}

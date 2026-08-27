@@ -47,6 +47,13 @@ func NewACLStore() *ACLStore {
 	return store
 }
 
+// DisableDefault removes the development NoPass identity.
+func (a *ACLStore) DisableDefault() {
+	a.mu.Lock()
+	delete(a.users, "default")
+	a.mu.Unlock()
+}
+
 // SetDefaultPassword replaces the built-in development user with a password
 // protected user. It is used by the server when require_password is enabled.
 func (a *ACLStore) SetDefaultPassword(name, password string) {
@@ -140,6 +147,7 @@ var adminCommands = map[string]bool{
 	"CONFIG": true, "DEBUG": true, "FLUSHALL": true, "FLUSHDB": true,
 	"SAVE": true, "BGSAVE": true, "CLUSTER": true, "ACL": true,
 	"REPLICAOF": true, "SLAVEOF": true, "SHUTDOWN": true,
+	"VCOMPACT": true,
 }
 
 var writeCommands = map[string]bool{
@@ -152,6 +160,7 @@ var writeCommands = map[string]bool{
 	"XADD": true, "XGROUP": true, "XACK": true, "SETBIT": true,
 	"GEOADD": true, "PERSIST": true, "MULTI": true, "EXEC": true, "DISCARD": true,
 	"PUBLISH": true,
+	"VADD":    true, "VADD_BATCH": true, "VADDBIN": true, "VDEL": true,
 }
 
 func isAdminCommand(cmd string) bool { return adminCommands[cmd] }

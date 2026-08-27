@@ -5,11 +5,8 @@ metadata:
   labels:
     app: dbx-orchestrator
 spec:
-  clusterIP: None # Headless service for Raft peer discovery
+  clusterIP: None
   ports:
-  - port: 7000
-    name: raft
-    targetPort: 7000
   - port: 8000
     name: http
     targetPort: 8000
@@ -33,5 +30,8 @@ spec:
   - port: 80
     name: http
     targetPort: 8000
+  - port: 6380
+    name: resp
+    targetPort: 6380
   selector:
     app: dbx-orchestrator

@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	maxRESPArrayItems = 1 << 20
-	maxRESPBulkBytes  = 64 << 20
-	maxRESPLineBytes  = 1 << 20
+	maxRESPArrayItems = 4096
+	maxRESPBulkBytes  = 8 << 20
+	maxRESPLineBytes  = 64 << 10
 )
 
 // RESPParser parses RESP2 and inline command format.
@@ -22,6 +22,15 @@ type RESPParser struct {
 // NewRESPParser creates a parser reading from r.
 func NewRESPParser(r io.Reader) *RESPParser {
 	return &RESPParser{rd: bufio.NewReaderSize(r, 64*1024)}
+}
+
+// NewRESPParserFromReader preserves bytes already buffered by a proxy.
+func NewRESPParserFromReader(r *bufio.Reader) *RESPParser {
+	return &RESPParser{rd: r}
+}
+
+func (p *RESPParser) Buffered() int {
+	return p.rd.Buffered()
 }
 
 // ReadCommand reads and parses the next command from the reader.
@@ -93,6 +102,9 @@ func (p *RESPParser) readBulkString() ([]byte, error) {
 	buf := make([]byte, length+2) // +2 for \r\n
 	if _, err = io.ReadFull(p.rd, buf); err != nil {
 		return nil, err
+	}
+	if buf[length] != '\r' || buf[length+1] != '\n' {
+		return nil, fmt.Errorf("bulk string missing CRLF terminator")
 	}
 	return buf[:length], nil
 }

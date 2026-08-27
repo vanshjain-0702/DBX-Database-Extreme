@@ -16,7 +16,7 @@ func Defaults() *Config {
 		},
 		Engine: EngineConfig{
 			MaxMemory:      "256mb",
-			EvictionPolicy: "lru",
+			EvictionPolicy: "no-eviction",
 			DefaultTTL:     0,
 			NumShards:      256,
 		},
@@ -31,7 +31,7 @@ func Defaults() *Config {
 			CompactionInterval: 24 * time.Hour,
 		},
 		Replication: ReplicationConfig{
-			Role:         "primary",
+			Role:         "",
 			Quorum:       1,
 			SyncTimeout:  5 * time.Second,
 			LagThreshold: 10 * time.Second,

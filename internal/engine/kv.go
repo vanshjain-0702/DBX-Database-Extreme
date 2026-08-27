@@ -3,7 +3,9 @@
 package engine
 
 import (
+	"container/heap"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dbx/dbx/internal/protocol"
@@ -32,16 +34,36 @@ func (e *Entry) IsExpired() bool {
 
 // shard is a single partition of the KV map.
 type shard struct {
-	mu   sync.RWMutex
-	data map[string]*Entry
+	mu       sync.RWMutex
+	data     map[string]*Entry
+	expiries expiryHeap
+}
+
+type expiryItem struct {
+	key      string
+	deadline int64
+	version  uint64
+}
+
+type expiryHeap []expiryItem
+
+func (h expiryHeap) Len() int            { return len(h) }
+func (h expiryHeap) Less(i, j int) bool  { return h[i].deadline < h[j].deadline }
+func (h expiryHeap) Swap(i, j int)       { h[i], h[j] = h[j], h[i] }
+func (h *expiryHeap) Push(x interface{}) { *h = append(*h, x.(expiryItem)) }
+func (h *expiryHeap) Pop() interface{} {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
 }
 
 // KVStore is the sharded in-memory key-value store.
 type KVStore struct {
 	shards    []*shard
 	numShards int
-	version   uint64
-	mu        sync.Mutex // for version counter
+	version   atomic.Uint64
 }
 
 // New creates a new KVStore with n shards.
@@ -66,11 +88,7 @@ func (kv *KVStore) shard(key string) *shard {
 
 // nextVersion returns a monotonically increasing version number.
 func (kv *KVStore) nextVersion() uint64 {
-	kv.mu.Lock()
-	kv.version++
-	v := kv.version
-	kv.mu.Unlock()
-	return v
+	return kv.version.Add(1)
 }
 
 // Set stores a value with optional TTL in nanoseconds (0 = no expiry).
@@ -98,6 +116,10 @@ func (kv *KVStore) Set(key string, value interface{}, typ protocol.DataType, ttl
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
+	}
+	if exp > 0 {
+		e := s.data[key]
+		heap.Push(&s.expiries, expiryItem{key: key, deadline: exp, version: e.Version})
 	}
 }
 
@@ -143,7 +165,8 @@ func (kv *KVStore) Delete(keys ...string) int {
 	for _, key := range keys {
 		s := kv.shard(key)
 		s.mu.Lock()
-		if _, ok := s.data[key]; ok {
+		if e, ok := s.data[key]; ok {
+			closeVectorEntry(e)
 			delete(s.data, key)
 			deleted++
 		}
@@ -179,6 +202,8 @@ func (kv *KVStore) Expire(key string, seconds int64) bool {
 		delete(s.data, key)
 	} else {
 		e.ExpiresAt = time.Now().UnixNano() + seconds*int64(time.Second)
+		e.Version = kv.nextVersion()
+		heap.Push(&s.expiries, expiryItem{key: key, deadline: e.ExpiresAt, version: e.Version})
 	}
 	return true
 }
@@ -265,8 +290,21 @@ func (kv *KVStore) KeyspaceStats() map[string]int {
 func (kv *KVStore) FlushAll() {
 	for _, s := range kv.shards {
 		s.mu.Lock()
+		for _, e := range s.data {
+			closeVectorEntry(e)
+		}
 		s.data = make(map[string]*Entry)
 		s.mu.Unlock()
+	}
+}
+
+func closeVectorEntry(e *Entry) {
+	if e == nil || e.Type != protocol.TypeVector {
+		return
+	}
+	if idx, ok := e.Value.(*MMapVectorIndex); ok && idx != nil {
+		idx.Close()
+		e.Value = nil
 	}
 }
 
@@ -277,7 +315,14 @@ func (kv *KVStore) Rename(key, newKey string) error {
 		return util.ErrNotFound
 	}
 	kv.Delete(key)
-	kv.Set(newKey, e.Value, e.Type, 0)
+	ttl := int64(0)
+	if e.ExpiresAt > 0 {
+		ttl = e.ExpiresAt - time.Now().UnixNano()
+		if ttl <= 0 {
+			return util.ErrNotFound
+		}
+	}
+	kv.Set(newKey, e.Value, e.Type, ttl)
 	return nil
 }
 
@@ -298,16 +343,33 @@ func (kv *KVStore) ExpiredKeys() []string {
 
 // DeleteExpired removes expired keys from all shards.
 func (kv *KVStore) DeleteExpired() int {
+	return kv.DeleteExpiredLimit(0)
+}
+
+// DeleteExpiredLimit removes at most limit keys using per-shard deadline
+// heaps. A zero limit drains every currently due key.
+func (kv *KVStore) DeleteExpiredLimit(limit int) int {
 	count := 0
+	now := time.Now().UnixNano()
 	for _, s := range kv.shards {
 		s.mu.Lock()
-		for k, e := range s.data {
-			if e.IsExpired() {
-				delete(s.data, k)
-				count++
+		for s.expiries.Len() > 0 && (limit <= 0 || count < limit) {
+			item := s.expiries[0]
+			if item.deadline > now {
+				break
 			}
+			heap.Pop(&s.expiries)
+			entry := s.data[item.key]
+			if entry == nil || entry.Version != item.version || entry.ExpiresAt != item.deadline {
+				continue
+			}
+			delete(s.data, item.key)
+			count++
 		}
 		s.mu.Unlock()
+		if limit > 0 && count >= limit {
+			break
+		}
 	}
 	return count
 }
@@ -327,7 +389,28 @@ func (kv *KVStore) Snapshot() map[string]*Entry {
 	return snap
 }
 
-
+// MemoryUsage returns conservative tenant-owned heap bytes for keys, entry
+// metadata, and string values. Vector mmap usage is reported by VectorStore.
+func (kv *KVStore) MemoryUsage() int64 {
+	var total int64
+	for _, s := range kv.shards {
+		s.mu.RLock()
+		for key, entry := range s.data {
+			if entry.IsExpired() {
+				continue
+			}
+			total += int64(len(key) + 96)
+			if entry.Type == protocol.TypeString {
+				if value, ok := entry.Value.([]byte); ok {
+					total += int64(len(value))
+				}
+			}
+		}
+		total += int64(len(s.expiries)) * 48
+		s.mu.RUnlock()
+	}
+	return total
+}
 
 // matchGlob performs simple Redis-style glob matching (* and ? supported).
 func matchGlob(pattern, s string) bool {
