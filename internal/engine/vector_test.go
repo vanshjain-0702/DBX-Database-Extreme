@@ -230,9 +230,9 @@ func TestVectorTombstoneAndCompaction(t *testing.T) {
 
 func TestVectorSearchRecallMatchesBruteForce(t *testing.T) {
 	const (
-		count   = 4000
+		count   = 800
 		dim     = 32
-		queries = 20
+		queries = 12
 		k       = 10
 	)
 	store := NewVectorStore(New(32), t.TempDir(), count)

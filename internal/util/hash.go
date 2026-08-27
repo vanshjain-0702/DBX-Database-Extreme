@@ -4,8 +4,7 @@ package util
 import (
 	"encoding/binary"
 	"hash/fnv"
-
-	"github.com/spaolacci/murmur3"
+	"math/bits"
 )
 
 const DefaultReplicas = 150
@@ -27,9 +26,57 @@ func HashSlot(key string) uint16 {
 	return crc16([]byte(key)) % 16384
 }
 
-// MurmurHash32 returns a 32-bit Murmur3 hash of key.
+// MurmurHash32 returns a 32-bit Murmur3 (x86_32, seed 0) hash of key.
+// Implemented in pure Go so `go test -race` / checkptr stays valid; the
+// spaolacci/murmur3 v1.1.0 unsafe walk crashes on keys whose length is a
+// multiple of 4.
 func MurmurHash32(key string) uint32 {
-	return murmur3.Sum32([]byte(key))
+	return murmur32([]byte(key), 0)
+}
+
+func murmur32(data []byte, seed uint32) uint32 {
+	const (
+		c1 uint32 = 0xcc9e2d51
+		c2 uint32 = 0x1b873593
+		r1        = 15
+		r2        = 13
+		m         = 5
+		n  uint32 = 0xe6546b64
+	)
+	h1 := seed
+	nblocks := len(data) / 4
+	for i := 0; i < nblocks; i++ {
+		k1 := binary.LittleEndian.Uint32(data[i*4 : i*4+4])
+		k1 *= c1
+		k1 = bits.RotateLeft32(k1, r1)
+		k1 *= c2
+		h1 ^= k1
+		h1 = bits.RotateLeft32(h1, r2)
+		h1 = h1*m + n
+	}
+	var k1 uint32
+	tail := data[nblocks*4:]
+	switch len(tail) {
+	case 3:
+		k1 ^= uint32(tail[2]) << 16
+		fallthrough
+	case 2:
+		k1 ^= uint32(tail[1]) << 8
+		fallthrough
+	case 1:
+		k1 ^= uint32(tail[0])
+		k1 *= c1
+		k1 = bits.RotateLeft32(k1, r1)
+		k1 *= c2
+		h1 ^= k1
+	}
+	h1 ^= uint32(len(data))
+	h1 ^= h1 >> 16
+	h1 *= 0x85ebca6b
+	h1 ^= h1 >> 13
+	h1 *= 0xc2b2ae35
+	h1 ^= h1 >> 16
+	return h1
 }
 
 // FNVHash64 returns a 64-bit FNV-1a hash of key.

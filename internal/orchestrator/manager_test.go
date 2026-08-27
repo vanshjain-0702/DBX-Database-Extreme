@@ -115,7 +115,11 @@ func TestDeleteUnknownTenant(t *testing.T) {
 }
 
 func TestTenantKeyLifecycleAndPersistence(t *testing.T) {
-	m, acme, _ := newTestManager(t)
+	m, acme, globex := newTestManager(t)
+	acme.HTTPPort = freeTCPPort(t)
+	acme.RESPPort = freeTCPPort(t)
+	globex.HTTPPort = freeTCPPort(t)
+	globex.RESPPort = freeTCPPort(t)
 	secret, key, err := m.CreateTenantKey(acme.ID, "agent-reader", "reader", []string{"agent:*"})
 	if err != nil {
 		t.Fatal(err)

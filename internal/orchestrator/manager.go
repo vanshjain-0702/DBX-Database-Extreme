@@ -111,11 +111,14 @@ func NewManager(stateFile string) (*Manager, error) {
 			fmt.Printf("[Orchestrator] tenant %s failed to start: %v\n", t.ID, err)
 		}
 	}
+	// Start synchronously so primaries bind the WAL listener before replicas
+	// connect, and so tests can StopAll before t.TempDir cleanup. Background
+	// starts raced with directory removal on macOS GitHub runners.
 	for _, t := range primaries {
-		go start(t)
+		start(t)
 	}
 	for _, t := range replicas {
-		go start(t)
+		start(t)
 	}
 	return m, nil
 }

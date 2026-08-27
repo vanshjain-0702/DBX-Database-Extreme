@@ -455,7 +455,18 @@ func (w *WAL) Failure() error {
 func (w *WAL) ReadAll() ([]*WALRecord, error) {
 	entries, err := os.ReadDir(w.dir)
 	if err != nil {
-		return nil, err
+		if w.file == nil {
+			return nil, err
+		}
+		if _, seekErr := w.file.Seek(0, io.SeekStart); seekErr != nil {
+			return nil, err
+		}
+		records, readErr := decodeRecords(w.file)
+		_, _ = w.file.Seek(0, io.SeekEnd)
+		if readErr != nil {
+			return nil, readErr
+		}
+		return records, nil
 	}
 	var paths []string
 	for _, entry := range entries {
