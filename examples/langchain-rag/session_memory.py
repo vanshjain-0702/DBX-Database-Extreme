@@ -13,24 +13,36 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "sdk", "python"))
 
 from dbx import DBXClient
+from langchain_core.embeddings import Embeddings
 from langchain_dbx import DBXVectorStore
 
 
-class _FixedEmbeddings:
+class _FixedEmbeddings(Embeddings):
     def __init__(self, size: int = 8) -> None:
         self.size = size
 
-    def embed_documents(self, texts):
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [[float((i + 1) % self.size) for i in range(self.size)] for _ in texts]
 
-    def embed_query(self, text):
+    def embed_query(self, text: str) -> list[float]:
         return [0.1] * self.size
 
 
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(
+            f"missing {name}. Start the node with `make run-dev`, mint a writer key "
+            "(examples/quickstart.py or dashboard Tenant keys), then set "
+            "DBX_TENANT, DBX_KEY_ID, and DBX_SECRET."
+        )
+    return value
+
+
 def main() -> None:
-    tenant = os.environ["DBX_TENANT"]
-    key_id = os.environ["DBX_KEY_ID"]
-    secret = os.environ["DBX_SECRET"]
+    tenant = _require_env("DBX_TENANT")
+    key_id = _require_env("DBX_KEY_ID")
+    secret = _require_env("DBX_SECRET")
     client = DBXClient(
         host="127.0.0.1",
         port=6380,

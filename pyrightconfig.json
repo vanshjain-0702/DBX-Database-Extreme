@@ -1,0 +1,14 @@
+{
+  "include": ["sdk/python", "examples"],
+  "extraPaths": ["sdk/python"],
+  "reportMissingImports": true,
+  "executionEnvironments": [
+    {
+      "root": "examples/langchain-rag",
+      "extraPaths": ["sdk/python"]
+    },
+    {
+      "root": "sdk/python"
+    }
+  ]
+}

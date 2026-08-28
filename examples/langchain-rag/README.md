@@ -26,5 +26,7 @@ export DBX_SECRET=...
 python session_memory.py
 ```
 
+Without those three variables the script exits with a missing-env message instead of a stack trace. It will not talk to `:6380` until a tenant and writer key exist.
+
 `session_memory.py` uses a local fixed embedding stub so you do not need an OpenAI
 key. The store talks RESP through `DBXClient` — not the operator JWT on `:8000`.
