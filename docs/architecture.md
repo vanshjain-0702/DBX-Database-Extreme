@@ -61,11 +61,9 @@ binary at build time via Go's `embed.FS`. **Tenant keys**
 the secret is shown once. Console, explorer, and vector playground talk to
 `:8000` with an operator JWT. They are operator tools, not the public tenant API.
 
-The public marketing site is **not** this UI. It is static HTML in `website/`,
-deployed by GitHub Pages. Live URL:
-https://vanshjain-0702.github.io/DBX-Database-Extreme/
-(`website/README.md`). `dbxdb.io` is not in DNS until the name is registered
-and pointed at GitHub.
+The public marketing site is **not** this UI. It is static HTML in `website/`.
+Open `website/index.html` (or `make site`). GitHub Pages is 404 while the
+repository is private; `dbxdb.io` has no DNS. See `website/README.md`.
 
 ## Data Flow
 

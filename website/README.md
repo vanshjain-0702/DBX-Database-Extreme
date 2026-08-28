@@ -1,24 +1,27 @@
 # Public site
 
-The live site is GitHub Pages:
+**Open it now:** `website/index.html` in a browser, or from the repo root
+`make site`. That does not use DNS or GitHub Pages.
 
-**https://vanshjain-0702.github.io/DBX-Database-Extreme/**
+`https://dbxdb.io` does not resolve (the name is not registered).
+`https://vanshjain-0702.github.io/DBX-Database-Extreme/` returns **404**
+while this GitHub repository is **private** (GitHub Pages on Free is for
+public repos). Making the repo public, or GitHub Pro, is required for that
+URL to load.
 
-`dbxdb.io` does not resolve today (no DNS / the name is not registered), so
-a click on that hostname cannot open a page. Contact mail
-`hello@dbxdb.io` is the intended address once the domain exists.
+## Publish on GitHub Pages
 
-## Enable Pages
-
-Repo **Settings → Pages → Source = GitHub Actions**. The workflow is
-[`.github/workflows/pages.yml`](../.github/workflows/pages.yml). It publishes
-this directory. If the repository is private, anonymous visitors get 404
-until Pages is public or they are signed in with access.
+1. **Settings → Actions → General → Workflow permissions** → Read and write.
+2. Push `main` (or run **Actions → Deploy site → Run workflow**). That updates
+   the `gh-pages` branch from this folder.
+3. **Settings → Pages → Deploy from a branch** → `gh-pages` / `/ (root)` → Save.
+4. For people who are not logged in: **Settings → General → Change repository
+   visibility → Public** (or use GitHub Pro with Pages enabled).
 
 ## Attach dbxdb.io later
 
-1. Register `dbxdb.io` at a registrar.
-2. Apex A records (GitHub Pages):
+1. Register `dbxdb.io`.
+2. Apex A records:
 
    ```
    185.199.108.153
@@ -27,7 +30,5 @@ until Pages is public or they are signed in with access.
    185.199.111.153
    ```
 
-   Optional: `www` CNAME to `vanshjain-0702.github.io`.
-3. Put a file `website/CNAME` containing `dbxdb.io` and push `main`.
-4. In **Settings → Pages**, set the custom domain to `dbxdb.io` and wait for
-   the TLS certificate.
+3. Add `website/CNAME` containing `dbxdb.io`, push, and set the custom domain
+   under **Settings → Pages**.

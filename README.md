@@ -9,7 +9,7 @@
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/">Site</a>
+  <a href="website/index.html">Site (open in repo)</a>
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
@@ -305,7 +305,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 
 | What | Where |
 |---|---|
-| Public site (GitHub Pages) | [`website/`](website/) — **live:** [vanshjain-0702.github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/). `dbxdb.io` is the intended custom domain once it is registered and DNS points at GitHub Pages ([`website/README.md`](website/README.md)). |
+| Public site | [`website/`](website/) — open [`website/index.html`](website/index.html) or `make site`. GitHub Pages (`github.io`) stays 404 while this repo is private; `dbxdb.io` is not registered. See [`website/README.md`](website/README.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |

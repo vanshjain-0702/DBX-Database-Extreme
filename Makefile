@@ -7,7 +7,7 @@ VERSION            := $(shell git describe --tags --always --dirty 2>/dev/null |
 LDFLAGS            := -ldflags="-X main.version=$(VERSION) -s -w"
 BUILD_DIR          := ./bin
 
-.PHONY: all build build-server build-orchestrator run-dev test python-check soak restore-drill clean docker-build docker-up lint help
+.PHONY: all build build-server build-orchestrator run-dev test python-check soak restore-drill clean docker-build docker-up lint site help
 
 all: build
 
@@ -51,6 +51,10 @@ python-check:
 	python -m flake8 scripts sdk/python examples
 	python -m black --check scripts sdk/python examples
 	python -m pytest sdk/python examples --ignore=sdk/python/.venv
+
+## site: Open the public HTML from disk (GitHub Pages is 404 while the repo is private)
+site:
+	python -c "import pathlib, webbrowser; webbrowser.open(pathlib.Path('website/index.html').resolve().as_uri())"
 
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:

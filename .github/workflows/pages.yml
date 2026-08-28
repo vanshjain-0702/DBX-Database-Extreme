@@ -1,8 +1,7 @@
-# Publishes website/ to GitHub Pages at
-# https://vanshjain-0702.github.io/DBX-Database-Extreme/
-# Enable: repo Settings → Pages → Source = GitHub Actions.
-# Do not add website/CNAME until dbxdb.io is registered and its DNS
-# points at GitHub Pages (see website/README.md).
+# Publishes website/ to the gh-pages branch.
+# Then: Settings → Pages → Deploy from a branch → gh-pages → / (root).
+# GitHub Pages stays 404 while this repository is private on a Free plan.
+# Open website/index.html locally, or make the repo public / use GitHub Pro.
 name: Deploy site
 
 on:
@@ -14,9 +13,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
@@ -24,17 +21,13 @@ concurrency:
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/configure-pages@v5
+      - name: Publish website to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: website
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website
+          force_orphan: true
+          enable_jekyll: false
