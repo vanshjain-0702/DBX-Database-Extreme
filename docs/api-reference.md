@@ -77,6 +77,9 @@ tenant is stopped; a failed validation or startup rolls back to its previous dir
 - `DELETE /api/v1/tenants/{tenantID}/keys/{keyID}`: revoke immediately, including existing
   RESP connections.
 
+The dashboard **Tenant keys** page (`/cluster/{id}/keys`) is the same API. Orchestrator
+tenants have no default superuser.
+
 ### POST `/api/tenants/delete`
 Off-board a tenant: stop its engine and remove it from the control plane. With `purge: true`
 the tenant's data directory is erased, which is what a customer deletion request requires.

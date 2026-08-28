@@ -27,9 +27,16 @@ make test
 make soak
 make restore-drill
 
+# Python SDK + examples (flake8, black, pytest)
+make python-check
+
 # Run the linter locally
 golangci-lint run
 ```
+
+Public site: edit [`website/`](../website/). Dashboard: edit [`dashboard/`](../dashboard/),
+then `npm run lint` and `npm run build` (CI golangci-lint builds the dashboard first
+so the Go embed is current).
 
 ## Dashboard Development
 To work on the React Dashboard:

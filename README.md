@@ -8,6 +8,14 @@
   <strong>The per-tenant memory engine for AI products.</strong>
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
+  <br />
+  <a href="https://dbxdb.io">dbxdb.io</a>
+  ·
+  <a href="docs/architecture.md">Architecture</a>
+  ·
+  <a href="docs/api-reference.md">API</a>
+  ·
+  <a href="docs/positioning.md">Positioning</a>
 </p>
 
 <p align="center">
@@ -131,8 +139,10 @@ customers who each need memory, DBX is built for exactly that shape.
 
 ### Option 1: Docker (build the orchestrator locally)
 
-Published images land on GitHub Releases as
-`ghcr.io/vanshjain-0702/dbx-orchestrator`. The supported local path is:
+The supported image is [`deploy/Dockerfile`](deploy/Dockerfile) (`cmd/dbx-orchestrator`,
+dashboard embedded, `:8000` + `:6380`). GitHub Actions publishes
+`ghcr.io/vanshjain-0702/dbx-orchestrator` when a **GitHub Release** is published,
+not on every push. Until then, build locally:
 
 ```bash
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
@@ -165,8 +175,12 @@ make run-dev    # start the local development stack
 ```bash
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
 cd DBX-Database-Extreme
+# needs DBX_ADMIN_PASSWORD, DBX_JWT_SECRET, DBX_INTERNAL_API_TOKEN in the environment
 make docker-up
 ```
+
+`make docker-up` uses [`deploy/docker-compose.yml`](deploy/docker-compose.yml). The
+root [`docker-compose.yml`](docker-compose.yml) builds the same Dockerfile.
 
 ---
 
@@ -206,6 +220,16 @@ curl -X POST http://localhost:8000/api/tenants/delete \
 
 ## Connect your application
 
+Mint a **writer** key after you provision: dashboard **Tenant keys**
+(`/cluster/{tenant}/keys`) or `POST /api/v1/tenants/{id}/keys`. The secret is shown
+once. A **reader** key can `GET` and `VSEARCH` and cannot `SET`, `SETEX`, `VADD`, or
+`VDEL`. Orchestrator tenants have no default superuser — loopback `AUTH default`
+is rejected.
+
+Worked examples: [`examples/quickstart.py`](examples/quickstart.py) (15-minute path),
+[`examples/langchain-rag`](examples/langchain-rag) (session KV + vectors, no OpenAI key),
+[`examples/nextjs-cache`](examples/nextjs-cache) (`SETEX` / node-redis `setEx`).
+
 ### Python (AI / LangChain)
 
 ```python
@@ -227,10 +251,17 @@ db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
 results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
 ```
 
-The full path — login, provision, mint a key, AUTH, SET, VADD, usage, export, purge — is
-[`examples/quickstart.py`](examples/quickstart.py). Control-plane helpers live on
+Install the SDK from this tree: `pip install -e sdk/python` (optional extras:
+`pip install -e "sdk/python[langchain]"`). Control-plane helpers live on
 `ControlPlane`. Per-tenant cost is `GET /api/v1/tenants/{id}/usage`. Prometheus is
-`GET /metrics` on the orchestrator.
+`GET /metrics` on the orchestrator (Bearer JWT or `DBX_INTERNAL_API_TOKEN` unless
+you passed `-insecure-http`).
+
+Python unit tests do not need a running node:
+
+```bash
+make python-check   # flake8, black, pytest (live AUTH tests skip without env)
+```
 
 ### Node.js / TypeScript
 
@@ -268,6 +299,17 @@ provisioning, authentication, and routing.
 
 For the deep dive, read the [Architecture Document](docs/architecture.md). For the product
 thesis and where we will and will not compete, read [Positioning](docs/positioning.md).
+HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
+
+## Documentation and website
+
+| What | Where |
+|---|---|
+| Public site (GitHub Pages) | [`website/`](website/) — intended URL [dbxdb.io](https://dbxdb.io). Workflow: [`.github/workflows/pages.yml`](.github/workflows/pages.yml). Custom domain is [`website/CNAME`](website/CNAME); DNS at the registrar must point at GitHub Pages. |
+| Architecture, API, positioning | [`docs/`](docs/) |
+| Changelog | [`website/changelog.html`](website/changelog.html) |
+| LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
+| Operator UI | [`dashboard/`](dashboard/) — Tenant keys, console, explorer, vector playground. Embedded in the orchestrator binary. |
 
 ---
 
@@ -286,11 +328,11 @@ dbx/
 │   ├── persistence/        # WAL, snapshots, checksummed backup
 │   ├── security/           # ACL, rate limiting, encryption
 │   └── api/                # HTTP API handlers
-├── dashboard/              # React + Vite admin dashboard (embedded)
+├── dashboard/              # React + Vite admin UI (embedded; Tenant keys at /cluster/:id/keys)
 ├── sdk/python/             # Official Python SDK + LangChain adapter
 ├── examples/               # 15-minute path, LangChain, Next.js session
-├── website/                # Marketing site (GitHub Pages → dbxdb.io)
-├── deploy/                 # Docker Compose and Helm charts
+├── website/                # Public site (GitHub Pages; CNAME dbxdb.io)
+├── deploy/                 # Canonical Dockerfile, Compose, Helm
 └── docs/                   # Architecture, API reference, positioning
 ```
 
@@ -342,7 +384,8 @@ service, talk to us at `hello@dbxdb.io`.
 ## Contributing
 
 We welcome contributions. Please read [CONTRIBUTING.md](CONTRIBUTING.md) and open an issue or
-pull request.
+pull request. Go tests: `make test`. Python lint and SDK tests: `make python-check`.
+Site copy lives in `website/` so the Pages deploy and this README stay aligned.
 
 ---
 

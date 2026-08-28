@@ -55,7 +55,15 @@ The data plane. One instance runs per tenant member (primary or replica).
 - `internal/persistence/wal.go` — Write-Ahead Log
 
 ### 3. Dashboard (`dashboard/`)
-A React + Vite + TailwindCSS SPA compiled and embedded directly into the Orchestrator binary at build time via Go's `embed.FS`.
+A React + Vite + Tailwind CSS SPA compiled and embedded into the orchestrator
+binary at build time via Go's `embed.FS`. **Tenant keys**
+(`/cluster/{id}/keys`) mints `reader` / `writer` / `tenant-admin` credentials;
+the secret is shown once. Console, explorer, and vector playground talk to
+`:8000` with an operator JWT. They are operator tools, not the public tenant API.
+
+The public marketing site is **not** this UI. It is static HTML in `website/`,
+deployed by GitHub Pages (`.github/workflows/pages.yml`). Intended hostname:
+`dbxdb.io` (`website/CNAME`).
 
 ## Data Flow
 

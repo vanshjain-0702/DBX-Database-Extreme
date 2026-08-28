@@ -18,7 +18,8 @@ We do not describe DBX as a replacement for anything.
 
 1. **Fork** the repository and clone your fork.
 2. **Create a branch** for your change: `git checkout -b feat/my-feature`
-3. **Make your changes** and ensure all tests pass: `make test`
+3. **Make your changes** and ensure tests pass: `make test` (Go) and, if you
+   touched Python, `make python-check`.
 4. **Submit a Pull Request** against the `main` branch.
 
 ## Development Setup
@@ -34,6 +35,9 @@ go mod download
 # Run tests
 make test
 
+# Python SDK, examples, flake8, and black (same job as GitHub "Python Lint")
+make python-check
+
 # Operator drills (not a CI default)
 make soak            # 100 idle / 25 active KV engines
 make restore-drill   # backup/restore + hibernate + usage tests
@@ -44,6 +48,10 @@ make run-dev
 # Run dashboard
 make run-dashboard
 ```
+
+Public site copy is [`website/`](website/). It deploys from GitHub Actions when
+`website/**` changes ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
+Operator UI copy is [`dashboard/`](dashboard/) (Tenant keys, console, explorer).
 
 ## Code Style
 

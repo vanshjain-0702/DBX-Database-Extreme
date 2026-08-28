@@ -54,7 +54,9 @@
           <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak.</li>
         </ul>
         <h2>Dashboard</h2>
-        <p>React UI compiled into the orchestrator binary. No separate control-plane service.</p>
+        <p>React UI compiled into the orchestrator binary. <strong>Tenant keys</strong> (<code>/cluster/{id}/keys</code>) mints reader/writer/tenant-admin credentials; the secret is shown once. Console, explorer, and vector playground use an operator JWT on <code>:8000</code>. They are operator tools, not the public tenant API.</p>
+        <h2>Public site</h2>
+        <p>Static HTML in <code>website/</code>, deployed by GitHub Pages. Not the embedded dashboard. Intended hostname <code>dbxdb.io</code>.</p>
       </article>
     </div>
   </main>

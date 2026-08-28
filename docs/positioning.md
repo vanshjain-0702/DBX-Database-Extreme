@@ -11,8 +11,8 @@ proposal contradicts this document, one of the two is wrong and it is usually no
 > **DBX is the per-tenant memory engine for AI products: one isolated store per customer,
 > holding both their working state and their vector memory.**
 
-Everything else — the RESP wire protocol, the HNSW index, the dashboard — is in service of
-that sentence.
+Everything else — the RESP wire protocol, the HNSW index, the dashboard, the
+public site in `website/` — is in service of that sentence.
 
 ---
 

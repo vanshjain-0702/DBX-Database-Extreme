@@ -40,6 +40,13 @@
           <article class="change">
             <time datetime="2026-08-28">28 Aug 2026</time>
             <div>
+              <h2>Public site, Python tests, orchestrator image</h2>
+              <p>Marketing and docs pages live in <code>website/</code> and deploy from GitHub Pages (<code>.github/workflows/pages.yml</code>). Intended hostname <code>dbxdb.io</code> via <code>website/CNAME</code>. Python Lint runs flake8, Black, and pytest; live AUTH tests skip without env. <code>make python-check</code> is the local match. Docker publish and the root Dockerfile build <code>deploy/Dockerfile</code> (<code>cmd/dbx-orchestrator</code>), not the old <code>cmd/orchestrator</code> entrypoint. GHCR tags appear when a GitHub Release is published.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
               <h2>v1.0.0 — industry launch profile</h2>
               <p>Reader keys cannot <code>SET</code> or <code>VADD</code> (tested). Orchestrator tenants have no default superuser. Production <code>/metrics</code> requires a Bearer JWT or <code>DBX_INTERNAL_API_TOKEN</code>. Dashboard Tenant keys mints reader/writer/tenant-admin credentials. Still a single-node profile: 100 tenants/node, 100k vectors/tenant. Not SOC 2. Not a cluster.</p>
             </div>

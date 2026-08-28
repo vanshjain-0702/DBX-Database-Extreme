@@ -10,7 +10,7 @@ when you pass `tenant`, `key_id`, and `secret`.
 
 - Python 3.10+
 - `make run-dev`
-- A tenant and writer key (see `examples/quickstart.py`)
+- A tenant and writer key (`examples/quickstart.py` or dashboard **Tenant keys**)
 
 ```bash
 pip install redis langchain-core

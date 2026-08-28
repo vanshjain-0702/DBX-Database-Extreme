@@ -1,32 +1,33 @@
-# React + TypeScript + Vite
+# DBX control plane UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + Vite + Tailwind operator UI. It is compiled into `cmd/dbx-orchestrator`
+via [`embed.go`](embed.go) (`//go:embed all:dist`). There is no separate
+control-plane service.
 
-Currently, two official plugins are available:
+This is not the public marketing site. That lives in [`website/`](../website/)
+and deploys with GitHub Pages.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## What it covers
 
-## React Compiler
+- Tenant list, provision, backup/restore, hibernate/wake, delete
+- **Tenant keys** at `/cluster/{id}/keys` — mint `reader` / `writer` /
+  `tenant-admin`. The secret is shown once. Same API as
+  `POST /api/v1/tenants/{id}/keys`.
+- Interactive console, data explorer, vector playground (operator JWT on
+  `:8000`; application data plane is AUTH'd RESP on `:6380`)
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+A reader key cannot `SET`, `SETEX`, `VADD`, or `VDEL`. Production `/metrics`
+is not this UI; scrape Prometheus with a Bearer token.
 
-## Expanding the Oxlint configuration
+## Develop
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+cd dashboard
+npm install
+npm run dev     # or `make run-dashboard` from the repo root
+npm run lint
+npm run build   # writes dist/ for the Go embed
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+CI builds this package before golangci-lint so a clean checkout embeds a real
+`dist/`.
