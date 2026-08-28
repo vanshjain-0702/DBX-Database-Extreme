@@ -9,6 +9,7 @@ import HardwarePage from './HardwarePage';
 import StoragePage from './StoragePage';
 import NetworkPage from './NetworkPage';
 import HostingPerformancePage from './HostingPerformancePage';
+import TenantKeysPage from './TenantKeysPage';
 
 export default function ClusterDashboard() {
   const { id } = useParams();
@@ -25,6 +26,7 @@ export default function ClusterDashboard() {
             <Route path="explorer" element={<DataExplorerPage clusterId={id || ''} />} />
             <Route path="hosting" element={<HostingPerformancePage clusterId={id || ''} />} />
             <Route path="vector" element={<VectorPlaygroundPage clusterId={id || ''} />} />
+            <Route path="keys" element={<TenantKeysPage clusterId={id || ''} />} />
             <Route path="terminal" element={<ConsolePage clusterId={id || ''} />} />
             <Route path="hardware" element={<HardwarePage clusterId={id || ''} />} />
             <Route path="storage" element={<StoragePage clusterId={id || ''} />} />

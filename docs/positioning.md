@@ -171,8 +171,8 @@ Ordered by how much each one strengthens the positioning above, not by difficult
 2. **Per-tenant quotas and usage accounting.** Shipped. `GET /api/v1/tenants/{id}/usage`
    and orchestrator `GET /metrics` are the meter. CI density soak is 12/4; operators run
    `make soak`.
-3. **Scoped credentials per tenant.** Shipped with immediate revocation. Remaining work is
-   closing gaps a security review will still find (complete write-command classification).
+3. **Scoped credentials per tenant.** Shipped. Reader cannot SET/VADD (tested). Dashboard
+   Tenant keys mints roles. Orchestrator tenants have no default superuser.
 4. **Hot standby.** Async WAL replicas shipped; the primary acks locally. Data-plane Raft
    still fails closed.
 5. **Published recall for quantized search.** Shipped on the certification host (recall@10

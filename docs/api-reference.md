@@ -104,7 +104,9 @@ Stop a cold engine and keep its directory. Wake rehydrates from that directory. 
 should not occupy a live process. Sentinel will not restart a hibernated tenant.
 
 ### GET `/metrics`
-Prometheus text on the orchestrator (no JWT). Per-tenant gauges: keys, vectors, memory, disk,
+Prometheus text on the orchestrator. With `-insecure-http` (local dev) this is open.
+In production it requires `Authorization: Bearer` — either an operator JWT or
+`DBX_INTERNAL_API_TOKEN`. Per-tenant gauges: keys, vectors, memory, disk,
 commands, hibernated. JSON snapshots remain at `GET /t/{tenantID}/metrics`. Tenant engines also
 expose `/usage` and `/metrics/prometheus` to the orchestrator internal token.
 

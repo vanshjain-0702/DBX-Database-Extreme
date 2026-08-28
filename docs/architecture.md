@@ -21,7 +21,8 @@ The control plane. It is the single entry point for all clients and the admin da
   (`/api/tenants/restore`), export/import aliases, hibernate/wake
   (`/api/v1/tenants/{id}/hibernate`, `/wake`), usage (`/api/v1/tenants/{id}/usage`,
   `/api/usage`), and delete (`/api/tenants/delete`, optionally purging)
-- Prometheus text on `GET /metrics` (no JWT). JSON snapshots remain at
+- Prometheus text on `GET /metrics` (Bearer JWT or `DBX_INTERNAL_API_TOKEN` in
+  production; open only with `-insecure-http`). JSON snapshots remain at
   `GET /t/{tenantID}/metrics`.
 - One public RESP ingress on `:6380`, authenticated with tenant-scoped keys
 - Reverse-proxying data plane requests to the current primary
@@ -96,7 +97,10 @@ DBX uses a two-layer persistence model:
 ## Security Model
 
 - **Control-plane authentication:** JWT Bearer tokens issued to operators.
-- **Data-plane authentication:** 256-bit tenant keys stored only as hashes.
+- **Data-plane authentication:** 256-bit tenant keys stored only as hashes. Roles
+  `reader`, `writer`, and `tenant-admin` are enforced on every RESP command.
+  A reader cannot `SET`, `SETEX`, `VADD`, or `VDEL`. Revoke deletes the user so
+  existing connections fail on the next command.
 - **Authorization:** `reader`, `writer`, and `tenant-admin` roles with key-pattern scopes.
 - **Rate Limiting:** Per-IP brute-force protection on the `/api/login` endpoint (5 failures = 60-second lockout).
 - **DoS Protection:** `http.MaxBytesReader` limits on all data plane request bodies.

@@ -101,19 +101,16 @@ disk bytes, and commands. Orchestrator `/metrics` is Prometheus text with per-te
 this customer cost me?" from the API.
 
 ### 3. Scoped credentials per tenant
-**Status:** implemented with immediate revocation · **Thesis:** USP 1
+**Status:** implemented; reader cannot VADD/SET, verified by test · **Thesis:** USP 1
 
-Roles and an ACL check exist (`internal/auth/role.go`, `internal/auth/acl.go`), but issued API
-keys and dashboard tokens carry no role, no command allowlist, and no key-prefix scope. The
-default user has full permissions, and `VADD` is missing from the write-command set, so a
-"reader" can still ingest vectors.
-
-**Shape of the work:** attach a role to every issued key, wire ACL enforcement to token claims,
-complete the write-command classification (vector and flush commands included), and expose key
-creation with a role in the dashboard.
+Issued keys carry `reader`, `writer`, or `tenant-admin`. ACL is enforced on every RESP
+command, including live connections after revoke. `VADD` / `VDEL` are write commands.
+Orchestrator tenants do not get a PermAll default user. Mint keys in the dashboard
+(Tenant keys) or `POST /api/v1/tenants/{id}/keys`.
 
 **Done when:** a read-only key can search vectors and cannot write, delete, or flush anything —
-verified by a test, not by inspection.
+verified by a test, not by inspection. That test is `TestReaderCannotMutateStringsOrVectors`
+and `TestEnforceReaderDeniedOnVADDAndSET`.
 
 ---
 

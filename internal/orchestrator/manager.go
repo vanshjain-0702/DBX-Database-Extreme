@@ -553,6 +553,7 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	if err != nil {
 		return err
 	}
+	inst.SkipBuiltinUser()
 	m.mu.RLock()
 	users := make([]*auth.User, 0)
 	addKeys := func(keys map[string]*TenantKey) {

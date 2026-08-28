@@ -45,11 +45,8 @@ func ValidateToken(tokenString string, secretKey []byte) (string, error) {
 // RequireAuth is HTTP middleware that enforces JWT authentication.
 func RequireAuth(secretKey []byte, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
 		if r.Method == "OPTIONS" {
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.WriteHeader(http.StatusOK)
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 

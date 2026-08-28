@@ -497,6 +497,10 @@ func main() {
 	mux.Handle("/t/", orchestrator.RequireAuth(jwtSecret, protectedMux))
 
 	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		if !orchestrator.MetricsAuthorized(r, jwtSecret, internalToken, *insecureHTTP) {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
 		var buf strings.Builder
 		fmt.Fprintf(&buf, "dbx_tenants %d\n", len(manager.ListTenants()))

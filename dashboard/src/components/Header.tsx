@@ -28,6 +28,7 @@ export default function Header() {
     if (path === id) return current?.name || id;
     if (path === 'settings') return 'Settings';
     if (path === 'terminal') return 'Console';
+    if (path === 'keys') return 'Tenant keys';
     if (index === 2 && id) return path.charAt(0).toUpperCase() + path.slice(1);
     return path.charAt(0).toUpperCase() + path.slice(1);
   };

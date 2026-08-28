@@ -23,25 +23,26 @@ import (
 )
 
 type Instance struct {
-	cfg           *config.Config
-	logger        *observability.Logger
-	ctx           context.Context
-	cancel        context.CancelFunc
-	respServer    *api.RESPServer
-	httpServer    *api.HTTPServer
-	wal           *persistence.WAL
-	snapshotter   *persistence.Snapshotter
-	kv            *engine.KVStore
-	vecStore      *engine.VectorStore
-	executor      *query.Executor
-	auditGuard    *security.AuditGuard
-	primaryStream *replication.PrimaryStream
-	replicaStream *replication.ReplicaStream
-	serverErr     chan error
-	metrics       *observability.Metrics
-	stopOnce      sync.Once
-	aclStore      *auth.ACLStore
-	initialUsers  []*auth.User
+	cfg             *config.Config
+	logger          *observability.Logger
+	ctx             context.Context
+	cancel          context.CancelFunc
+	respServer      *api.RESPServer
+	httpServer      *api.HTTPServer
+	wal             *persistence.WAL
+	snapshotter     *persistence.Snapshotter
+	kv              *engine.KVStore
+	vecStore        *engine.VectorStore
+	executor        *query.Executor
+	auditGuard      *security.AuditGuard
+	primaryStream   *replication.PrimaryStream
+	replicaStream   *replication.ReplicaStream
+	serverErr       chan error
+	metrics         *observability.Metrics
+	stopOnce        sync.Once
+	aclStore        *auth.ACLStore
+	initialUsers    []*auth.User
+	skipBuiltinUser bool
 }
 
 func NewInstance(cfg *config.Config) (*Instance, error) {
@@ -98,7 +99,9 @@ func (i *Instance) Start(ctx context.Context) error {
 
 	aclStore := auth.NewACLStore()
 	aclStore.DisableDefault()
-	if cfg.Auth.Enabled && cfg.Auth.RequirePassword {
+	// Orchestrator tenants authenticate only with scoped keys. A PermAll
+	// "default" user would inherit DBX_DEFAULT_PASSWORD from the control plane.
+	if !i.skipBuiltinUser && cfg.Auth.Enabled && cfg.Auth.RequirePassword {
 		password := os.Getenv("DBX_DEFAULT_PASSWORD")
 		if password != "" {
 			aclStore.SetDefaultPassword(cfg.Auth.DefaultUser, password)
@@ -422,6 +425,12 @@ func (i *Instance) MetricsSnapshot() map[string]int64 {
 		return map[string]int64{}
 	}
 	return i.metrics.Snapshot()
+}
+
+// SkipBuiltinUser disables the standalone default superuser. Orchestrator
+// tenants must authenticate with a minted tenant key only.
+func (i *Instance) SkipBuiltinUser() {
+	i.skipBuiltinUser = true
 }
 
 // SetInitialUsers installs tenant-scoped credentials before listeners start.

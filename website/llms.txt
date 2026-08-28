@@ -17,10 +17,13 @@ Async WAL replicas optional (primary acks locally). Raft, cluster, and non-strin
 
 Operator HTTP (JWT on :8000): provision, keys, backup/restore, export/import,
 hibernate/wake, GET /api/v1/tenants/{id}/usage, GET /api/usage.
-Prometheus: GET /metrics (no JWT). JSON: GET /t/{id}/metrics.
+Prometheus: GET /metrics (Bearer JWT or internal token in production). JSON: GET /t/{id}/metrics.
 
 Density: CI soaks 12 idle / 4 active. Operators run `make soak` (100 idle / 25 active).
 That is not a 100-orchestrator-process soak. 15-minute path: examples/quickstart.py.
+
+Launch: reader keys cannot SET/VADD. Production /metrics needs Bearer. No default
+superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.
 
 ## Do not say
 

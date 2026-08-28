@@ -46,7 +46,7 @@
           </article>
           <article class="secure-card">
             <h3>Tenant keys</h3>
-            <p>256-bit secrets, stored only as hashes. Create, list metadata, revoke immediately — including live RESP connections. Secrets are never returned after mint.</p>
+            <p>256-bit secrets, stored only as hashes. Create, list metadata, revoke immediately — including live RESP connections. Secrets are never returned after mint. A <code>reader</code> key can <code>GET</code> and <code>VSEARCH</code> and cannot <code>SET</code> or <code>VADD</code>. Mint from Tenant keys in the dashboard.</p>
           </article>
           <article class="secure-card">
             <h3>Roles and scopes</h3>
@@ -67,6 +67,10 @@
           <article class="secure-card">
             <h3>TLS</h3>
             <p>Control plane TLS by default. <code>-insecure-http</code> is local development only. RESP ingress can require mTLS when configured.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Prometheus</h3>
+            <p>Orchestrator <code>GET /metrics</code> is open only with <code>-insecure-http</code>. In production scrape with <code>Authorization: Bearer</code> — operator JWT or <code>DBX_INTERNAL_API_TOKEN</code>. Do not expose <code>:8000</code> to the internet without TLS.</p>
           </article>
           <article class="secure-card">
             <h3>Blast radius</h3>

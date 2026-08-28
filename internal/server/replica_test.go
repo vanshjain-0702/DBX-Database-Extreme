@@ -120,6 +120,44 @@ func waitTCP(t *testing.T, addr string) {
 	t.Fatalf("timeout waiting for %s", addr)
 }
 
+func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {
+	t.Setenv("DBX_DEFAULT_PASSWORD", "should-not-work-on-orchestrated-tenants")
+	respPort := freePort(t)
+	httpPort := freePort(t)
+	cfg := replicaTestConfig(t, respPort, httpPort, "", "", "")
+	inst, err := NewInstance(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inst.SkipBuiltinUser()
+	if err := inst.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer inst.Stop()
+	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", respPort))
+
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", respPort), time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	writer := protocol.NewWriter(conn)
+	_ = writer.WriteArray(3)
+	_ = writer.WriteBulkString([]byte("AUTH"))
+	_ = writer.WriteBulkString([]byte("default"))
+	_ = writer.WriteBulkString([]byte("should-not-work-on-orchestrated-tenants"))
+	if err := writer.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.HasPrefix(line, "+OK") {
+		t.Fatalf("default superuser authenticated on orchestrated instance: %q", line)
+	}
+}
+
 func respCommand(t *testing.T, port int, password string, args ...string) string {
 	t.Helper()
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)

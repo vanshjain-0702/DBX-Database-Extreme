@@ -1,7 +1,7 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Terminal, Database, Settings, Moon, Sun, LayoutGrid, Network } from 'lucide-react';
+import { Search, Terminal, Database, Settings, Moon, Sun, LayoutGrid, Network, Key } from 'lucide-react';
 import { useTheme } from './ThemeProvider';
 import { useTenants } from './TenantProvider';
 
@@ -58,6 +58,7 @@ export default function CommandPalette() {
           { name: 'Go to Overview', icon: <LayoutGrid size={15} />, action: () => navigate(`/cluster/${clusterId}/overview`) },
           { name: 'Go to Data Explorer', icon: <Database size={15} />, action: () => navigate(`/cluster/${clusterId}/explorer`) },
           { name: 'Go to Vector Playground', icon: <Network size={15} />, action: () => navigate(`/cluster/${clusterId}/vector`) },
+          { name: 'Go to Tenant keys', icon: <Key size={15} />, action: () => navigate(`/cluster/${clusterId}/keys`) },
           { name: 'Go to Console', icon: <Terminal size={15} />, action: () => navigate(`/cluster/${clusterId}/terminal`) },
         ]
       : []),

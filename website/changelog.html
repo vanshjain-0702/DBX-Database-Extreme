@@ -40,6 +40,13 @@
           <article class="change">
             <time datetime="2026-08-28">28 Aug 2026</time>
             <div>
+              <h2>v1.0.0 — industry launch profile</h2>
+              <p>Reader keys cannot <code>SET</code> or <code>VADD</code> (tested). Orchestrator tenants have no default superuser. Production <code>/metrics</code> requires a Bearer JWT or <code>DBX_INTERNAL_API_TOKEN</code>. Dashboard Tenant keys mints reader/writer/tenant-admin credentials. Still a single-node profile: 100 tenants/node, 100k vectors/tenant. Not SOC 2. Not a cluster.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
               <h2>Usage, hibernate, soak harness</h2>
               <p>Per-tenant usage API and Prometheus <code>/metrics</code>. Export/import aliases for the portable tenant archive. Hibernate/wake evicts a cold engine without deleting it. CI runs a 12/4 density soak plus backup/restore; operators run <code>make soak</code> for 100 idle / 25 active. Python 15-minute path: <code>examples/quickstart.py</code>. Durable <code>SETEX</code> (node-redis <code>setEx</code>) sits on the same WAL path as <code>SET … EX</code>. Next.js and LangChain examples AUTH on <code>:6380</code>.</p>
             </div>

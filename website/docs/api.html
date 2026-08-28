@@ -62,7 +62,7 @@
         </ul>
         <p>There is no <code>VGET</code> or <code>VSET</code>. Recall and latency gates are on the <a href="../performance.html">performance</a> page.</p>
         <h2>Metrics</h2>
-        <p><code>GET /t/{tenantID}/metrics</code> — JSON command/latency/memory snapshot. Orchestrator <code>GET /metrics</code> is Prometheus text with per-tenant labels (no JWT). Tenant engines also expose <code>/usage</code> and <code>/metrics/prometheus</code> to the internal token.</p>
+        <p><code>GET /t/{tenantID}/metrics</code> — JSON command/latency/memory snapshot. Orchestrator <code>GET /metrics</code> is Prometheus text with per-tenant labels. Production requires <code>Authorization: Bearer</code> (operator JWT or <code>DBX_INTERNAL_API_TOKEN</code>). <code>-insecure-http</code> leaves it open for local scrapes. Tenant engines also expose <code>/usage</code> and <code>/metrics/prometheus</code> to the internal token.</p>
       </article>
     </div>
   </main>

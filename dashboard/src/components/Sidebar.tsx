@@ -5,7 +5,7 @@ import {
   Activity, Database, Settings, Terminal, Network,
   ChevronDown, ChevronRight, BarChart2, Cpu,
   Shield, LogOut, User, MonitorDot, Gauge, Globe, HardDrive,
-  Layers, Menu, PanelLeft
+  Layers, Menu, PanelLeft, Key
 } from 'lucide-react';
 import logo from '../assets/logo.jpg';
 import { openCommandPalette } from '../api';
@@ -43,6 +43,7 @@ export default function Sidebar({ clusterId }: SidebarProps) {
             { path: `/cluster/${clusterId}/overview`, label: 'Overview', icon: <Activity size={15} /> },
             { path: `/cluster/${clusterId}/explorer`, label: 'Data Explorer', icon: <Database size={15} /> },
             { path: `/cluster/${clusterId}/vector`, label: 'Vector Playground', icon: <Network size={15} /> },
+            { path: `/cluster/${clusterId}/keys`, label: 'Tenant keys', icon: <Key size={15} /> },
             { path: `/cluster/${clusterId}/terminal`, label: 'Console', icon: <Terminal size={15} /> },
           ],
         },
