@@ -136,9 +136,13 @@ class ControlPlane:
         return self.token
 
     def provision(self, tenant_id: str, name: str = "") -> Dict[str, Any]:
-        return self._json("POST", "/api/provision", {"id": tenant_id, "name": name or tenant_id})
+        return self._json(
+            "POST", "/api/provision", {"id": tenant_id, "name": name or tenant_id}
+        )
 
-    def create_key(self, tenant_id: str, name: str = "writer", role: str = "writer") -> Dict[str, Any]:
+    def create_key(
+        self, tenant_id: str, name: str = "writer", role: str = "writer"
+    ) -> Dict[str, Any]:
         return self._json(
             "POST",
             f"/api/v1/tenants/{tenant_id}/keys",
@@ -155,13 +159,17 @@ class ControlPlane:
         return self._json("POST", "/api/tenants/backup", {"id": tenant_id})
 
     def restore(self, tenant_id: str, path: str) -> Dict[str, Any]:
-        return self._json("POST", "/api/tenants/restore", {"id": tenant_id, "path": path})
+        return self._json(
+            "POST", "/api/tenants/restore", {"id": tenant_id, "path": path}
+        )
 
     def export_tenant(self, tenant_id: str) -> Dict[str, Any]:
         return self._json("POST", "/api/tenants/export", {"id": tenant_id})
 
     def import_tenant(self, tenant_id: str, path: str) -> Dict[str, Any]:
-        return self._json("POST", "/api/tenants/import", {"id": tenant_id, "path": path})
+        return self._json(
+            "POST", "/api/tenants/import", {"id": tenant_id, "path": path}
+        )
 
     def hibernate(self, tenant_id: str) -> Dict[str, Any]:
         return self._json("POST", f"/api/v1/tenants/{tenant_id}/hibernate")
@@ -170,7 +178,9 @@ class ControlPlane:
         return self._json("POST", f"/api/v1/tenants/{tenant_id}/wake")
 
     def delete(self, tenant_id: str, purge: bool = True) -> Dict[str, Any]:
-        return self._json("POST", "/api/tenants/delete", {"id": tenant_id, "purge": purge})
+        return self._json(
+            "POST", "/api/tenants/delete", {"id": tenant_id, "purge": purge}
+        )
 
     def _json(
         self,
@@ -193,7 +203,9 @@ class ControlPlane:
             detail = exc.read().decode("utf-8", "replace")
             raise DBXError(f"{exc.code} {path}: {detail}") from exc
         except URLError as exc:
-            raise DBXError(f"cannot reach control plane {self.base}: {exc.reason}") from exc
+            raise DBXError(
+                f"cannot reach control plane {self.base}: {exc.reason}"
+            ) from exc
         if not raw:
             return {}
         return json.loads(raw.decode("utf-8"))

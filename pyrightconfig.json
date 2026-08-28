@@ -1,7 +1,18 @@
 {
   "include": ["sdk/python", "examples"],
+  "exclude": [
+    "**/.venv",
+    "**/venv",
+    "**/__pycache__",
+    "**/.pytest_cache",
+    "**/node_modules"
+  ],
   "extraPaths": ["sdk/python"],
+  "pythonVersion": "3.10",
+  "typeCheckingMode": "basic",
   "reportMissingImports": true,
+  "venvPath": "sdk/python",
+  "venv": ".venv",
   "executionEnvironments": [
     {
       "root": "examples/langchain-rag",

@@ -1,42 +1,18 @@
-# Stage 1: Build the Go binary
+# Standalone engine binary. The supported product image is deploy/Dockerfile
+# (orchestrator + embedded dashboard + RESP :6380).
 FROM golang:1.25-alpine AS builder
-
-# Install build dependencies
-RUN apk add --no-cache git gcc musl-dev
-
+RUN apk add --no-cache git
 WORKDIR /app
-
-# Cache go modules
 COPY go.mod go.sum ./
 RUN go mod download
-
-# Copy the entire project
 COPY . .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/bin/dbx-server ./cmd/dbx-server
 
-# Build a static binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/bin/server ./cmd/server
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o /app/bin/orchestrator ./cmd/orchestrator
-
-# Stage 2: Create a minimal runtime image
 FROM alpine:3.19
-
-RUN apk add --no-cache ca-certificates tzdata bash
-
+RUN apk add --no-cache ca-certificates tzdata
 WORKDIR /app
-
-# Copy the compiled binaries
-COPY --from=builder /app/bin/server /app/bin/server
-COPY --from=builder /app/bin/orchestrator /app/bin/orchestrator
-
-# Copy configs and default scripts
+COPY --from=builder /app/bin/dbx-server /app/bin/dbx-server
 COPY --from=builder /app/configs /app/configs
-COPY --from=builder /app/scripts /app/scripts
-# TLS certificates are mounted from a secret/host directory at runtime.
-# Create volumes for persistent data and certificates
-VOLUME [ "/app/data", "/app/certs" ]
-
-# Expose RESP Engine Port and Orchestrator Peer Port
-EXPOSE 6399 6401
-
-# Entrypoint is the main engine server
-CMD ["/app/bin/server", "-config", "/app/configs/local.yaml"]
+VOLUME ["/app/data", "/app/certs"]
+EXPOSE 6399
+CMD ["/app/bin/dbx-server", "-config", "/app/configs/local.yaml"]

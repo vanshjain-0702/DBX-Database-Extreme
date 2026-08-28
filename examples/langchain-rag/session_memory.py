@@ -19,7 +19,7 @@ from langchain_dbx import DBXVectorStore
 
 class _FixedEmbeddings(Embeddings):
     def __init__(self, size: int = 8) -> None:
-        self.size = size
+        self.size: int = size
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
         return [[float((i + 1) % self.size) for i in range(self.size)] for _ in texts]
@@ -70,3 +70,24 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def test_require_env_missing() -> None:
+    old = os.environ.pop("DBX_TENANT", None)
+    try:
+        try:
+            _require_env("DBX_TENANT")
+        except SystemExit as exc:
+            assert "DBX_TENANT" in str(exc)
+        else:
+            raise AssertionError("expected SystemExit")
+    finally:
+        if old is not None:
+            os.environ["DBX_TENANT"] = old
+
+
+def test_fixed_embeddings_dimension() -> None:
+    emb = _FixedEmbeddings(size=8)
+    assert len(emb.embed_query("q")) == 8
+    docs = emb.embed_documents(["a", "b"])
+    assert len(docs) == 2 and len(docs[0]) == 8

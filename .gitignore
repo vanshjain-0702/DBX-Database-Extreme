@@ -29,6 +29,8 @@ __pycache__/
 *.py[cod]
 sdk/python/.venv/
 *.egg-info/
+.pytest_cache/
+sdk/python/.pytest_cache/
 
 # Environment & secrets
 .env

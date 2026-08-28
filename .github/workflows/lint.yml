@@ -57,8 +57,15 @@ jobs:
         uses: actions/setup-python@v7
         with:
           python-version: "3.10"
-      - name: Install Flake8 & Black
-        run: |
-          pip install flake8 black
-          flake8 scripts sdk/python
-          black --check scripts sdk/python
+      - name: Install Flake8, Black, and pytest
+        run: pip install flake8 black pytest redis langchain-core
+      - name: flake8
+        run: >
+          flake8 scripts sdk/python examples
+          --max-line-length=88
+          --extend-ignore=E203,E402,E501,W503
+          --exclude=.venv,venv,.git,__pycache__,node_modules
+      - name: black
+        run: black --check scripts sdk/python examples
+      - name: pytest
+        run: pytest sdk/python examples --ignore=sdk/python/.venv

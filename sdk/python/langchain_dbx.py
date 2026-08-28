@@ -28,7 +28,7 @@ class DBXVectorStore(VectorStore):
     def add_texts(
         self,
         texts: Iterable[str],
-        metadatas: Optional[List[dict]] = None,
+        metadatas: Optional[List[dict[str, Any]]] = None,
         **kwargs: Any,
     ) -> List[str]:
         texts = list(texts)
@@ -75,7 +75,7 @@ class DBXVectorStore(VectorStore):
         cls,
         texts: List[str],
         embedding: Embeddings,
-        metadatas: Optional[List[dict]] = None,
+        metadatas: Optional[List[dict[str, Any]]] = None,
         *,
         ids: Optional[List[str]] = None,
         client: Optional[DBXClient] = None,

@@ -22,18 +22,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push DBX Server
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: ./Dockerfile.engine
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/dbx-engine:latest,ghcr.io/${{ github.repository_owner }}/dbx-engine:${{ github.event.release.tag_name }}
-          
       - name: Build and push DBX Orchestrator
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: ./Dockerfile
+          file: ./deploy/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:latest,ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:${{ github.event.release.tag_name }}

@@ -19,9 +19,7 @@ def main() -> None:
     try:
         plane.login("admin", admin)
     except DBXError as exc:
-        raise SystemExit(
-            f"{exc}\nStart the node first: make run-dev"
-        ) from exc
+        raise SystemExit(f"{exc}\nStart the node first: make run-dev") from exc
 
     tenant = "acme-quickstart"
     try:

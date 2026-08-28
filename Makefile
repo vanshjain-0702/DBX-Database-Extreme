@@ -7,7 +7,7 @@ VERSION            := $(shell git describe --tags --always --dirty 2>/dev/null |
 LDFLAGS            := -ldflags="-X main.version=$(VERSION) -s -w"
 BUILD_DIR          := ./bin
 
-.PHONY: all build build-server build-orchestrator run-dev test soak restore-drill clean docker-build docker-up lint help
+.PHONY: all build build-server build-orchestrator run-dev test python-check soak restore-drill clean docker-build docker-up lint help
 
 all: build
 
@@ -45,6 +45,12 @@ run-dashboard:
 ## test: Run the Go test suite (no race detector; Linux CI adds -race)
 test:
 	go test -count=1 -timeout 15m ./...
+
+## python-check: Flake8, Black, and pytest for the SDK and examples
+python-check:
+	python -m flake8 scripts sdk/python examples
+	python -m black --check scripts sdk/python examples
+	python -m pytest sdk/python examples --ignore=sdk/python/.venv
 
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:
