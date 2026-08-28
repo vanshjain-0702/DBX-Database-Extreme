@@ -2,7 +2,7 @@
 
 > Per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory.
 
-- Site: https://dbxdb.io/
+- Site: https://vanshjain-0702.github.io/DBX-Database-Extreme/
 - Contact: hello@dbxdb.io
 - License: Business Source License 1.1 (Apache 2.0 after four years)
 - Source: https://github.com/vanshjain-0702/DBX-Database-Extreme
@@ -25,7 +25,9 @@ That is not a 100-orchestrator-process soak. 15-minute path: examples/quickstart
 LangChain example: examples/langchain-rag. Next.js SETEX: examples/nextjs-cache.
 Python checks: `make python-check` (pytest skips live AUTH without env).
 
-Public site source: website/ (GitHub Pages). Intended URL https://dbxdb.io/
+Public site source: website/ (GitHub Pages).
+Live: https://vanshjain-0702.github.io/DBX-Database-Extreme/
+dbxdb.io is the intended custom domain after DNS exists (website/README.md).
 Docker: deploy/Dockerfile. GHCR ghcr.io/<owner>/dbx-orchestrator on GitHub Release.
 
 Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default
@@ -37,13 +39,13 @@ Redis replacement. All-in-one AI database. Cheaper than Pinecone. Scales to bill
 
 ## Pages
 
-- [Home](https://dbxdb.io/)
-- [Docs](https://dbxdb.io/docs/)
-- [Quickstart](https://dbxdb.io/docs/quickstart.html)
-- [Architecture](https://dbxdb.io/docs/architecture.html)
-- [API](https://dbxdb.io/docs/api.html)
-- [Positioning](https://dbxdb.io/docs/positioning.html)
-- [Pricing](https://dbxdb.io/pricing.html)
-- [Security](https://dbxdb.io/security.html)
-- [Performance](https://dbxdb.io/performance.html)
-- [License](https://dbxdb.io/license.html)
+- [Home](https://vanshjain-0702.github.io/DBX-Database-Extreme/)
+- [Docs](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/)
+- [Quickstart](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/quickstart.html)
+- [Architecture](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/architecture.html)
+- [API](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/api.html)
+- [Positioning](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/positioning.html)
+- [Pricing](https://vanshjain-0702.github.io/DBX-Database-Extreme/pricing.html)
+- [Security](https://vanshjain-0702.github.io/DBX-Database-Extreme/security.html)
+- [Performance](https://vanshjain-0702.github.io/DBX-Database-Extreme/performance.html)
+- [License](https://vanshjain-0702.github.io/DBX-Database-Extreme/license.html)

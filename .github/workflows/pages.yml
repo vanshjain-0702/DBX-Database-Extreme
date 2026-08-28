@@ -1,6 +1,8 @@
-# Publishes website/ to GitHub Pages.
+# Publishes website/ to GitHub Pages at
+# https://vanshjain-0702.github.io/DBX-Database-Extreme/
 # Enable: repo Settings → Pages → Source = GitHub Actions.
-# Custom domain: point dbxdb.io at GitHub, then Pages will pick up website/CNAME.
+# Do not add website/CNAME until dbxdb.io is registered and its DNS
+# points at GitHub Pages (see website/README.md).
 name: Deploy site
 
 on:

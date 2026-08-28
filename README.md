@@ -9,7 +9,7 @@
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
-  <a href="https://dbxdb.io">dbxdb.io</a>
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/">Site</a>
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
@@ -305,7 +305,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 
 | What | Where |
 |---|---|
-| Public site (GitHub Pages) | [`website/`](website/) — intended URL [dbxdb.io](https://dbxdb.io). Workflow: [`.github/workflows/pages.yml`](.github/workflows/pages.yml). Custom domain is [`website/CNAME`](website/CNAME); DNS at the registrar must point at GitHub Pages. |
+| Public site (GitHub Pages) | [`website/`](website/) — **live:** [vanshjain-0702.github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/). `dbxdb.io` is the intended custom domain once it is registered and DNS points at GitHub Pages ([`website/README.md`](website/README.md)). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
@@ -331,7 +331,7 @@ dbx/
 ├── dashboard/              # React + Vite admin UI (embedded; Tenant keys at /cluster/:id/keys)
 ├── sdk/python/             # Official Python SDK + LangChain adapter
 ├── examples/               # 15-minute path, LangChain, Next.js session
-├── website/                # Public site (GitHub Pages; CNAME dbxdb.io)
+├── website/                # Public site (GitHub Pages)
 ├── deploy/                 # Canonical Dockerfile, Compose, Helm
 └── docs/                   # Architecture, API reference, positioning
 ```
