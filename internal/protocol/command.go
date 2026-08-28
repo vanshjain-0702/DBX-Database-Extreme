@@ -65,6 +65,7 @@ var Registry = map[string]CommandInfo{
 	// String commands
 	"GET":      {Name: "GET", Arity: 2, ReadOnly: true, KeyIndex: 1},
 	"SET":      {Name: "SET", Arity: -3, KeyIndex: 1, DurableV1: true},
+	"SETEX":    {Name: "SETEX", Arity: 4, KeyIndex: 1, DurableV1: true},
 	"DEL":      {Name: "DEL", Arity: -2, KeyIndex: 1, DurableV1: true},
 	"EXISTS":   {Name: "EXISTS", Arity: -2, ReadOnly: true, KeyIndex: 1},
 	"EXPIRE":   {Name: "EXPIRE", Arity: 3, KeyIndex: 1, DurableV1: true},
@@ -209,7 +210,7 @@ func SupportedInDurableV1(name string) bool {
 // allocation-free; security-sensitive commands still log.
 func ShouldAudit(name string) bool {
 	switch strings.ToUpper(name) {
-	case "SET", "GET", "MSET", "MGET", "INCR", "INCRBY", "DECR", "DECRBY",
+	case "SET", "SETEX", "GET", "MSET", "MGET", "INCR", "INCRBY", "DECR", "DECRBY",
 		"HSET", "HGET", "HMSET", "HMGET", "HDEL",
 		"VADD", "VADD_BATCH", "VSEARCH":
 		return false

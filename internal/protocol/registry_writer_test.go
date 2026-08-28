@@ -73,7 +73,7 @@ func TestCommandRegistryAndHelpers(t *testing.T) {
 	if !ok || !info.DurableV1 || info.ReadOnly {
 		t.Fatalf("SET info = %#v", info)
 	}
-	if !SupportedInDurableV1("GET") || !SupportedInDurableV1("SET") || SupportedInDurableV1("HSET") {
+	if !SupportedInDurableV1("GET") || !SupportedInDurableV1("SET") || !SupportedInDurableV1("SETEX") || SupportedInDurableV1("HSET") {
 		t.Fatal("durable profile classification")
 	}
 	if !LookupMustReadOnly("GET") || LookupMustReadOnly("SET") {

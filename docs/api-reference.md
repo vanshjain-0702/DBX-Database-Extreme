@@ -120,7 +120,8 @@ mutations are not part of the v1 contract.
 
 | Command | Example |
 |---|---|
-| `SET` | `["SET", "key", "value"]` |
+| `SET` | `["SET", "key", "value"]` or `["SET", "key", "value", "EX", "60"]` |
+| `SETEX` | `["SETEX", "key", "60", "value"]` — same durable path as `SET … EX`; what node-redis `setEx` sends |
 | `GET` | `["GET", "key"]` |
 | `DEL` | `["DEL", "key"]` |
 | `KEYS` | `["KEYS", "*"]` |

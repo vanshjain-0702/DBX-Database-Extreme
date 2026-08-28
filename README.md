@@ -123,15 +123,21 @@ customers who each need memory, DBX is built for exactly that shape.
 
 ## Quickstart
 
-### Option 1: Docker
+### Option 1: Docker (build the orchestrator locally)
+
+Published images land on GitHub Releases as
+`ghcr.io/vanshjain-0702/dbx-orchestrator`. The supported local path is:
 
 ```bash
+git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+docker build -t dbx:dev -f deploy/Dockerfile .
 docker run -p 8000:8000 -p 6380:6380 \
   -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
   -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
   -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
   -e DBX_NODE_MEMORY_BUDGET=8gb \
-  ghcr.io/dbx/dbx:latest
+  dbx:dev
 ```
 
 Open the dashboard at **http://localhost:8000** and log in with `admin` / `yourpassword`.
@@ -141,8 +147,8 @@ Open the dashboard at **http://localhost:8000** and log in with `admin` / `yourp
 **Prerequisites:** Go 1.25+, Node.js 20+
 
 ```bash
-git clone https://github.com/dbx/dbx.git
-cd dbx
+git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
 
 make build      # build all binaries
 make run-dev    # start the local development stack
@@ -151,8 +157,8 @@ make run-dev    # start the local development stack
 ### Option 3: Docker Compose
 
 ```bash
-git clone https://github.com/dbx/dbx.git
-cd dbx
+git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
 make docker-up
 ```
 
@@ -265,19 +271,21 @@ thesis and where we will and will not compete, read [Positioning](docs/positioni
 dbx/
 ├── cmd/
 │   ├── dbx-server/         # Storage node entry point
-│   └── dbx-orchestrator/   # Control plane entry point
+│   ├── dbx-orchestrator/   # Control plane entry point
+│   └── dbx-soak/           # Operator density drill (`make soak`)
 ├── internal/
 │   ├── engine/             # KV engine + HNSW vector index (SQ8, mmap)
-│   ├── orchestrator/       # Tenant lifecycle, provisioning, routing
-│   ├── protocol/           # RESP3 parser and writer
-│   ├── persistence/        # WAL, snapshots, S3 backup
+│   ├── orchestrator/       # Tenant lifecycle, usage, hibernate, routing
+│   ├── protocol/           # RESP parser and writer
+│   ├── persistence/        # WAL, snapshots, checksummed backup
 │   ├── security/           # ACL, rate limiting, encryption
 │   └── api/                # HTTP API handlers
 ├── dashboard/              # React + Vite admin dashboard (embedded)
-├── sdk/python/             # Official Python SDK
-├── examples/               # LangChain RAG, Next.js caching
+├── sdk/python/             # Official Python SDK + LangChain adapter
+├── examples/               # 15-minute path, LangChain, Next.js session
+├── website/                # Marketing site (GitHub Pages → dbxdb.io)
 ├── deploy/                 # Docker Compose and Helm charts
-└── docs/                   # Architecture, API reference, positioning, roadmap
+└── docs/                   # Architecture, API reference, positioning
 ```
 
 ---
@@ -305,14 +313,10 @@ Methodology and the honest caveats are in
 ## Roadmap
 
 CI runs a scaled density soak (12 idle / 4 active) plus backup/restore and hibernate
-tests. Operators run the certified 100/25 profile with `make soak`. Per-tenant usage
-is `GET /api/v1/tenants/{id}/usage`. The 15-minute path is `examples/quickstart.py`.
-See [ROADMAP.md](ROADMAP.md).
-
-CI runs a scaled density soak (12 idle / 4 active) plus backup/restore and
-hibernate tests. Operators run the certified profile with `make soak`.
-Per-tenant usage is `GET /api/v1/tenants/{id}/usage`. The 15-minute path is
-`examples/quickstart.py`.
+tests. Operators run the certified 100 idle / 25 active profile with `make soak`.
+Per-tenant cost is `GET /api/v1/tenants/{id}/usage`. Hibernate/wake evicts a cold
+engine without deleting it. The 15-minute path is
+[`examples/quickstart.py`](examples/quickstart.py). Detail in [ROADMAP.md](ROADMAP.md).
 
 ---
 

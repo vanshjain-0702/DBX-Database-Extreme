@@ -3,6 +3,9 @@
 DBX is not a shared vector database with a metadata filter. Point this example at
 **one tenant** over RESP `:6380`. Session KV and embeddings share that engine.
 
+The first command must be `AUTH tenantID:keyID secret`. The Python SDK does that
+when you pass `tenant`, `key_id`, and `secret`.
+
 ## Prerequisites
 
 - Python 3.10+
@@ -23,5 +26,5 @@ export DBX_SECRET=...
 python session_memory.py
 ```
 
-`session_memory.py` uses `FakeEmbeddings` so you do not need an OpenAI key.
-The store talks RESP through `DBXClient` — not the operator JWT on `:8000`.
+`session_memory.py` uses a local fixed embedding stub so you do not need an OpenAI
+key. The store talks RESP through `DBXClient` — not the operator JWT on `:8000`.

@@ -51,7 +51,7 @@
         <h2>Keys</h2>
         <p><code>/api/v1/tenants/{id}/keys</code> — POST creates a 256-bit key (<code>name</code>, <code>role</code> reader/writer/tenant-admin, optional <code>key_patterns</code>). GET lists metadata. DELETE revokes immediately, including existing RESP connections. Secret hashes are never returned.</p>
         <h2>KV (v1 durable)</h2>
-        <p><code>SET GET DEL KEYS EXPIRE TTL PERSIST MSET MGET</code>. Hashes, lists, sets, sorted sets, streams, JSON, bitmap, geo, transactions, pub/sub, <code>FLUSH*</code>, cluster, and replication mutations are not in the v1 contract and fail before dispatch.</p>
+        <p><code>SET</code> (optional <code>EX</code>), <code>SETEX</code>, <code>GET DEL KEYS EXPIRE TTL PERSIST MSET MGET</code>. Hashes, lists, sets, sorted sets, streams, JSON, bitmap, geo, transactions, pub/sub, <code>FLUSH*</code>, cluster, and replication mutations are not in the v1 contract and fail before dispatch.</p>
         <h2>Vectors</h2>
         <p>Index key first, so one tenant can hold several indexes.</p>
         <ul>

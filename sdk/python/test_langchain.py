@@ -1,61 +1,60 @@
+"""Manual live check against a provisioned tenant. Not part of `go test`.
+
+Requires `make run-dev` and:
+  DBX_TENANT, DBX_KEY_ID, DBX_SECRET
+"""
+
+from __future__ import annotations
+
 import os
+import sys
 
 from dbx import DBXClient
-from langchain_community.embeddings import FakeEmbeddings
 from langchain_dbx import DBXVectorStore
 
 
-def test_dbx_langchain():
-    print("Connecting to DBX via mTLS...")
-    # Paths to the certificates we generated earlier
-    certs_dir = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "certs"
-    )
-    ca_cert = os.path.join(certs_dir, "ca.crt")
-    client_cert = os.path.join(certs_dir, "client.crt")
-    client_key = os.path.join(certs_dir, "client.key")
+class _FixedEmbeddings:
+    def __init__(self, size: int = 8) -> None:
+        self.size = size
+
+    def embed_documents(self, texts):
+        return [[float((i + 1) % self.size) for i in range(self.size)] for _ in texts]
+
+    def embed_query(self, text):
+        return [0.1] * self.size
+
+
+def test_dbx_langchain() -> None:
+    tenant = os.environ.get("DBX_TENANT")
+    key_id = os.environ.get("DBX_KEY_ID")
+    secret = os.environ.get("DBX_SECRET")
+    if not tenant or not key_id or not secret:
+        print("skip: set DBX_TENANT, DBX_KEY_ID, DBX_SECRET")
+        return
 
     client = DBXClient(
         host="127.0.0.1",
-        port=6399,
-        ca_cert=ca_cert,
-        client_cert=client_cert,
-        client_key=client_key,
+        port=6380,
+        tenant=tenant,
+        key_id=key_id,
+        secret=secret,
     )
-
     if not client.ping():
-        print("Failed to connect to DBX!")
-        return
-    print("Connected successfully!")
+        print("Failed to AUTH to :6380")
+        sys.exit(1)
 
-    # We use FakeEmbeddings for testing so we don't need an OpenAI API key
-    embeddings = FakeEmbeddings(size=128)
-
-    print("Initializing LangChain DBX VectorStore...")
-    dbx_store = DBXVectorStore(client, embeddings, index_name="knowledge_base")
-
-    docs = [
-        "DBX is a high-performance in-memory database built in Go.",
-        "LangChain is a framework for developing applications powered by language models.",
-        "Vector databases are essential for Retrieval-Augmented Generation (RAG).",
-    ]
-
-    print("Adding documents to DBX...")
-    dbx_store.add_texts(
-        docs, metadatas=[{"source": "doc1"}, {"source": "doc2"}, {"source": "doc3"}]
+    store = DBXVectorStore(client, _FixedEmbeddings(size=8), index_name="knowledge_base")
+    store.add_texts(
+        [
+            "DBX is a per-tenant memory engine for AI products.",
+            "Each customer gets an isolated WAL, KV, and HNSW index.",
+        ]
     )
-
-    query = "Tell me about the DBX database."
-    print(f"Querying DBX for: '{query}'")
-
-    results = dbx_store.similarity_search(query, k=1)
-
-    print("\n--- Top Result ---")
-    if results:
-        print(f"Content: {results[0].page_content}")
-        print(f"Metadata: {results[0].metadata}")
-    else:
+    results = store.similarity_search("isolated memory per customer", k=1)
+    if not results:
         print("No results found.")
+        sys.exit(1)
+    print(results[0].page_content)
 
 
 if __name__ == "__main__":

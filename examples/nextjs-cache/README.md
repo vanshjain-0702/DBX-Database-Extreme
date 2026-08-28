@@ -1,11 +1,15 @@
-# Next.js Session Caching with DBX
+# Next.js session state with DBX
 
-Use DBX as a session and API response cache in your Next.js app. DBX speaks RESP, so the
-standard `redis` npm client works without a custom driver.
+Use one tenant as the working-state store for a Next.js app. DBX speaks RESP, so
+the `redis` npm client connects without a custom driver — that is an on-ramp, not
+a claim that DBX substitutes for a tuned cache cluster.
 
-The reason to reach for DBX here rather than a plain cache is that the same tenant also holds
-your vector memory: session state and semantic recall for a customer live in one engine and one
-data directory, so there is no second system to keep in sync.
+The reason to put session JSON here is the same tenant also holds that customer's
+vector memory. Session state and semantic recall live in one engine and one data
+directory. There is no second system to keep in sync.
+
+The first command on `:6380` must be `AUTH tenantID:keyID secret`. `SETEX` and
+`SET key value EX seconds` are both in the durable v1 string surface.
 
 ## Setup
 
@@ -13,43 +17,55 @@ data directory, so there is no second system to keep in sync.
 npm install redis
 ```
 
-## Usage in Next.js API Routes
-
-```typescript
-// lib/dbx.ts
-import { createClient } from 'redis';
-
-const dbx = createClient({
-  url: process.env.DBX_URL || 'redis://localhost:6380',
-});
-
-export default dbx;
-
-// app/api/user/route.ts
-import dbx from '@/lib/dbx';
-
-export async function GET(request: Request) {
-  const userId = "user:123";
-
-  // Try cache first
-  const cached = await dbx.get(userId);
-  if (cached) {
-    return Response.json(JSON.parse(cached), { headers: { 'X-Cache': 'HIT' } });
-  }
-
-  // Fetch from DB
-  const user = await fetchUserFromDatabase(userId);
-
-  // Store in DBX with 1-hour TTL
-  await dbx.setEx(userId, 3600, JSON.stringify(user));
-
-  return Response.json(user, { headers: { 'X-Cache': 'MISS' } });
-}
-```
-
-## Environment Variables
+Provision a tenant and mint a writer key first (`examples/quickstart.py` or the
+dashboard). Then:
 
 ```bash
 # .env.local
-DBX_URL=redis://localhost:6380
+DBX_URL=redis://127.0.0.1:6380
+DBX_TENANT=acme-corp
+DBX_KEY_ID=key-id
+DBX_SECRET=one-time-key-secret
 ```
+
+## Usage in a Next.js route
+
+```typescript
+// lib/dbx.ts
+import { createClient, type RedisClientType } from 'redis';
+
+let client: RedisClientType | undefined;
+
+export async function dbx(): Promise<RedisClientType> {
+  if (!client) {
+    client = createClient({ url: process.env.DBX_URL || 'redis://127.0.0.1:6380' });
+    await client.connect();
+    await client.sendCommand([
+      'AUTH',
+      `${process.env.DBX_TENANT}:${process.env.DBX_KEY_ID}`,
+      process.env.DBX_SECRET as string,
+    ]);
+  }
+  return client;
+}
+
+// app/api/session/route.ts
+import { dbx } from '@/lib/dbx';
+
+export async function GET() {
+  const store = await dbx();
+  const key = 'session:user:123';
+  const cached = await store.get(key);
+  if (cached) {
+    return Response.json(JSON.parse(cached), { headers: { 'X-Store': 'HIT' } });
+  }
+
+  const session = { userId: 123, step: 'onboarding' };
+  // SETEX is the node-redis setEx path; SET … EX is equivalent.
+  await store.setEx(key, 3600, JSON.stringify(session));
+  return Response.json(session, { headers: { 'X-Store': 'MISS' } });
+}
+```
+
+Point this at one tenant. Do not share a connection across customers — mint a key
+per tenant and AUTH that identity.

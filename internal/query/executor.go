@@ -376,6 +376,15 @@ func (e *Executor) prepareDurableEffects(cmd *protocol.Command) ([]persistence.W
 			expiresAt = now + ttlSec*int64(time.Second)
 		}
 		return []persistence.WALEffect{put(cmd.Arg(0), append([]byte(nil), value...), expiresAt)}, true
+	case "SETEX":
+		if cmd.NumArgs() < 3 {
+			return nil, true
+		}
+		seconds, err := strconv.ParseInt(cmd.Arg(1), 10, 64)
+		if err != nil || seconds <= 0 {
+			return nil, true
+		}
+		return []persistence.WALEffect{put(cmd.Arg(0), append([]byte(nil), cmd.ArgBytes(2)...), now+seconds*int64(time.Second))}, true
 	case "SETNX":
 		if cmd.NumArgs() < 2 {
 			return nil, true
@@ -710,6 +719,27 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			Key:     cmd.Arg(0),
 			Value:   val,
 			TTLNano: ttl * 1e6,
+		}); err != nil {
+			return w.WriteError("ERR WAL write failed: " + err.Error())
+		}
+		return w.WriteOK()
+	case "SETEX":
+		if cmd.NumArgs() < 3 {
+			return w.WriteError(protocol.WrongNumArgsError("SETEX"))
+		}
+		seconds, err := strconv.ParseInt(cmd.Arg(1), 10, 64)
+		if err != nil || seconds <= 0 {
+			return w.WriteError("ERR invalid expire time in 'setex' command")
+		}
+		val := cmd.ArgBytes(2)
+		if _, err := e.str.Set(cmd.Arg(0), val, seconds, false, false); err != nil {
+			return w.WriteError(err.Error())
+		}
+		if err := e.writeWAL(&persistence.WALRecord{
+			Type:    persistence.RecordSet,
+			Key:     cmd.Arg(0),
+			Value:   val,
+			TTLNano: seconds * 1e6,
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}

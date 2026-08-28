@@ -151,7 +151,7 @@ var adminCommands = map[string]bool{
 }
 
 var writeCommands = map[string]bool{
-	"SET": true, "DEL": true, "EXPIRE": true, "RENAME": true, "INCR": true,
+	"SET": true, "SETEX": true, "DEL": true, "EXPIRE": true, "RENAME": true, "INCR": true,
 	"DECR": true, "INCRBY": true, "DECRBY": true, "APPEND": true, "SETRANGE": true,
 	"MSET": true, "SETNX": true, "GETSET": true, "HSET": true, "HDEL": true,
 	"HMSET": true, "HINCRBY": true, "LPUSH": true, "RPUSH": true, "LPOP": true,

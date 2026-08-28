@@ -18,10 +18,15 @@ The control plane. It is the single entry point for all clients and the admin da
 - JWT-based authentication and authorization
 - Tenant lifecycle: provision (`/api/provision`, optional `replicas`), promote
   (`/api/tenants/promote`), back up (`/api/tenants/backup`), restore
-  (`/api/tenants/restore`), and delete (`/api/tenants/delete`, optionally purging)
+  (`/api/tenants/restore`), export/import aliases, hibernate/wake
+  (`/api/v1/tenants/{id}/hibernate`, `/wake`), usage (`/api/v1/tenants/{id}/usage`,
+  `/api/usage`), and delete (`/api/tenants/delete`, optionally purging)
+- Prometheus text on `GET /metrics` (no JWT). JSON snapshots remain at
+  `GET /t/{tenantID}/metrics`.
 - One public RESP ingress on `:6380`, authenticated with tenant-scoped keys
 - Reverse-proxying data plane requests to the current primary
 - Atomic local control-plane state. Data-plane Raft and cluster mode fail closed.
+  Sentinel does not restart a hibernated tenant.
 
 Because each tenant owns a separate data directory, every lifecycle operation affects exactly
 one customer. There is no cross-tenant scan and no shared keyspace to sweep.
@@ -83,7 +88,10 @@ DBX uses a two-layer persistence model:
 3. **Vector files:** SQ8 rows, generation tombstones, metadata, and a rebuildable checksummed
    HNSW cache live in the tenant directory.
 4. **Backup/restore:** A maintenance lock produces a manifest with SHA-256 checksums. Restore
-   validates into a sibling directory and swaps with rollback.
+   validates into a sibling directory and swaps with rollback. `POST /api/tenants/export`
+   and `/import` are aliases. Hibernate stops the engine process and keeps the directory.
+5. **Density:** CI runs 12 idle / 4 active engines. Operators run `make soak` for
+   100 idle / 25 active. That is not a 100-orchestrator-process soak.
 
 ## Security Model
 

@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Changelog — DBX</title>
-  <meta name="description" content="DBX v1 is GO for the single-node profile as of 27 August 2026. Remaining work: density soak and engine coverage. Releases on GitHub.">
+  <meta name="description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness, and the 15-minute Python path shipped 28 August 2026. Releases on GitHub.">
   <meta property="og:title" content="Changelog — DBX">
-  <meta property="og:description" content="DBX v1 is GO for the single-node profile as of 27 August 2026. Remaining work: density soak and engine coverage. Releases on GitHub.">
+  <meta property="og:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.io/changelog.html">
   <meta property="og:image" content="assets/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Changelog — DBX">
-  <meta name="twitter:description" content="DBX v1 is GO for the single-node profile as of 27 August 2026. Remaining work: density soak and engine coverage. Releases on GitHub.">
+  <meta name="twitter:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
   <meta name="twitter:image" content="assets/og-image.jpg">
   <meta name="theme-color" content="#051c33">
   <link rel="canonical" href="https://dbxdb.io/changelog.html">
@@ -41,7 +41,7 @@
             <time datetime="2026-08-28">28 Aug 2026</time>
             <div>
               <h2>Usage, hibernate, soak harness</h2>
-              <p>Per-tenant usage API and Prometheus <code>/metrics</code>. Export/import aliases for the portable tenant archive. Hibernate/wake evicts a cold engine without deleting it. CI runs a 12/4 density soak plus backup/restore; operators run <code>make soak</code> for 100 idle / 25 active. Python 15-minute path: <code>examples/quickstart.py</code>.</p>
+              <p>Per-tenant usage API and Prometheus <code>/metrics</code>. Export/import aliases for the portable tenant archive. Hibernate/wake evicts a cold engine without deleting it. CI runs a 12/4 density soak plus backup/restore; operators run <code>make soak</code> for 100 idle / 25 active. Python 15-minute path: <code>examples/quickstart.py</code>. Durable <code>SETEX</code> (node-redis <code>setEx</code>) sits on the same WAL path as <code>SET … EX</code>. Next.js and LangChain examples AUTH on <code>:6380</code>.</p>
             </div>
           </article>
           <article class="change">

@@ -146,7 +146,7 @@
           </div>
           <div class="layer">
             <span class="layer-tag">Backup</span>
-            <p><strong>One customer, one archive.</strong> A maintenance lock produces a manifest with SHA-256 checksums for both KV and vector surfaces. Restore validates into a sibling directory and swaps with rollback.</p>
+            <p><strong>One customer, one archive.</strong> A maintenance lock produces a manifest with SHA-256 checksums for both KV and vector surfaces. Restore validates into a sibling directory and swaps with rollback. Export/import are the same artifact. Hibernate stops the process and keeps the directory.</p>
           </div>
         </div>
         <p class="note">Do not read “backup archive” as “atomic KV+vector point-in-time snapshot.” The archive is a consistent cut of the tenant directory under a lock. The periodic <code>.rdb</code> is still KV only.</p>

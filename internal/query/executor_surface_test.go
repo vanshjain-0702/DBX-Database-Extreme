@@ -104,8 +104,17 @@ func TestDurableStringSurface(t *testing.T) {
 	if executeForTest(t, executor, "SET", "ttlkey", "v", "EX", "60") != "+OK\r\n" {
 		t.Fatal("SET EX")
 	}
+	if executeForTest(t, executor, "SETEX", "setexkey", "30", "cached") != "+OK\r\n" {
+		t.Fatal("SETEX")
+	}
+	if executeForTest(t, executor, "GET", "setexkey") != "$6\r\ncached\r\n" {
+		t.Fatal("SETEX GET")
+	}
 	if !strings.Contains(executeForTest(t, executor, "TTL", "ttlkey"), ":") {
 		t.Fatal("TTL")
+	}
+	if !strings.Contains(executeForTest(t, executor, "TTL", "setexkey"), ":") {
+		t.Fatal("SETEX TTL")
 	}
 	if !strings.Contains(executeForTest(t, executor, "EXPIRE", "a", "30"), ":1") {
 		t.Fatal("EXPIRE")

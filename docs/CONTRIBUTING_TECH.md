@@ -20,10 +20,14 @@ make docker-build
 ## Running Tests
 All pull requests must pass the CI pipeline, which includes data races and strict linting.
 ```bash
-# Run Go tests with race detector
-go test -v -race ./...
+# Run Go tests (`make test` is the portable target; Linux CI adds -race)
+make test
 
-# Run the Linter locally
+# Operator drills
+make soak
+make restore-drill
+
+# Run the linter locally
 golangci-lint run
 ```
 

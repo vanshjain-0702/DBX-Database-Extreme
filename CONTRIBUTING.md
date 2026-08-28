@@ -25,14 +25,18 @@ We do not describe DBX as a replacement for anything.
 
 ```bash
 # Clone
-git clone https://github.com/your-fork/dbx.git
-cd dbx
+git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
 
 # Install Go dependencies
 go mod download
 
 # Run tests
 make test
+
+# Operator drills (not a CI default)
+make soak            # 100 idle / 25 active KV engines
+make restore-drill   # backup/restore + hibernate + usage tests
 
 # Run in dev mode
 make run-dev

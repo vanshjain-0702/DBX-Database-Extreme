@@ -35,7 +35,7 @@
         <p>Every tenant gets its own isolated in-memory store: KV working state and HNSW-indexed vector memory, with its own WAL and snapshot lineage. The orchestrator owns lifecycle; each tenant owns its data.</p>
         <p>The wire protocol is RESP2-compatible so existing clients connect without a custom driver. That is an on-ramp, not a claim that DBX substitutes for a tuned shared KV cluster. See <a href="positioning.html">positioning</a>.</p>
         <h2>Orchestrator</h2>
-        <p><code>cmd/dbx-orchestrator</code> is the control plane: JWT auth, provision / promote / backup / restore / delete, one public RESP ingress on <code>:6380</code>, and reverse-proxying to the current primary. Data-plane Raft and cluster mode fail closed.</p>
+        <p><code>cmd/dbx-orchestrator</code> is the control plane: JWT auth, provision / promote / backup / restore / export / import / hibernate / wake / delete, per-tenant usage, Prometheus <code>GET /metrics</code>, one public RESP ingress on <code>:6380</code>, and reverse-proxying to the current primary. Data-plane Raft and cluster mode fail closed. Sentinel does not restart a hibernated tenant.</p>
         <p>Because each tenant owns a separate directory, every lifecycle operation affects exactly one customer.</p>
         <h2>Tenant server</h2>
         <p><code>cmd/dbx-server</code> is the data plane. One instance per tenant member. It serves the v1 string/vector surface over loopback, manages HNSW, WAL, and snapshots. Optional async WAL streaming: the primary broadcasts committed records; replicas apply them read-only. Writes are never acknowledged through Raft.</p>
@@ -50,7 +50,8 @@
         <ul>
           <li><strong>WAL v2</strong> — length-framed, sequenced, CRC-protected. <code>always</code> fsyncs before ack; <code>everysec</code> is a one-second loss window.</li>
           <li><strong>Checkpoints</strong> — sequence-bearing KV snapshots. Vector rows live in mmap files, not in the periodic <code>.rdb</code> image. Do not claim a single atomic KV+vector snapshot.</li>
-          <li><strong>Backup</strong> — maintenance lock, SHA-256 manifest, restore into a sibling directory with rollback.</li>
+          <li><strong>Backup</strong> — maintenance lock, SHA-256 manifest, restore into a sibling directory with rollback. Export/import are aliases. Hibernate stops the engine and keeps the directory; wake rehydrates it.</li>
+          <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak.</li>
         </ul>
         <h2>Dashboard</h2>
         <p>React UI compiled into the orchestrator binary. No separate control-plane service.</p>

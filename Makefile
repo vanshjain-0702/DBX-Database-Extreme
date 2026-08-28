@@ -42,6 +42,10 @@ run-dashboard:
 	@echo "==> Starting Dashboard dev server..."
 	cd dashboard && npm run dev
 
+## test: Run the Go test suite (no race detector; Linux CI adds -race)
+test:
+	go test -count=1 -timeout 15m ./...
+
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:
 	go run ./cmd/dbx-soak -idle 100 -active 25 -for 3s

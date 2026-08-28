@@ -166,17 +166,17 @@ the number our buyer's business model depends on.
 Ordered by how much each one strengthens the positioning above, not by difficulty. Detail in
 [ROADMAP.md](../ROADMAP.md).
 
-1. **Single ingress port for all tenants.** Today each tenant binds its own RESP port. That
-   caps tenant density at the OS and cloud-network layer, which directly contradicts USP 1 and
-   USP 3. This is the highest-value item we have.
-2. **Per-tenant quotas and usage accounting.** Isolation without limits is not isolation, and
-   without usage numbers our customers cannot price their own product.
-3. **Scoped credentials per tenant.** A read-only key for an agent, a write key for ingestion.
-   Required before anyone puts customer data in DBX under a security review.
-4. **Hot standby.** Losing a node currently means restoring from S3. Per-tenant failover is
-   what turns "isolated" into "durable."
-5. **Published recall for quantized search.** USP 3 is a quality claim as much as a memory
-   claim, and right now we only publish half of it.
+1. **Single ingress port for all tenants.** Shipped on public `:6380`. Loopback backend
+   listeners remain; the certified cap is 100 tenants/node.
+2. **Per-tenant quotas and usage accounting.** Shipped. `GET /api/v1/tenants/{id}/usage`
+   and orchestrator `GET /metrics` are the meter. CI density soak is 12/4; operators run
+   `make soak`.
+3. **Scoped credentials per tenant.** Shipped with immediate revocation. Remaining work is
+   closing gaps a security review will still find (complete write-command classification).
+4. **Hot standby.** Async WAL replicas shipped; the primary acks locally. Data-plane Raft
+   still fails closed.
+5. **Published recall for quantized search.** Shipped on the certification host (recall@10
+   mean 0.920 / p05 0.800). Linux CI re-runs the harness.
 
 ---
 
