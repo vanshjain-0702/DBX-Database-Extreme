@@ -381,6 +381,49 @@ func (i *Instance) ErrorChannel() <-chan error {
 	return i.serverErr
 }
 
+// UsageSnapshot is the billable unit for one running engine: keys, live vectors,
+// memory, and command counters. Disk bytes are filled by the orchestrator.
+type UsageSnapshot struct {
+	Keys             int64 `json:"keys"`
+	Vectors          int64 `json:"vectors"`
+	MemoryUsedBytes  int64 `json:"memory_used_bytes"`
+	MemoryLimitBytes int64 `json:"memory_limit_bytes"`
+	Commands         int64 `json:"commands"`
+	Errors           int64 `json:"errors"`
+	AvgLatencyNs     int64 `json:"avg_latency_ns"`
+	Ready            int64 `json:"ready"`
+}
+
+func (i *Instance) UsageSnapshot() UsageSnapshot {
+	if i == nil {
+		return UsageSnapshot{}
+	}
+	out := UsageSnapshot{}
+	if i.kv != nil {
+		out.Keys = i.kv.KeyCount()
+	}
+	if i.vecStore != nil {
+		out.Vectors = i.vecStore.LiveVectorCount()
+	}
+	if i.metrics != nil {
+		snap := i.metrics.Snapshot()
+		out.MemoryUsedBytes = snap["tenant_memory_used_bytes"]
+		out.MemoryLimitBytes = snap["tenant_memory_limit_bytes"]
+		out.Commands = snap["total_commands"]
+		out.Errors = snap["total_errors"]
+		out.AvgLatencyNs = snap["avg_latency_ns"]
+		out.Ready = snap["tenant_ready"]
+	}
+	return out
+}
+
+func (i *Instance) MetricsSnapshot() map[string]int64 {
+	if i == nil || i.metrics == nil {
+		return map[string]int64{}
+	}
+	return i.metrics.Snapshot()
+}
+
 // SetInitialUsers installs tenant-scoped credentials before listeners start.
 func (i *Instance) SetInitialUsers(users []*auth.User) {
 	i.initialUsers = append([]*auth.User(nil), users...)

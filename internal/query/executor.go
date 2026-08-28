@@ -90,6 +90,11 @@ func (e *Executor) KV() *engine.KVStore {
 	return e.kv
 }
 
+// Vectors returns the tenant vector store.
+func (e *Executor) Vectors() *engine.VectorStore {
+	return e.vec
+}
+
 // SetRaft assigns the Raft node to the executor for write interception.
 func (e *Executor) SetRaft(raftNode RaftNode) {
 	e.raft = raftNode

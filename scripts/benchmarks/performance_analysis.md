@@ -114,10 +114,10 @@ Search waits for every shard, which is why median latency rose after the ingest 
 and routes to loopback-only tenant listeners. Backend listener density still consumes local
 ports, so the v1 contract remains capped at 100 tenants/node.
 
-**We have not passed a 100-idle / 25-active soak yet.** A unit noisy-neighbor
-test now proves a quiet tenant's reads stay on-budget while another tenant writes
-continuously, and that a quota rejection is isolated. The full 100/25 density
-soak remains an operations drill, not a code gap.
+**We have not claimed a 100-orchestrator-tenant soak in CI.** A unit density soak
+(12 idle / 4 active) and a noisy-neighbor quota test run in Linux gates.
+Operators run `make soak` (100 idle / 25 active KV engines). That drill measures
+engine isolation, not 100 full orchestrator processes.
 
 ---
 

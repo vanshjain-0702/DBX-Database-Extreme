@@ -1,61 +1,27 @@
-# LangChain RAG with DBX
+# LangChain + DBX (one tenant)
 
-This example demonstrates how to use DBX as a vector store backend for a LangChain
-Retrieval-Augmented Generation (RAG) pipeline.
-
-Note the `tenant_id` below: in DBX each customer's corpus lives in its own isolated engine, so
-a multi-tenant RAG app points at a different tenant per customer rather than filtering a
-shared index.
+DBX is not a shared vector database with a metadata filter. Point this example at
+**one tenant** over RESP `:6380`. Session KV and embeddings share that engine.
 
 ## Prerequisites
 
 - Python 3.10+
-- DBX running locally (`make run-dev`)
-
-## Setup
+- `make run-dev`
+- A tenant and writer key (see `examples/quickstart.py`)
 
 ```bash
-pip install langchain langchain-openai openai
+pip install redis langchain-core
 pip install -e ../../sdk/python
 ```
 
 ## Run
 
 ```bash
-export OPENAI_API_KEY="your_openai_key"
-python rag_example.py
+export DBX_TENANT=acme-quickstart
+export DBX_KEY_ID=...
+export DBX_SECRET=...
+python session_memory.py
 ```
 
-## Code
-
-```python
-from langchain_dbx import DBXVectorStore
-from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from langchain.chains import RetrievalQA
-
-# Initialize DBX as vector store
-embeddings = OpenAIEmbeddings()
-db = DBXVectorStore(
-    host="localhost",
-    port=8000,
-    tenant_id="my-app",
-    token="your_jwt_token",
-    embedding_function=embeddings,
-)
-
-# Add documents
-db.add_texts([
-    "DBX is a per-tenant memory engine for AI products.",
-    "Each tenant gets an isolated store holding both KV state and vector memory.",
-    "Backup, export, and deletion operate on one customer at a time.",
-])
-
-# Ask a question
-qa_chain = RetrievalQA.from_chain_type(
-    llm=ChatOpenAI(model="gpt-4o"),
-    retriever=db.as_retriever(search_kwargs={"k": 3}),
-)
-
-answer = qa_chain.invoke("What is DBX used for?")
-print(answer["result"])
-```
+`session_memory.py` uses `FakeEmbeddings` so you do not need an OpenAI key.
+The store talks RESP through `DBXClient` — not the operator JWT on `:8000`.

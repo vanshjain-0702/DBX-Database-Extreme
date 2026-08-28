@@ -30,6 +30,7 @@ type Tenant struct {
 	ReplicationPort int                   `json:"replication_port,omitempty"`
 	Replicas        []string              `json:"replicas,omitempty"`
 	Keys            map[string]*TenantKey `json:"keys,omitempty"`
+	Hibernated      bool                  `json:"hibernated,omitempty"`
 }
 
 const (
@@ -107,6 +108,9 @@ func NewManager(stateFile string) (*Manager, error) {
 		}
 	}
 	start := func(t *Tenant) {
+		if t.Hibernated {
+			return
+		}
 		if err := m.StartTenant(t); err != nil {
 			fmt.Printf("[Orchestrator] tenant %s failed to start: %v\n", t.ID, err)
 		}
@@ -424,6 +428,7 @@ type TenantView struct {
 	ReplicaOf       string   `json:"replica_of,omitempty"`
 	ReplicationPort int      `json:"replication_port,omitempty"`
 	Replicas        []string `json:"replicas,omitempty"`
+	Hibernated      bool     `json:"hibernated,omitempty"`
 }
 
 // ListTenantViews returns tenants with running/starting/down derived from in-process engines.
@@ -445,6 +450,7 @@ func (m *Manager) ListTenantViews() []TenantView {
 			ReplicaOf:       t.ReplicaOf,
 			ReplicationPort: t.ReplicationPort,
 			Replicas:        append([]string(nil), t.Replicas...),
+			Hibernated:      t.Hibernated,
 		})
 	}
 	m.mu.RUnlock()
@@ -459,6 +465,9 @@ func (m *Manager) ListTenantViews() []TenantView {
 	for i := range views {
 		id := views[i].ID
 		switch {
+		case views[i].Hibernated:
+			views[i].Status = "hibernated"
+			views[i].Healthy = false
 		case running[id]:
 			views[i].Status = "running"
 			views[i].Healthy = true
@@ -474,6 +483,9 @@ func (m *Manager) ListTenantViews() []TenantView {
 }
 
 func (m *Manager) StartTenant(t *Tenant) error {
+	if t != nil && t.Hibernated {
+		return fmt.Errorf("tenant %s is hibernated", t.ID)
+	}
 	m.startMu.Lock()
 	if m.starting[t.ID] {
 		m.startMu.Unlock()
@@ -593,7 +605,7 @@ func (m *Manager) superviseTenant(t *Tenant, inst *server.Instance) {
 		return
 	}
 	m.mu.Lock()
-	if m.instances[t.ID] != inst {
+	if t.Hibernated || m.instances[t.ID] != inst {
 		m.mu.Unlock()
 		return
 	}

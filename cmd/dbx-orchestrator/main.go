@@ -366,20 +366,40 @@ func main() {
 
 	protectedMux.HandleFunc("/api/v1/tenants/", func(w http.ResponseWriter, r *http.Request) {
 		parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
-		if len(parts) < 5 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "tenants" || parts[4] != "keys" {
+		if len(parts) < 5 || parts[0] != "api" || parts[1] != "v1" || parts[2] != "tenants" {
 			http.NotFound(w, r)
 			return
 		}
 		tenantID := parts[3]
+		resource := parts[4]
 		switch {
-		case r.Method == http.MethodGet && len(parts) == 5:
+		case resource == "usage" && r.Method == http.MethodGet && len(parts) == 5:
+			usage, err := manager.TenantUsage(tenantID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusNotFound)
+				return
+			}
+			json.NewEncoder(w).Encode(usage)
+		case resource == "hibernate" && r.Method == http.MethodPost && len(parts) == 5:
+			if err := manager.HibernateTenant(tenantID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"status": "hibernated", "id": tenantID})
+		case resource == "wake" && r.Method == http.MethodPost && len(parts) == 5:
+			if err := manager.WakeTenant(tenantID); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			json.NewEncoder(w).Encode(map[string]string{"status": "running", "id": tenantID})
+		case resource == "keys" && r.Method == http.MethodGet && len(parts) == 5:
 			keys, err := manager.ListTenantKeys(tenantID)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
 			}
 			json.NewEncoder(w).Encode(keys)
-		case r.Method == http.MethodPost && len(parts) == 5:
+		case resource == "keys" && r.Method == http.MethodPost && len(parts) == 5:
 			var req struct {
 				Name        string   `json:"name"`
 				Role        string   `json:"role"`
@@ -396,7 +416,7 @@ func main() {
 			}
 			w.WriteHeader(http.StatusCreated)
 			json.NewEncoder(w).Encode(map[string]interface{}{"secret": secret, "key": key})
-		case r.Method == http.MethodDelete && len(parts) == 6:
+		case resource == "keys" && r.Method == http.MethodDelete && len(parts) == 6:
 			if err := manager.RevokeTenantKey(tenantID, parts[5]); err != nil {
 				http.Error(w, err.Error(), http.StatusNotFound)
 				return
@@ -405,6 +425,56 @@ func main() {
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
+	})
+
+	protectedMux.HandleFunc("/api/usage", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		json.NewEncoder(w).Encode(manager.ListUsage())
+	})
+
+	protectedMux.HandleFunc("/api/tenants/export", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID string `json:"id"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		path, manifest, err := manager.BackupTenant(req.ID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"status": "exported", "path": path, "manifest": manifest,
+		})
+	})
+
+	protectedMux.HandleFunc("/api/tenants/import", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var req struct {
+			ID   string `json:"id"`
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64*1024)).Decode(&req); err != nil {
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+		if err := manager.RestoreTenant(req.ID, req.Path); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]string{"status": "imported"})
 	})
 
 	// Data Plane proxy
@@ -421,7 +491,30 @@ func main() {
 	mux.Handle("/api/admin/keys", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/admin/keys/revoke", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/api/v1/tenants/", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/usage", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/export", orchestrator.RequireAuth(jwtSecret, protectedMux))
+	mux.Handle("/api/tenants/import", orchestrator.RequireAuth(jwtSecret, protectedMux))
 	mux.Handle("/t/", orchestrator.RequireAuth(jwtSecret, protectedMux))
+
+	mux.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		var buf strings.Builder
+		fmt.Fprintf(&buf, "dbx_tenants %d\n", len(manager.ListTenants()))
+		for _, usage := range manager.ListUsage() {
+			label := `{tenant="` + usage.TenantID + `"}`
+			fmt.Fprintf(&buf, "dbx_tenant_keys%s %d\n", label, usage.Keys)
+			fmt.Fprintf(&buf, "dbx_tenant_vectors%s %d\n", label, usage.Vectors)
+			fmt.Fprintf(&buf, "dbx_tenant_memory_used_bytes%s %d\n", label, usage.MemoryUsedBytes)
+			fmt.Fprintf(&buf, "dbx_tenant_disk_bytes%s %d\n", label, usage.DiskBytes)
+			fmt.Fprintf(&buf, "dbx_tenant_commands%s %d\n", label, usage.Commands)
+			hib := 0
+			if usage.Hibernated {
+				hib = 1
+			}
+			fmt.Fprintf(&buf, "dbx_tenant_hibernated%s %d\n", label, hib)
+		}
+		w.Write([]byte(buf.String()))
+	})
 
 	// Static Dashboard Serving (SPA Handler)
 	subFS, err := fs.Sub(dashboard.DistFS, "dist")

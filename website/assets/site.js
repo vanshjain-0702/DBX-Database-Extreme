@@ -36,7 +36,7 @@
         '<header class="site-header">' +
         '<div class="header-inner">' +
         '<a class="brand" href="' + href("index.html") + '"><img src="' + href("assets/logo.jpg") + '" width="48" height="48" alt="DBX"></a>' +
-        '<span class="live-meta"><span data-clock>00:00:00</span> · :6380</span>' +
+        '<span class="live-meta"><span data-clock>00:00:00</span><span class="live-port">:6380</span></span>' +
         '<button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>' +
         '<nav id="site-nav" class="site-nav" aria-label="Primary">' +
         "<ul>" +

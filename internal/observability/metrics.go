@@ -2,7 +2,9 @@
 package observability
 
 import (
+	"fmt"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -80,5 +82,21 @@ func (m *Metrics) Snapshot() map[string]int64 {
 		"goroutines":                int64(runtime.NumGoroutine()),
 		"cpu_count":                 int64(runtime.NumCPU()),
 		"uptime_seconds":            int64(time.Since(StartTime).Seconds()),
+	}
+}
+
+// WritePrometheus emits unlabeled or tenant-labeled gauges from a snapshot.
+func WritePrometheus(buf *strings.Builder, tenantID string, snap map[string]int64) {
+	label := ""
+	if tenantID != "" {
+		label = `{tenant="` + tenantID + `"}`
+	}
+	for key, value := range snap {
+		metric := "dbx_" + key
+		if label == "" {
+			fmt.Fprintf(buf, "%s %d\n", metric, value)
+			continue
+		}
+		fmt.Fprintf(buf, "%s%s %d\n", metric, label, value)
 	}
 }

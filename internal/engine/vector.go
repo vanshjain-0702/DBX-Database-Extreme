@@ -728,6 +728,36 @@ func (s *VectorStore) MemoryUsage() int64 {
 	return total
 }
 
+// LiveVectorCount returns searchable (non-tombstoned) vectors across indexes.
+func (s *VectorStore) LiveVectorCount() int64 {
+	if s == nil || s.kv == nil {
+		return 0
+	}
+	var live int64
+	for _, sh := range s.kv.shards {
+		sh.mu.RLock()
+		for _, entry := range sh.data {
+			if entry.Type != protocol.TypeVector {
+				continue
+			}
+			idx, ok := entry.Value.(*MMapVectorIndex)
+			if !ok || idx == nil {
+				continue
+			}
+			idx.mu.RLock()
+			for row := 0; row < idx.count; row++ {
+				if row < len(idx.tombstones) && idx.tombstones[row] {
+					continue
+				}
+				live++
+			}
+			idx.mu.RUnlock()
+		}
+		sh.mu.RUnlock()
+	}
+	return live
+}
+
 // VDel records a generation tombstone. The graph keeps the node for
 // navigation, but searches never return it.
 func (s *VectorStore) VDel(key, id string) (bool, error) {

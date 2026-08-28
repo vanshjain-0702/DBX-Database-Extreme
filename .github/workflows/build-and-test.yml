@@ -86,7 +86,7 @@ jobs:
       - name: Coverage floors
         run: python3 scripts/ci/check-coverage.py
       - name: Density isolation
-        run: go test -count=1 -timeout 2m ./internal/engine/ ./internal/query/ ./internal/security/ -run 'Density|NoisyNeighbor|Quota'
+        run: go test -count=1 -timeout 3m ./internal/engine/ ./internal/query/ ./internal/security/ ./internal/orchestrator/ -run 'Density|NoisyNeighbor|Quota|BackupRestore|Hibernate|TenantUsage'
       - name: Vector smoke harness
         run: |
           set -euo pipefail

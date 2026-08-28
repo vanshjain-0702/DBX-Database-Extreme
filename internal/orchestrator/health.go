@@ -96,7 +96,9 @@ func (s *Sentinel) checkHealth() {
 
 	tenants := s.manager.ListTenants()
 	for _, t := range tenants {
-		// Ping the RESP port
+		if t.Hibernated {
+			continue
+		}
 		addr := fmt.Sprintf("127.0.0.1:%d", t.RESPPort)
 		conn, err := net.DialTimeout("tcp", addr, healthDialTimeout)
 		if err != nil {

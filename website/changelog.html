@@ -20,7 +20,7 @@
   <link rel="apple-touch-icon" href="assets/logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="assets/site.css">
 </head>
 <body data-root="." data-page="changelog">
@@ -38,6 +38,13 @@
       <div class="wrap">
         <div class="change-list">
           <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
+              <h2>Usage, hibernate, soak harness</h2>
+              <p>Per-tenant usage API and Prometheus <code>/metrics</code>. Export/import aliases for the portable tenant archive. Hibernate/wake evicts a cold engine without deleting it. CI runs a 12/4 density soak plus backup/restore; operators run <code>make soak</code> for 100 idle / 25 active. Python 15-minute path: <code>examples/quickstart.py</code>.</p>
+            </div>
+          </article>
+          <article class="change">
             <time datetime="2026-08-27">27 Aug 2026</time>
             <div>
               <h2>v1 GO — single-node profile</h2>
@@ -46,10 +53,10 @@
             </div>
           </article>
           <article class="change">
-            <time datetime="2026-08-28">Next</time>
+            <time datetime="2026-08-28">Later</time>
             <div>
-              <h2>Soak and coverage</h2>
-              <p>Remaining follow-ups from the roadmap: a 100 idle / 25 active density soak, and engine-package test coverage. Async replicas are available; they do not replace that soak.</p>
+              <h2>Engine-package coverage</h2>
+              <p>Remaining follow-up from the roadmap is raising engine-package test coverage. Async replicas are available; they do not replace an operator 100/25 soak on your hardware.</p>
             </div>
           </article>
         </div>

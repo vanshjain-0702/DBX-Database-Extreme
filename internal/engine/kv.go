@@ -286,6 +286,18 @@ func (kv *KVStore) KeyspaceStats() map[string]int {
 	return stats
 }
 
+// KeyCount returns non-expired keys of every type in this tenant.
+func (kv *KVStore) KeyCount() int64 {
+	if kv == nil {
+		return 0
+	}
+	var n int64
+	for _, count := range kv.KeyspaceStats() {
+		n += int64(count)
+	}
+	return n
+}
+
 // FlushAll removes all keys.
 func (kv *KVStore) FlushAll() {
 	for _, s := range kv.shards {

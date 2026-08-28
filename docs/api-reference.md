@@ -91,6 +91,23 @@ No other tenant's data is read or modified. Requires auth.
 { "status": "deleted", "id": "my-app-prod", "purged": true }
 ```
 
+### GET `/api/v1/tenants/{id}/usage` and GET `/api/usage`
+Per-tenant keys, live vectors, memory, disk bytes, and command counters. `/api/usage` lists
+every tenant. This is the meter an operator's billing loop should call.
+
+### POST `/api/tenants/export` / `/api/tenants/import`
+Aliases for backup and restore. The archive is a portable tenant file another DBX node can
+import. SHA-256 manifest, rollback on a failed restore.
+
+### POST `/api/v1/tenants/{id}/hibernate` and `/wake`
+Stop a cold engine and keep its directory. Wake rehydrates from that directory. Idle tenants
+should not occupy a live process. Sentinel will not restart a hibernated tenant.
+
+### GET `/metrics`
+Prometheus text on the orchestrator (no JWT). Per-tenant gauges: keys, vectors, memory, disk,
+commands, hibernated. JSON snapshots remain at `GET /t/{tenantID}/metrics`. Tenant engines also
+expose `/usage` and `/metrics/prometheus` to the orchestrator internal token.
+
 ---
 
 ## KV Commands

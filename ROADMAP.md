@@ -17,8 +17,11 @@ sense that matters.
 The August 2026 hardening implementation completed the WAL v2, quota, bounded-expiry,
 panic-boundary, scoped-key, single-ingress, tombstone, and checksummed-restore work below.
 Vector ingest, recall@10, search p99, noisy-neighbor unit isolation, and Linux CI race
-coverage now pass. Version 1 is **GO for the single-node profile**. Remaining follow-ups
-are a 100/25 density soak and engine-package coverage. Async WAL replicas are
+coverage now pass. Version 1 is **GO for the single-node profile**. CI now runs a scaled density soak
+(12 idle / 4 active), backup/restore round-trip, and hibernate persistence.
+Operators run `make soak` for 100 idle / 25 active. Per-tenant usage, Prometheus
+`/metrics`, export/import aliases, and engine hibernate/wake are in the control
+plane. Remaining follow-up is engine-package coverage. Async WAL replicas are
 available without routing writes through Raft.
 
 ### 0a. Panic isolation
@@ -89,18 +92,13 @@ one firewall rule, regardless of tenant count.
 the certified v1 cap is therefore 100 tenants/node, not 1,000.
 
 ### 2. Per-tenant quotas and usage accounting
-**Status:** implemented; density/noisy-neighbor gate pending · **Thesis:** USP 1, business model
+**Status:** implemented; CI density soak is 12/4, operator drill is `make soak` · **Thesis:** USP 1, business model
 
-Isolation without limits is not isolation. `Tenant` currently carries ports and a data
-directory but no memory ceiling, key ceiling, vector ceiling, or rate limit, and we expose no
-per-tenant usage counters.
+`GET /api/v1/tenants/{id}/usage` and `GET /api/usage` report keys, live vectors, memory,
+disk bytes, and commands. Orchestrator `/metrics` is Prometheus text with per-tenant labels.
 
-**Shape of the work:** quota fields on the tenant record, enforcement in the engine's write
-path, and a usage endpoint reporting keys, vectors, bytes resident, bytes on disk, and
-operations for each tenant.
-
-**Done when:** a runaway tenant hits its own ceiling and no other tenant notices, and an
-operator can answer "what does this customer cost me?" from the API.
+**Done when:** a runaway tenant hits its own ceiling, and an operator can answer "what does
+this customer cost me?" from the API.
 
 ### 3. Scoped credentials per tenant
 **Status:** implemented with immediate revocation · **Thesis:** USP 1
@@ -159,13 +157,17 @@ certification host. Linux CI re-runs the harness.
 ## Later — scale within the same thesis
 
 ### 6. Tenant tiering: hibernate and wake
-Idle tenants should cost close to nothing. Evict a cold tenant's engine from memory entirely
-and rehydrate it from its own snapshot on first request. This is the strongest possible version
-of "cost scales with active tenants."
+**Status:** implemented as stop/rehydrate of the engine process · **Thesis:** USP 3
+
+`POST /api/v1/tenants/{id}/hibernate` stops the engine and keeps the directory.
+`POST .../wake` starts it again. Sentinel does not restart hibernated tenants.
+This is process-level eviction, not a separate snapshot format.
 
 ### 7. Per-tenant export and import as a first-class artifact
-A single portable file per tenant that another DBX node can restore. Turns customer migration,
-on-prem hand-off, and point-in-time recovery into a file copy.
+**Status:** implemented as backup/restore aliases · **Thesis:** USP 1
+
+`POST /api/tenants/export` and `/import` are the portable tenant file. Same SHA-256
+manifest and rollback as backup/restore. `make restore-drill` covers the round-trip.
 
 ### 8. Product quantization for large tenants
 Only once customers actually arrive with tenants large enough to need it. SQ8 is sufficient for

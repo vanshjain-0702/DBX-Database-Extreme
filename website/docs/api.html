@@ -20,7 +20,7 @@
   <link rel="apple-touch-icon" href="../assets/logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../assets/site.css">
 </head>
 <body data-root=".." data-page="docs-api">
@@ -43,6 +43,10 @@
           <li><code>POST /api/tenants/backup</code> — mutation-consistent archive, SHA-256 manifest</li>
           <li><code>POST /api/tenants/restore</code> — validate and swap, rollback on failure</li>
           <li><code>POST /api/tenants/delete</code> — stop; <code>purge: true</code> erases that directory only</li>
+          <li><code>GET /api/v1/tenants/{id}/usage</code> — keys, vectors, memory, disk, commands</li>
+          <li><code>GET /api/usage</code> — the same meter for every tenant</li>
+          <li><code>POST /api/tenants/export</code> / <code>import</code> — portable tenant archive</li>
+          <li><code>POST /api/v1/tenants/{id}/hibernate</code> and <code>/wake</code> — evict a cold engine</li>
         </ul>
         <h2>Keys</h2>
         <p><code>/api/v1/tenants/{id}/keys</code> — POST creates a 256-bit key (<code>name</code>, <code>role</code> reader/writer/tenant-admin, optional <code>key_patterns</code>). GET lists metadata. DELETE revokes immediately, including existing RESP connections. Secret hashes are never returned.</p>
@@ -58,7 +62,7 @@
         </ul>
         <p>There is no <code>VGET</code> or <code>VSET</code>. Recall and latency gates are on the <a href="../performance.html">performance</a> page.</p>
         <h2>Metrics</h2>
-        <p><code>GET /t/{tenantID}/metrics</code> — commands, latency, memory used/limit, ready flag.</p>
+        <p><code>GET /t/{tenantID}/metrics</code> — JSON command/latency/memory snapshot. Orchestrator <code>GET /metrics</code> is Prometheus text with per-tenant labels (no JWT). Tenant engines also expose <code>/usage</code> and <code>/metrics/prometheus</code> to the internal token.</p>
       </article>
     </div>
   </main>

@@ -7,7 +7,7 @@ VERSION            := $(shell git describe --tags --always --dirty 2>/dev/null |
 LDFLAGS            := -ldflags="-X main.version=$(VERSION) -s -w"
 BUILD_DIR          := ./bin
 
-.PHONY: all build build-server build-orchestrator run-dev test clean docker-build docker-up lint help
+.PHONY: all build build-server build-orchestrator run-dev test soak restore-drill clean docker-build docker-up lint help
 
 all: build
 
@@ -42,9 +42,13 @@ run-dashboard:
 	@echo "==> Starting Dashboard dev server..."
 	cd dashboard && npm run dev
 
-## test: Run all Go tests
-test:
-	go test -v -race ./...
+## soak: Engine density drill (100 idle / 25 active). Not a CI default.
+soak:
+	go run ./cmd/dbx-soak -idle 100 -active 25 -for 3s
+
+## restore-drill: Backup/restore round-trip test
+restore-drill:
+	go test -count=1 -timeout 3m ./internal/orchestrator/ -run 'BackupRestore|Hibernate|TenantUsage'
 
 ## test-bench: Run benchmarks
 test-bench:

@@ -446,6 +446,16 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 		}
 		fmt.Fprintf(w, `}`)
 	})))
+	mux.HandleFunc("/usage", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(h.executorUsage())
+	})))
+	mux.HandleFunc("/metrics/prometheus", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
+		var buf strings.Builder
+		observability.WritePrometheus(&buf, "", h.metrics.Snapshot())
+		w.Write([]byte(buf.String()))
+	})))
 	mux.HandleFunc("/info", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"version":"1.0.0","engine":"DBX"}`)
@@ -574,4 +584,26 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 		srv.Shutdown(context.Background())
 	}()
 	return srv.ListenAndServe()
+}
+
+func (h *HTTPServer) executorUsage() map[string]int64 {
+	out := map[string]int64{}
+	if h.executor != nil {
+		if kv := h.executor.KV(); kv != nil {
+			out["keys"] = kv.KeyCount()
+		}
+		if vec := h.executor.Vectors(); vec != nil {
+			out["vectors"] = vec.LiveVectorCount()
+		}
+		out["memory_used_bytes"] = h.executor.MemoryUsage()
+	}
+	if h.metrics != nil {
+		snap := h.metrics.Snapshot()
+		out["memory_limit_bytes"] = snap["tenant_memory_limit_bytes"]
+		out["commands"] = snap["total_commands"]
+		out["errors"] = snap["total_errors"]
+		out["avg_latency_ns"] = snap["avg_latency_ns"]
+		out["ready"] = snap["tenant_ready"]
+	}
+	return out
 }

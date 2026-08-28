@@ -215,6 +215,11 @@ db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
 results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
 ```
 
+The full path — login, provision, mint a key, AUTH, SET, VADD, usage, export, purge — is
+[`examples/quickstart.py`](examples/quickstart.py). Control-plane helpers live on
+`ControlPlane`. Per-tenant cost is `GET /api/v1/tenants/{id}/usage`. Prometheus is
+`GET /metrics` on the orchestrator.
+
 ### Node.js / TypeScript
 
 ```typescript
@@ -299,9 +304,15 @@ Methodology and the honest caveats are in
 
 ## Roadmap
 
-The immediate work after launch is Linux soak density (100 idle / 25 active)
-and raising engine coverage. Async WAL replicas are available; they do not
-replace a 100/25 density soak. See [ROADMAP.md](ROADMAP.md).
+CI runs a scaled density soak (12 idle / 4 active) plus backup/restore and hibernate
+tests. Operators run the certified 100/25 profile with `make soak`. Per-tenant usage
+is `GET /api/v1/tenants/{id}/usage`. The 15-minute path is `examples/quickstart.py`.
+See [ROADMAP.md](ROADMAP.md).
+
+CI runs a scaled density soak (12 idle / 4 active) plus backup/restore and
+hibernate tests. Operators run the certified profile with `make soak`.
+Per-tenant usage is `GET /api/v1/tenants/{id}/usage`. The 15-minute path is
+`examples/quickstart.py`.
 
 ---
 
