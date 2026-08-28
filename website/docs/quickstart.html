@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quickstart — DBX Docs</title>
+  <meta name="description" content="Run DBX with Docker, Compose, or source. AUTH is tenant:key_id plus secret. Dashboard on :8000, RESP on :6380.">
+  <meta property="og:title" content="Quickstart — DBX Docs">
+  <meta property="og:description" content="Run DBX with Docker, Compose, or source. AUTH is tenant:key_id plus secret. Dashboard on :8000, RESP on :6380.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/docs/quickstart.html">
+  <meta property="og:image" content="../assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Quickstart — DBX Docs">
+  <meta name="twitter:description" content="Run DBX with Docker, Compose, or source. AUTH is tenant:key_id plus secret. Dashboard on :8000, RESP on :6380.">
+  <meta name="twitter:image" content="../assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/docs/quickstart.html">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-root=".." data-page="docs-quickstart">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <div class="docs-shell">
+      <div id="docs-rail"></div>
+      <article class="docs-body">
+        <p class="kicker">Docs</p>
+        <h1>Quickstart</h1>
+        <p>Dashboard on <code>:8000</code>. RESP on <code>:6380</code>. The first RESP command must be <code>AUTH &lt;tenantID&gt;:&lt;keyID&gt; &lt;secret&gt;</code>.</p>
+        <aside class="limits" aria-label="Supported production profile">
+          <div class="limits-inner">
+            <span class="stamp">v1 certified</span>
+            <p>Single-node production: <strong>100 tenants/node</strong>, <strong>100k vectors/tenant</strong>, durable <strong>strings + vectors</strong>. Optional async WAL replicas (primary acks locally). Raft, cluster, and non-string RESP mutations fail closed.</p>
+          </div>
+        </aside>
+        <h2>Docker</h2>
+        <div class="code-panel">
+          <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>docker run -p 8000:8000 -p 6380:6380 \
+  -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
+  -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
+  -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
+  -e DBX_NODE_MEMORY_BUDGET=8gb \
+  ghcr.io/dbx/dbx:latest</pre>
+        </div>
+        <p>Open <a href="http://localhost:8000">http://localhost:8000</a> and log in with <code>admin</code> / your password.</p>
+        <h2>From source</h2>
+        <p class="muted">Prerequisites: Go 1.25+, Node.js 20+.</p>
+        <div class="code-panel">
+          <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+
+make build
+make run-dev</pre>
+        </div>
+        <h2>Compose</h2>
+        <div class="code-panel">
+          <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+make docker-up</pre>
+        </div>
+        <h2>Python</h2>
+        <div class="code-panel">
+          <header><span>python</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>from dbx import DBXClient
+
+db = DBXClient(
+    host="localhost",
+    port=6380,
+    tenant="acme-corp",
+    key_id="key-id",
+    secret="one-time-key-secret",
+)
+
+db.set("session:42", '{"thread": "onboarding", "step": 3}')
+db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
+results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)</pre>
+        </div>
+        <h2>Node.js</h2>
+        <div class="code-panel">
+          <header><span>typescript</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>import { createClient } from 'redis'; // RESP on-ramp, not a Redis replacement
+
+const client = createClient({ url: 'redis://localhost:6380' });
+await client.connect();
+await client.sendCommand(['AUTH', 'acme-corp:key-id', 'one-time-key-secret']);
+await client.set('session:abc', JSON.stringify({ userId: 42 }));</pre>
+        </div>
+        <h2>Provision</h2>
+        <div class="code-panel">
+          <header><span>HTTP</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>curl -X POST http://localhost:8000/api/provision \
+  -H "Authorization: Bearer $DBX_TOKEN" \
+  -d '{"id": "acme-corp", "name": "Acme Corp"}'</pre>
+        </div>
+        <p>Bearer token from <code>POST /api/login</code>. Backup, restore, and delete take the same token and a tenant id. Full command list on the <a href="api.html">API</a> page.</p>
+      </article>
+    </div>
+  </main>
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

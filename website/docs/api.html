@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API — DBX Docs</title>
+  <meta name="description" content="Public data plane is AUTH’d RESP on :6380. HTTP lifecycle APIs use operator JWTs. Tenant keys, backup, restore, KV and vector commands.">
+  <meta property="og:title" content="API — DBX Docs">
+  <meta property="og:description" content="Public data plane is AUTH’d RESP on :6380. HTTP lifecycle APIs use operator JWTs. Tenant keys, backup, restore, KV and vector commands.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/docs/api.html">
+  <meta property="og:image" content="../assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="API — DBX Docs">
+  <meta name="twitter:description" content="Public data plane is AUTH’d RESP on :6380. HTTP lifecycle APIs use operator JWTs. Tenant keys, backup, restore, KV and vector commands.">
+  <meta name="twitter:image" content="../assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/docs/api.html">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-root=".." data-page="docs-api">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <div class="docs-shell">
+      <div id="docs-rail"></div>
+      <article class="docs-body">
+        <p class="kicker">Docs</p>
+        <h1>API reference</h1>
+        <p>The public application data plane is authenticated RESP on port <code>6380</code>. The first command must be <code>AUTH &lt;tenantID&gt;:&lt;keyID&gt; &lt;secret&gt;</code>. HTTP <code>/t/{tenantID}/query</code> requires an operator JWT and is for the dashboard, not a public tenant API.</p>
+        <h2>POST /api/login</h2>
+        <p>Issue a JWT. Body: <code>{"username":"admin","password":"…"}</code>.</p>
+        <h2>Tenants</h2>
+        <ul>
+          <li><code>GET /api/tenants</code> — list</li>
+          <li><code>POST /api/provision</code> — <code>{"id","name","replicas"?}</code>. <code>replicas</code> 0–2. Zero is the certified path. 1 or 2 starts async WAL replicas; the primary still acks locally.</li>
+          <li><code>POST /api/tenants/promote</code> — fail over to a replica; AUTH identity unchanged</li>
+          <li><code>POST /api/tenants/backup</code> — mutation-consistent archive, SHA-256 manifest</li>
+          <li><code>POST /api/tenants/restore</code> — validate and swap, rollback on failure</li>
+          <li><code>POST /api/tenants/delete</code> — stop; <code>purge: true</code> erases that directory only</li>
+        </ul>
+        <h2>Keys</h2>
+        <p><code>/api/v1/tenants/{id}/keys</code> — POST creates a 256-bit key (<code>name</code>, <code>role</code> reader/writer/tenant-admin, optional <code>key_patterns</code>). GET lists metadata. DELETE revokes immediately, including existing RESP connections. Secret hashes are never returned.</p>
+        <h2>KV (v1 durable)</h2>
+        <p><code>SET GET DEL KEYS EXPIRE TTL PERSIST MSET MGET</code>. Hashes, lists, sets, sorted sets, streams, JSON, bitmap, geo, transactions, pub/sub, <code>FLUSH*</code>, cluster, and replication mutations are not in the v1 contract and fail before dispatch.</p>
+        <h2>Vectors</h2>
+        <p>Index key first, so one tenant can hold several indexes.</p>
+        <ul>
+          <li><code>VADD</code> / <code>VADD_BATCH</code></li>
+          <li><code>VDEL</code> — generation tombstone</li>
+          <li><code>VCOMPACT</code> — tenant-admin; rewrite active rows and rebuild HNSW</li>
+          <li><code>VSEARCH</code> — cosine, top-k last</li>
+        </ul>
+        <p>There is no <code>VGET</code> or <code>VSET</code>. Recall and latency gates are on the <a href="../performance.html">performance</a> page.</p>
+        <h2>Metrics</h2>
+        <p><code>GET /t/{tenantID}/metrics</code> — commands, latency, memory used/limit, ready flag.</p>
+      </article>
+    </div>
+  </main>
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

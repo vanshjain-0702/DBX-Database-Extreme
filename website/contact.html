@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contact — DBX</title>
+  <meta name="description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta property="og:title" content="Contact — DBX">
+  <meta property="og:description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/contact.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Contact — DBX">
+  <meta name="twitter:description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta name="twitter:image" content="assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/contact.html">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,500;0,6..72,600;1,6..72,500&family=Source+Sans+3:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="contact">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">hello@dbxdb.io</p>
+        <h1>Write us. We read it.</h1>
+        <p>Commercial license, support, security, or a question the docs do not cover. No ticket widget. No fake Formspree id.</p>
+      </div>
+    </header>
+    <section class="section">
+      <div class="wrap contact-grid">
+        <form class="form-stack" data-contact>
+          <label>Name
+            <input name="name" type="text" autocomplete="name" required>
+          </label>
+          <label>Email
+            <input name="email" type="email" autocomplete="email" required>
+          </label>
+          <label>Topic
+            <select name="topic">
+              <option>Commercial license</option>
+              <option>Support / SLA</option>
+              <option>Security report</option>
+              <option>Product question</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Message
+            <textarea name="message" required placeholder="What you are running, and what you need."></textarea>
+          </label>
+          <button class="btn" type="submit">Open email to hello@dbxdb.io</button>
+          <p class="form-status" data-contact-status hidden></p>
+          <p class="muted">Submit composes a mailto. If your browser blocks it, send the same text to <a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a>.</p>
+        </form>
+        <aside>
+          <h2>Direct</h2>
+          <p><a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a></p>
+          <p><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/issues">GitHub issues</a> for engineering bugs in the public tracker.</p>
+          <p class="muted">We do not list a phone number or a street address on this page because we do not staff a public switchboard.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>
