@@ -5,7 +5,7 @@
 <h1 align="center">DBX</h1>
 
 <p align="center">
-  <strong> An isolated per-tenant memory engine for AI products.</strong>
+  <strong> The isolated,per-tenant memory engine for AI products.</strong>
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
