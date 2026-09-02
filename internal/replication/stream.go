@@ -82,7 +82,22 @@ func (p *PrimaryStream) Addr() string {
 	return p.listener.Addr().String()
 }
 
+// ReplicaCount returns the number of currently registered replica connections.
+func (p *PrimaryStream) ReplicaCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return len(p.replicas)
+}
+
 func (p *PrimaryStream) bootstrap(id uint64, conn net.Conn, wal *persistence.WAL) {
+	// everysec acknowledges after the frame is in the process buffer, not after
+	// fsync. Flush so a replica that connected in that window still catch-up
+	// bootstraps the records it missed on the live channel.
+	if err := wal.Sync(); err != nil {
+		p.RemoveReplica(id)
+		conn.Close()
+		return
+	}
 	records, err := wal.ReadAll()
 	if err != nil {
 		p.RemoveReplica(id)
@@ -211,12 +226,19 @@ func writeFrame(conn net.Conn, data []byte) error {
 	return writeFull(conn, data)
 }
 
+const (
+	replicaReconnectMin = 50 * time.Millisecond
+	replicaReconnectMax = 2 * time.Second
+)
+
 // ReplicaStream manages receiving WAL records from a primary.
 type ReplicaStream struct {
 	PrimaryAddr string
 	Engine      interface {
 		ApplyWALRecord(rec *persistence.WALRecord) error
 	}
+	mu       sync.Mutex
+	conn     net.Conn
 	done     chan struct{}
 	stopOnce sync.Once
 }
@@ -234,6 +256,7 @@ func NewReplicaStream(addr string, engine interface {
 
 func (rs *ReplicaStream) Start() {
 	go func() {
+		backoff := replicaReconnectMin
 		for {
 			select {
 			case <-rs.done:
@@ -241,25 +264,60 @@ func (rs *ReplicaStream) Start() {
 			default:
 			}
 
-			conn, err := net.Dial("tcp", rs.PrimaryAddr)
+			conn, err := net.DialTimeout("tcp", rs.PrimaryAddr, time.Second)
 			if err != nil {
-				time.Sleep(2 * time.Second)
+				select {
+				case <-rs.done:
+					return
+				case <-time.After(backoff):
+				}
+				if backoff < replicaReconnectMax {
+					backoff *= 2
+					if backoff > replicaReconnectMax {
+						backoff = replicaReconnectMax
+					}
+				}
 				continue
 			}
+			backoff = replicaReconnectMin
+			rs.setConn(conn)
+			select {
+			case <-rs.done:
+				rs.setConn(nil)
+				conn.Close()
+				return
+			default:
+			}
 
-			// Send SYNC command
 			writer := protocol.NewWriter(conn)
-			writer.WriteArray(1)
-			writer.WriteBulkString([]byte("SYNC"))
+			_ = writer.WriteArray(1)
+			_ = writer.WriteBulkString([]byte("SYNC"))
+			_ = writer.Flush()
 
 			rs.consumeStream(conn)
+			rs.setConn(nil)
 			conn.Close()
 		}
 	}()
 }
 
+func (rs *ReplicaStream) setConn(conn net.Conn) {
+	rs.mu.Lock()
+	rs.conn = conn
+	rs.mu.Unlock()
+}
+
 func (rs *ReplicaStream) Stop() {
-	rs.stopOnce.Do(func() { close(rs.done) })
+	rs.stopOnce.Do(func() {
+		close(rs.done)
+		rs.mu.Lock()
+		conn := rs.conn
+		rs.conn = nil
+		rs.mu.Unlock()
+		if conn != nil {
+			_ = conn.Close()
+		}
+	})
 }
 
 func (rs *ReplicaStream) consumeStream(conn net.Conn) {

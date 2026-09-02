@@ -59,6 +59,37 @@ func TestPrimaryAndReplicaStreamBootstrapWAL(t *testing.T) {
 	}
 }
 
+func TestReplicaBootstrapsUnflushedEverysecWrites(t *testing.T) {
+	wal, err := persistence.OpenWAL(filepath.Join(t.TempDir(), "wal"), "everysec", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wal.Close()
+	if err := wal.Write(&persistence.WALRecord{Type: persistence.RecordSet, Key: "catchup", Value: []byte("v")}); err != nil {
+		t.Fatal(err)
+	}
+
+	primary := NewPrimaryStream()
+	if err := primary.Start("127.0.0.1:0", wal); err != nil {
+		t.Fatal(err)
+	}
+	defer primary.Stop()
+
+	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, 1)}
+	replica := NewReplicaStream(primary.Addr(), engine)
+	replica.Start()
+	defer replica.Stop()
+
+	select {
+	case record := <-engine.records:
+		if record.Key != "catchup" || string(record.Value) != "v" {
+			t.Fatalf("unexpected replicated record: %#v", record)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for everysec WAL catch-up bootstrap")
+	}
+}
+
 func TestReplicaStreamRejectsOversizedFrame(t *testing.T) {
 	server, client := net.Pipe()
 	rs := NewReplicaStream("", testReplicaEngine{})
