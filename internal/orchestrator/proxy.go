@@ -73,12 +73,19 @@ func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
 	proxy.Transport = transport
 
 	originalDirector := proxy.Director
+	tenantID := tenant.ID
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		// Never trust a caller-provided internal token. The proxy injects
-		// the service credential for the engine on every request.
+		// the service credential for the engine on every request. A sandboxed
+		// worker has its own token, resolved per request so a worker restart
+		// does not leave the cached proxy holding a stale one.
 		req.Header.Del("X-DBX-Internal-Token")
-		req.Header.Set("X-DBX-Internal-Token", p.internalAPIToken)
+		token := p.internalAPIToken
+		if workerToken, ok := p.manager.WorkerToken(tenantID); ok {
+			token = workerToken
+		}
+		req.Header.Set("X-DBX-Internal-Token", token)
 	}
 
 	p.proxies.Store(cacheKey, proxy)

@@ -49,6 +49,21 @@ func (w *isolatedWorker) Stop() {
 
 func (w *isolatedWorker) ErrorChannel() <-chan error { return w.errCh }
 
+// WorkerToken returns the per-worker control token for a sandboxed tenant.
+// In-process tenants have no worker and fall back to the node-wide token.
+func (m *Manager) WorkerToken(tenantID string) (string, bool) {
+	if m == nil {
+		return "", false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	worker := m.workers[tenantID]
+	if worker == nil || worker.token == "" {
+		return "", false
+	}
+	return worker.token, true
+}
+
 func (w *isolatedWorker) UpsertUser(*auth.User) {}
 func (w *isolatedWorker) DeleteUser(string)     {}
 
@@ -105,7 +120,8 @@ func (w *isolatedWorker) getJSON(path string, dest any) error {
 
 func unixHTTPClient(socket string) *http.Client {
 	return &http.Client{
-		Timeout: 15 * time.Second,
+		// Backup of a large tenant WAL/snapshot can exceed a few seconds.
+		Timeout: 2 * time.Minute,
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				var d net.Dialer
