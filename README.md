@@ -9,7 +9,7 @@
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
-  <a href="website/index.html">Site (open in repo)</a>
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><strong>Open the site</strong></a>
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg?branch=main&event=push" alt="Build Status" /></a>
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><img src="https://img.shields.io/badge/site-github.io-0a66c2" alt="Live site" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
@@ -324,7 +325,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 
 | What | Where |
 |---|---|
-| Public site | [`website/`](website/) — open [`website/index.html`](website/index.html) or `make site`. GitHub Pages (`github.io`) stays 404 while this repo is private; `dbxdb.io` is not registered. See [`website/README.md`](website/README.md). |
+| Public site | [github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/) — source in [`website/`](website/). Local preview: `make site`. `dbxdb.io` is the intended custom domain once registered. See [`website/README.md`](website/README.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |

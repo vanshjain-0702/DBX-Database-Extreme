@@ -7,7 +7,7 @@ VERSION            := $(shell git describe --tags --always --dirty 2>/dev/null |
 LDFLAGS            := -ldflags="-X main.version=$(VERSION) -s -w"
 BUILD_DIR          := ./bin
 
-.PHONY: all build build-server build-orchestrator run-dev test python-check soak restore-drill clean docker-build docker-up lint site help
+.PHONY: all build build-server build-orchestrator build-dashboard run-dev test python-check soak restore-drill clean docker-build docker-up lint site help
 
 all: build
 
@@ -20,14 +20,23 @@ build-server:
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_SERVER) ./cmd/dbx-server
 
+## build-dashboard: Compile the operator UI into dashboard/dist for Go embed
+build-dashboard:
+	@if [ -f dashboard/dist/index.html ]; then \
+		echo "==> dashboard/dist already built"; \
+	else \
+		echo "==> Building dashboard..."; \
+		cd dashboard && npm ci && npm run build; \
+	fi
+
 ## build-orchestrator: Build the DBX orchestrator (control plane) binary
-build-orchestrator:
+build-orchestrator: build-dashboard
 	@echo "==> Building dbx-orchestrator..."
 	@mkdir -p $(BUILD_DIR)
 	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_ORCHESTRATOR) ./cmd/dbx-orchestrator
 
 ## run-dev: Start the orchestrator in insecure local dev mode
-run-dev:
+run-dev: build-dashboard
 	@echo "==> Starting DBX Orchestrator in dev mode..."
 	@export DBX_ADMIN_PASSWORD=adminadminadmin && \
 	 export DBX_JWT_SECRET=supersecretjwtsecret1234567890123456 && \
@@ -52,9 +61,11 @@ python-check:
 	python -m black --check scripts sdk/python examples
 	python -m pytest sdk/python examples --ignore=sdk/python/.venv
 
-## site: Open the public HTML from disk (GitHub Pages is 404 while the repo is private)
+## site: Serve website/ at http://127.0.0.1:8765 (live site is GitHub Pages)
 site:
-	python -c "import pathlib, webbrowser; webbrowser.open(pathlib.Path('website/index.html').resolve().as_uri())"
+	@echo "Live:  https://vanshjain-0702.github.io/DBX-Database-Extreme/"
+	@echo "Local: http://127.0.0.1:8765/"
+	python -m http.server 8765 --bind 127.0.0.1 --directory website
 
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:

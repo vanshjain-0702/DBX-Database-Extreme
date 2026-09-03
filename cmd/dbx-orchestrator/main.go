@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -159,6 +158,7 @@ func main() {
 				http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 				return
 			}
+			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]string{"token": token})
 		} else {
 			loginMu.Lock()
@@ -170,7 +170,9 @@ func main() {
 			}
 			loginFailures[client] = state
 			loginMu.Unlock()
-			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(map[string]string{"error": "Invalid credentials"})
 		}
 	})
 
@@ -535,26 +537,11 @@ func main() {
 		w.Write([]byte(buf.String()))
 	})
 
-	// Static Dashboard Serving (SPA Handler)
-	subFS, err := fs.Sub(dashboard.DistFS, "dist")
+	dash, err := dashboard.Handler()
 	if err != nil {
-		log.Fatalf("Failed to load embedded dashboard: %v", err)
+		log.Fatal(err)
 	}
-	fileServer := http.FileServer(http.FS(subFS))
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/")
-		if path == "" {
-			path = "index.html"
-		}
-		f, err := subFS.Open(path)
-		if err != nil {
-			// fallback to index.html for SPA routing
-			r.URL.Path = "/"
-		} else {
-			f.Close()
-		}
-		fileServer.ServeHTTP(w, r)
-	})
+	mux.Handle("/", dash)
 
 	fmt.Printf("Control Plane Orchestrator running on :%d\n", *httpPort)
 	server := &http.Server{Addr: fmt.Sprintf(":%d", *httpPort), Handler: mux, ReadHeaderTimeout: 10 * time.Second}
