@@ -43,6 +43,8 @@ type Instance struct {
 	aclStore        *auth.ACLStore
 	initialUsers    []*auth.User
 	skipBuiltinUser bool
+	atRest          *security.Encryptor
+	tenantID        string
 }
 
 func NewInstance(cfg *config.Config) (*Instance, error) {
@@ -68,6 +70,9 @@ func (i *Instance) Start(ctx context.Context) error {
 	kv := engine.New(numShards)
 	i.kv = kv
 	vecStore := engine.NewVectorStore(kv, cfg.Persistence.DataDir, cfg.Engine.MaxVectorsPerTenant)
+	if i.atRest != nil {
+		vecStore.SetAtRest(i.atRest)
+	}
 	i.vecStore = vecStore
 	logger.Info("Engine initialized with %d shards", numShards)
 
@@ -75,12 +80,13 @@ func (i *Instance) Start(ctx context.Context) error {
 	var snapshotter *persistence.Snapshotter
 	if cfg.Persistence.Enabled {
 		var err error
-		wal, err = persistence.OpenWAL(cfg.Persistence.WALDir, cfg.Persistence.WALSync, 64)
+		wal, err = persistence.OpenWALEncrypted(cfg.Persistence.WALDir, cfg.Persistence.WALSync, 64, i.atRest)
 		if err != nil {
 			return fmt.Errorf("WAL init failed: %v", err)
 		}
 		i.wal = wal
 		snapshotter = persistence.NewSnapshotter(cfg.Persistence.SnapshotDir)
+		snapshotter.SetEncryptor(i.atRest)
 		i.snapshotter = snapshotter
 		recovery := persistence.NewRecovery(wal, snapshotter)
 		if err := recovery.Recover(kv, vecStore); err != nil {
@@ -109,6 +115,11 @@ func (i *Instance) Start(ctx context.Context) error {
 	}
 	for _, user := range i.initialUsers {
 		aclStore.AddUser(user)
+	}
+	if cfg.Auth.ACLFile != "" {
+		if err := aclStore.LoadFile(cfg.Auth.ACLFile); err != nil {
+			return fmt.Errorf("acl file: %w", err)
+		}
 	}
 	i.aclStore = aclStore
 	enforcer := security.NewACLEnforcer(aclStore)
@@ -314,6 +325,11 @@ func (i *Instance) Start(ctx context.Context) error {
 		&cfg.Server, &cfg.Security.TLS, executor, aclStore, enforcer, rateLimit, auditGuard, metrics, logger,
 	)
 	i.httpServer = api.NewHTTPServer(&cfg.Server, metrics, executor, os.Getenv("DBX_INTERNAL_API_TOKEN"), enforcer, auditGuard)
+	tenantID := i.tenantID
+	if tenantID == "" {
+		tenantID = os.Getenv("DBX_TENANT_ID")
+	}
+	i.httpServer.SetBackup(tenantID, i.CreateBackup)
 
 	go func() {
 		defer i.recoverTenantTask("http-server")
@@ -326,6 +342,30 @@ func (i *Instance) Start(ctx context.Context) error {
 		defer i.recoverTenantTask("resp-server")
 		i.serverErr <- i.respServer.ListenAndServe(i.ctx)
 	}()
+
+	if cfg.Auth.ACLFile != "" {
+		go func() {
+			defer i.recoverTenantTask("acl-reload")
+			ticker := time.NewTicker(500 * time.Millisecond)
+			defer ticker.Stop()
+			var lastMod time.Time
+			for {
+				select {
+				case <-ticker.C:
+					info, err := os.Stat(cfg.Auth.ACLFile)
+					if err != nil {
+						continue
+					}
+					if info.ModTime().After(lastMod) {
+						lastMod = info.ModTime()
+						_ = aclStore.LoadFile(cfg.Auth.ACLFile)
+					}
+				case <-i.ctx.Done():
+					return
+				}
+			}
+		}()
+	}
 
 	return nil
 }
@@ -431,6 +471,17 @@ func (i *Instance) MetricsSnapshot() map[string]int64 {
 // tenants must authenticate with a minted tenant key only.
 func (i *Instance) SkipBuiltinUser() {
 	i.skipBuiltinUser = true
+}
+
+// SetAtRest installs the tenant DEK used for durable files. Search still
+// runs over plaintext rows in memory.
+func (i *Instance) SetAtRest(enc *security.Encryptor) {
+	i.atRest = enc
+}
+
+// SetTenantID records the tenant identity for worker control endpoints.
+func (i *Instance) SetTenantID(id string) {
+	i.tenantID = id
 }
 
 // SetInitialUsers installs tenant-scoped credentials before listeners start.

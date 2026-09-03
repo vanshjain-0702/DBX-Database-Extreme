@@ -1,15 +1,20 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dbx/dbx/internal/isolation"
 )
 
 type Proxy struct {
@@ -30,24 +35,42 @@ func NewProxy(manager *Manager, internalAPIToken string) *Proxy {
 }
 
 func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
+	httpSock := isolation.HTTPSocket(tenant.DataDir)
+	useUnix := tenant.DataDir != ""
+	if useUnix {
+		if _, err := os.Stat(httpSock); err != nil {
+			useUnix = false
+		}
+	}
 	cacheKey := tenant.ID + ":" + strconv.Itoa(tenant.HTTPPort)
+	if useUnix {
+		cacheKey = tenant.ID + ":unix:" + httpSock
+	}
 	if cached, ok := p.proxies.Load(cacheKey); ok {
 		return cached.(*httputil.ReverseProxy)
 	}
 
-	targetAddr := fmt.Sprintf("http://127.0.0.1:%d", tenant.HTTPPort)
-	targetURL, _ := url.Parse(targetAddr)
+	targetURL, _ := url.Parse("http://127.0.0.1")
+	if !useUnix {
+		targetURL, _ = url.Parse(fmt.Sprintf("http://127.0.0.1:%d", tenant.HTTPPort))
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
-	// Configure connection pooling to prevent TCP socket exhaustion
-	proxy.Transport = &http.Transport{
+	transport := &http.Transport{
 		MaxIdleConns:          10000,
 		MaxIdleConnsPerHost:   1000,
 		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+	if useUnix {
+		sock := httpSock
+		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", sock)
+		}
+	}
+	proxy.Transport = transport
 
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {

@@ -38,7 +38,7 @@
         <p><code>cmd/dbx-orchestrator</code> is the control plane: JWT auth, provision / promote / backup / restore / export / import / hibernate / wake / delete, per-tenant usage, Prometheus <code>GET /metrics</code>, one public RESP ingress on <code>:6380</code>, and reverse-proxying to the current primary. Data-plane Raft and cluster mode fail closed. Sentinel does not restart a hibernated tenant.</p>
         <p>Because each tenant owns a separate directory, every lifecycle operation affects exactly one customer.</p>
         <h2>Tenant server</h2>
-        <p><code>cmd/dbx-server</code> is the data plane. One instance per tenant member. It serves the v1 string/vector surface over loopback, manages HNSW, WAL, and snapshots. Optional async WAL streaming: the primary broadcasts committed records; replicas apply them read-only. Writes are never acknowledged through Raft.</p>
+        <p><code>cmd/dbx-server</code> is the data plane. One instance per tenant member. On Linux production (<code>DBX_ISOLATION_MODE=strict</code>) that instance is a sealed worker process: Landlock, cgroup, envelope-encrypted files, Unix sockets with <code>SO_PEERCRED</code>. See the Isolation Kernel in the repo docs.</p>
         <h2>Request path</h2>
         <ol>
           <li>RESP ingress requires <code>AUTH tenantID:keyID secret</code>.</li>
@@ -51,8 +51,10 @@
           <li><strong>WAL v2</strong> — length-framed, sequenced, CRC-protected. <code>always</code> fsyncs before ack; <code>everysec</code> is a one-second loss window.</li>
           <li><strong>Checkpoints</strong> — sequence-bearing KV snapshots. Vector rows live in mmap files, not in the periodic <code>.rdb</code> image. Do not claim a single atomic KV+vector snapshot.</li>
           <li><strong>Backup</strong> — maintenance lock, SHA-256 manifest, restore into a sibling directory with rollback. Export/import are aliases. Hibernate stops the engine and keeps the directory; wake rehydrates it.</li>
-          <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak.</li>
+          <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak. The Isolation Kernel’s <code>strict</code> profile is a security mode, not that density drill.</li>
         </ul>
+        <h2>Isolation Kernel</h2>
+        <p>Linux production seals each tenant as its own process, Landlock filesystem, cgroup, per-tenant AES-256-GCM, and Unix sockets that only the orchestrator PID can open. Data in use is plaintext inside that worker because search requires it. <code>inprocess</code> is the density/dev profile and is not the security claim.</p>
         <h2>Dashboard</h2>
         <p>React UI compiled into the orchestrator binary. <strong>Tenant keys</strong> (<code>/cluster/{id}/keys</code>) mints reader/writer/tenant-admin credentials; the secret is shown once. Console, explorer, and vector playground use an operator JWT on <code>:8000</code>. They are operator tools, not the public tenant API.</p>
         <h2>Public site</h2>

@@ -55,6 +55,9 @@ func (f *OrchestratorFSM) Apply(l *raft.Log) (result interface{}) {
 			}
 		}
 		_, alreadyRunning := f.manager.instances[cmd.Tenant.ID]
+		if !alreadyRunning {
+			_, alreadyRunning = f.manager.workers[cmd.Tenant.ID]
+		}
 		f.manager.mu.Unlock()
 
 		if !alreadyRunning {
@@ -120,9 +123,13 @@ func (f *OrchestratorFSM) Restore(rc io.ReadCloser) error {
 
 	// Start any restored tenants that aren't running
 	for _, t := range f.manager.tenants {
-		if _, alreadyRunning := f.manager.instances[t.ID]; !alreadyRunning {
-			go f.manager.StartTenant(t)
+		if _, alreadyInst := f.manager.instances[t.ID]; alreadyInst {
+			continue
 		}
+		if _, alreadyWorker := f.manager.workers[t.ID]; alreadyWorker {
+			continue
+		}
+		go f.manager.StartTenant(t)
 	}
 	f.manager.mu.Unlock()
 	return nil

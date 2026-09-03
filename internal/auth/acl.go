@@ -2,6 +2,8 @@
 package auth
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"sync"
 )
@@ -165,3 +167,55 @@ var writeCommands = map[string]bool{
 
 func isAdminCommand(cmd string) bool { return adminCommands[cmd] }
 func isWriteCommand(cmd string) bool { return writeCommands[cmd] }
+
+// SnapshotUsers copies the live ACL for persistence into a tenant directory.
+func (a *ACLStore) SnapshotUsers() []*User {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	out := make([]*User, 0, len(a.users))
+	for _, u := range a.users {
+		copyUser := *u
+		copyUser.AllowedKeys = append([]string(nil), u.AllowedKeys...)
+		copyUser.AllowedChannels = append([]string(nil), u.AllowedChannels...)
+		out = append(out, &copyUser)
+	}
+	return out
+}
+
+// ReplaceUsers installs a complete ACL snapshot.
+func (a *ACLStore) ReplaceUsers(users []*User) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.users = make(map[string]*User, len(users))
+	for _, u := range users {
+		if u != nil && u.Name != "" {
+			a.users[u.Name] = u
+		}
+	}
+}
+
+// WriteFile persists the ACL as JSON.
+func (a *ACLStore) WriteFile(path string) error {
+	data, err := json.Marshal(a.SnapshotUsers())
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
+}
+
+// LoadFile replaces the ACL from JSON. Missing files are ignored.
+func (a *ACLStore) LoadFile(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var users []*User
+	if err := json.Unmarshal(data, &users); err != nil {
+		return err
+	}
+	a.ReplaceUsers(users)
+	return nil
+}

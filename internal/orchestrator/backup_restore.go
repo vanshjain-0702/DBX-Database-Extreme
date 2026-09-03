@@ -14,16 +14,23 @@ func (m *Manager) BackupTenant(id string) (string, persistence.BackupManifest, e
 	m.mu.RLock()
 	tenant := m.tenants[id]
 	instance := m.instances[id]
+	worker := m.workers[id]
 	m.mu.RUnlock()
 	if tenant == nil {
 		return "", persistence.BackupManifest{}, fmt.Errorf("tenant not found")
 	}
-	if instance == nil {
+	if instance == nil && worker == nil {
 		return "", persistence.BackupManifest{}, fmt.Errorf("tenant is not running")
 	}
 	name := fmt.Sprintf("backup_%s_%s.dbx.zip", id, time.Now().UTC().Format("20060102_150405"))
 	path := filepath.Join("data", "backups", name)
-	manifest, err := instance.CreateBackup(id, path)
+	var manifest persistence.BackupManifest
+	var err error
+	if instance != nil {
+		manifest, err = instance.CreateBackup(id, path)
+	} else {
+		manifest, err = worker.CreateBackup(id, path)
+	}
 	return path, manifest, err
 }
 
@@ -31,14 +38,19 @@ func (m *Manager) RestoreTenant(id, archivePath string) error {
 	m.mu.Lock()
 	tenant := m.tenants[id]
 	instance := m.instances[id]
+	worker := m.workers[id]
 	if tenant == nil {
 		m.mu.Unlock()
 		return fmt.Errorf("tenant not found")
 	}
 	delete(m.instances, id)
+	delete(m.workers, id)
 	m.mu.Unlock()
 	if instance != nil {
 		instance.Stop()
+	}
+	if worker != nil {
+		worker.Stop()
 	}
 
 	parent := filepath.Dir(tenant.DataDir)

@@ -114,3 +114,4 @@ DBX uses a two-layer persistence model:
 - **DoS Protection:** `http.MaxBytesReader` limits on all data plane request bodies.
 - **Admin Credentials:** Stored as bcrypt hashes; never in plaintext.
 - **TLS:** Supported on the control plane; disabled with `-insecure-http` flag for local development only.
+- **Isolation Kernel:** Linux production (`DBX_ISOLATION_MODE=strict`) seals each tenant as its own process, Landlock filesystem, cgroup, envelope-encrypted WAL/vectors, and Unix sockets restricted by `SO_PEERCRED`. See [isolation.md](isolation.md).

@@ -14,13 +14,16 @@ RUN go mod download
 COPY . .
 COPY --from=dashboard-builder /app/dashboard/dist ./dashboard/dist
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /dbx-orchestrator ./cmd/dbx-orchestrator
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /dbx-server ./cmd/dbx-server
 
 # Stage 3: Minimal production image
 FROM alpine:3.20
 RUN apk --no-cache add ca-certificates tzdata wget
 WORKDIR /data
 ENV DBX_DATA_DIR=/data
+ENV DBX_ISOLATION_MODE=strict
 COPY --from=go-builder /dbx-orchestrator /usr/local/bin/dbx-orchestrator
+COPY --from=go-builder /dbx-server /usr/local/bin/dbx-server
 RUN mkdir -p /data /certs
 EXPOSE 8000 6380
 VOLUME ["/data"]

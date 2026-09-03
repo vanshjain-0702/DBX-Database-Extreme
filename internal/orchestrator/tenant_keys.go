@@ -85,6 +85,7 @@ func (m *Manager) CreateTenantKey(tenantID, name, role string, patterns []string
 	}
 	instance := m.instances[tenantID]
 	m.mu.Unlock()
+	m.syncTenantACL(tenant)
 	if instance != nil {
 		instance.UpsertUser(tenantUser(key))
 	}
@@ -127,6 +128,7 @@ func (m *Manager) RevokeTenantKey(tenantID, keyID string) error {
 	}
 	instance := m.instances[tenantID]
 	m.mu.Unlock()
+	m.syncTenantACL(tenant)
 	if instance != nil {
 		instance.DeleteUser(keyID)
 	}

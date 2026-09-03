@@ -6,7 +6,7 @@
   <title>Features — DBX</title>
   <meta name="description" content="DBX features: first-class tenants, KV plus HNSW in one engine, cost per active tenant, self-hosted binary, and the provision / backup / delete lifecycle.">
   <meta property="og:title" content="Features — DBX">
-  <meta property="og:description" content="Four claims that have to remain true in the codebase. Tenant lifecycle is the product.">
+  <meta property="og:description" content="Five claims that have to remain true in the codebase. Tenant lifecycle is the product.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.io/features.html">
   <meta property="og:image" content="assets/og-image.jpg">
@@ -27,8 +27,8 @@
   <main id="content">
     <header class="page-band">
       <div class="wrap">
-        <p class="kicker">Four claims. One lifecycle.</p>
-        <h1>Four claims. One lifecycle.</h1>
+        <p class="kicker">Five claims. One lifecycle.</p>
+        <h1>Five claims. One lifecycle.</h1>
         <p>The tenant is a first-class object. Everything else — RESP, HNSW, the dashboard — is in service of that.</p>
       </div>
     </header>
@@ -64,6 +64,14 @@
           <div>
             <h2>Self-hosted single binary</h2>
             <p>Embeddings never leave the customer’s network. The dashboard, console, data explorer, and vector playground are compiled into the same binary. No sidecar. No separate control-plane service to deploy. No vendor to send data to.</p>
+          </div>
+        </article>
+        <article class="usp">
+          <div class="usp-num">05</div>
+          <div>
+            <h2>Isolation Kernel</h2>
+            <p>On Linux production a tenant is a sealed execution domain: its own process, Landlock filesystem, cgroup, envelope-encrypted WAL and vectors, and a Unix socket that only the orchestrator can open. Revoking the tenant key cryptographically shreds data at rest.</p>
+            <p class="note">Honest limit: data in use is plaintext inside that worker — search requires it. The density profile still shares a process; it is not this claim. See <a href="docs/architecture.html">architecture</a>.</p>
           </div>
         </article>
       </div>

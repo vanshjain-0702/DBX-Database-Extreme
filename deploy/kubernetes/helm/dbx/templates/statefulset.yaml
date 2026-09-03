@@ -48,6 +48,13 @@ spec:
             secretKeyRef:
               name: dbx-control-plane
               key: internal-token
+        - name: DBX_ISOLATION_MODE
+          value: '{{ .Values.isolationMode | default "strict" }}'
+        - name: DBX_KEK
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: kek
         ports:
         - containerPort: 8000
           name: http

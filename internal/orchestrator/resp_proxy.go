@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
 )
 
@@ -67,7 +69,18 @@ func (p *RESPIngress) handle(client net.Conn) {
 		_, _ = client.Write([]byte("-WRONGPASS invalid tenant credential\r\n"))
 		return
 	}
-	backend, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", tenant.RESPPort), 5*time.Second)
+	network, addr := "tcp", fmt.Sprintf("127.0.0.1:%d", tenant.RESPPort)
+	if sock := isolation.RESPSocket(tenant.DataDir); tenant.DataDir != "" {
+		if _, err := os.Stat(sock); err == nil {
+			network, addr = "unix", sock
+		}
+	}
+	var backend net.Conn
+	if network == "unix" {
+		backend, err = net.DialTimeout("unix", addr, 5*time.Second)
+	} else {
+		backend, err = net.DialTimeout("tcp", addr, 5*time.Second)
+	}
 	if err != nil {
 		_, _ = client.Write([]byte("-ERR tenant unavailable\r\n"))
 		return
@@ -96,6 +109,9 @@ func (p *RESPIngress) handle(client net.Conn) {
 		_, _ = io.Copy(backend, reader)
 		if tcp, ok := backend.(*net.TCPConn); ok {
 			_ = tcp.CloseWrite()
+		}
+		if unix, ok := backend.(*net.UnixConn); ok {
+			_ = unix.CloseWrite()
 		}
 		done <- struct{}{}
 	}()

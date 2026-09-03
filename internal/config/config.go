@@ -25,9 +25,12 @@ type ServerConfig struct {
 	Port           int           `yaml:"port"`
 	HTTPPort       int           `yaml:"http_port"`
 	GRPCPort       int           `yaml:"grpc_port"`
+	Socket         string        `yaml:"socket"`
+	HTTPSocket     string        `yaml:"http_socket"`
 	MaxConnections int           `yaml:"max_connections"`
 	ReadTimeout    time.Duration `yaml:"read_timeout"`
 	WriteTimeout   time.Duration `yaml:"write_timeout"`
+	PeerPIDs       []int         `yaml:"-"`
 }
 
 // EngineConfig holds in-memory engine settings.
@@ -60,7 +63,7 @@ type ReplicationConfig struct {
 	Quorum       int           `yaml:"quorum"`
 	SyncTimeout  time.Duration `yaml:"sync_timeout"`
 	LagThreshold time.Duration `yaml:"lag_threshold"`
-	
+
 	// Raft configuration
 	RaftEnabled   bool   `yaml:"raft_enabled"`
 	RaftNodeID    string `yaml:"raft_node_id"`
@@ -84,6 +87,7 @@ type AuthConfig struct {
 	Enabled         bool   `yaml:"enabled"`
 	DefaultUser     string `yaml:"default_user"`
 	RequirePassword bool   `yaml:"require_password"`
+	ACLFile         string `yaml:"acl_file"`
 }
 
 // SecurityConfig holds security policy settings.

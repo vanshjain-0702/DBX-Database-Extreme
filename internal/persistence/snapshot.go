@@ -1,6 +1,7 @@
 package persistence
 
 import (
+	"bytes"
 	"encoding/gob"
 	"fmt"
 	"os"
@@ -8,7 +9,9 @@ import (
 	"time"
 
 	"github.com/dbx/dbx/internal/engine"
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
+	"github.com/dbx/dbx/internal/security"
 )
 
 func init() {
@@ -27,12 +30,18 @@ type SnapshotHeader struct {
 // Snapshotter creates and restores RDB-style snapshots.
 type Snapshotter struct {
 	dir string
+	enc *security.Encryptor
 }
 
 // NewSnapshotter creates a snapshotter writing to dir.
 func NewSnapshotter(dir string) *Snapshotter {
 	os.MkdirAll(dir, 0755)
 	return &Snapshotter{dir: dir}
+}
+
+// SetEncryptor encrypts checkpoint files at rest. Search paths are unchanged.
+func (s *Snapshotter) SetEncryptor(enc *security.Encryptor) {
+	s.enc = enc
 }
 
 // Save writes a snapshot of the KV store to disk atomically.
@@ -44,16 +53,8 @@ func (s *Snapshotter) Save(kv *engine.KVStore) (string, error) {
 func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error) {
 	snap := kv.Snapshot()
 	filename := fmt.Sprintf("snapshot-%d.rdb", time.Now().UnixNano())
-	tmpPath := filepath.Join(s.dir, filename+".tmp")
 	finalPath := filepath.Join(s.dir, filename)
 
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return "", fmt.Errorf("snapshot: create tmp %s: %w", tmpPath, err)
-	}
-
-	enc := gob.NewEncoder(f)
-	// Encode as a map of key -> serializable entry
 	wire := make(map[string]*WireEntry, len(snap))
 	for k, e := range snap {
 		wire[k] = toWireEntry(e)
@@ -64,28 +65,17 @@ func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error
 		KeyCount:  len(wire),
 		Sequence:  sequence,
 	}
+	var payload bytes.Buffer
+	enc := gob.NewEncoder(&payload)
 	if err := enc.Encode(hdr); err != nil {
-		f.Close()
 		return "", fmt.Errorf("snapshot header: %w", err)
 	}
 	if err := enc.Encode(wire); err != nil {
-		f.Close()
 		return "", fmt.Errorf("snapshot data: %w", err)
 	}
-
-	// Force sync to disk to prevent data corruption on power loss
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return "", fmt.Errorf("snapshot sync: %w", err)
+	if err := isolation.WriteSealedFile(finalPath, payload.Bytes(), s.enc); err != nil {
+		return "", fmt.Errorf("snapshot write: %w", err)
 	}
-
-	f.Close()
-
-	// Atomically rename to final path
-	if err := os.Rename(tmpPath, finalPath); err != nil {
-		return "", fmt.Errorf("snapshot rename: %w", err)
-	}
-
 	return finalPath, nil
 }
 
@@ -97,12 +87,11 @@ func (s *Snapshotter) Load(kv *engine.KVStore, path string) error {
 
 // LoadWithHeader restores a checkpoint and returns its replay boundary.
 func (s *Snapshotter) LoadWithHeader(kv *engine.KVStore, path string) (SnapshotHeader, error) {
-	f, err := os.Open(path)
+	data, err := isolation.ReadSealedFile(path, s.enc)
 	if err != nil {
 		return SnapshotHeader{}, fmt.Errorf("snapshot: open %s: %w", path, err)
 	}
-	defer f.Close()
-	dec := gob.NewDecoder(f)
+	dec := gob.NewDecoder(bytes.NewReader(data))
 	var hdr SnapshotHeader
 	if err := dec.Decode(&hdr); err != nil {
 		return SnapshotHeader{}, fmt.Errorf("snapshot header: %w", err)

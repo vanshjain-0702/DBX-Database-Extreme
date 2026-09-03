@@ -17,11 +17,16 @@ func (m *Manager) HibernateTenant(id string) error {
 	}
 	tenant.Hibernated = true
 	inst := m.instances[id]
+	worker := m.workers[id]
 	delete(m.instances, id)
+	delete(m.workers, id)
 	_ = m.saveState()
 	m.mu.Unlock()
 	if inst != nil {
 		inst.Stop()
+	}
+	if worker != nil {
+		worker.Stop()
 	}
 	return nil
 }

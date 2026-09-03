@@ -76,6 +76,17 @@ shutdown persists the graph, and `TestVectorStoreRebuildsGraphAfterCrash` covers
 
 ## Next — density and safety per tenant
 
+### Isolation Kernel (process, Landlock, envelope encryption, Unix IPC)
+**Status:** implemented as `DBX_ISOLATION_MODE=strict` on Linux production images · **Thesis:** USP 5
+
+Directory isolation was structural but still one Go heap and plaintext files.
+The Isolation Kernel seals each tenant as a worker process, Landlock LSM,
+cgroup v2, per-tenant AES-256-GCM, and Unix sockets with `SO_PEERCRED`.
+Density tests keep `inprocess`. See `docs/isolation.md`.
+
+**Done when:** a tenant worker cannot open a sibling tenant directory, WAL
+bytes on disk are ciphertext, and public RESP still authenticates on `:6380`.
+
 ### 1. Single ingress port for all tenants
 **Status:** implemented on public `:6380` · **Thesis:** USP 1, USP 3
 

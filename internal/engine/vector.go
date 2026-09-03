@@ -11,7 +11,9 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
+	"github.com/dbx/dbx/internal/security"
 	"github.com/dbx/dbx/internal/util"
 	"github.com/edsrzf/mmap-go"
 )
@@ -31,6 +33,8 @@ type MMapVectorIndex struct {
 	searchJobs  chan shardSearchJob
 	searchWG    sync.WaitGroup
 	mu          sync.RWMutex
+	heapBacked  bool
+	atRest      *security.Encryptor
 }
 
 type shardSearchJob struct {
@@ -55,11 +59,15 @@ type vectorMetadata struct {
 }
 
 func NewMMapVectorIndex(path string, dim int) (*MMapVectorIndex, error) {
-	return newMMapVectorIndex(path, dim, 1000)
+	return newMMapVectorIndex(path, dim, 1000, nil)
 }
 
-func newMMapVectorIndex(path string, dim, capacity int) (*MMapVectorIndex, error) {
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor) (*MMapVectorIndex, error) {
+	mode := os.FileMode(0644)
+	if enc != nil {
+		mode = 0600
+	}
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, mode)
 	if err != nil {
 		return nil, err
 	}
@@ -68,36 +76,61 @@ func newMMapVectorIndex(path string, dim, capacity int) (*MMapVectorIndex, error
 		capacity = 1000
 	}
 	info, _ := f.Stat()
-	if info.Size() == 0 {
-		initialSize := int64(capacity * (dim + 8))
-		f.Truncate(initialSize)
-	}
-
-	m, err := mmap.Map(f, mmap.RDWR, 0)
-	if err != nil {
-		f.Close()
-		return nil, err
-	}
-
 	idx := &MMapVectorIndex{
 		file:        f,
-		mmap:        m,
 		dim:         dim,
 		idMap:       make(map[string]int),
 		idList:      make([]string, 0),
 		tombstones:  make([]bool, 0),
 		generations: make([]uint64, 0),
 		graphs:      newHNSWShards(),
+		atRest:      enc,
+	}
+	if enc != nil {
+		idx.heapBacked = true
+		initialSize := capacity * (dim + 8)
+		backing := make([]byte, initialSize)
+		if info.Size() > 0 {
+			onDisk, readErr := os.ReadFile(path)
+			if readErr != nil {
+				f.Close()
+				return nil, readErr
+			}
+			plain, openErr := isolation.OpenSealed(enc, onDisk)
+			if openErr != nil {
+				f.Close()
+				return nil, openErr
+			}
+			if len(plain) > len(backing) {
+				backing = make([]byte, len(plain))
+			}
+			copy(backing, plain)
+			if len(plain) > 0 {
+				backing = backing[:len(plain)]
+			}
+		}
+		idx.mmap = backing
+	} else {
+		if info.Size() == 0 {
+			initialSize := int64(capacity * (dim + 8))
+			f.Truncate(initialSize)
+		}
+		m, mapErr := mmap.Map(f, mmap.RDWR, 0)
+		if mapErr != nil {
+			f.Close()
+			return nil, mapErr
+		}
+		idx.mmap = m
 	}
 	idx.startSearchWorkers()
 	metaPath := path + ".meta"
-	if data, readErr := os.ReadFile(metaPath); readErr == nil {
+	if data, readErr := isolation.ReadSealedFile(metaPath, enc); readErr == nil {
 		var meta vectorMetadata
 		if err := json.Unmarshal(data, &meta); err != nil || meta.Dim != dim {
 			idx.Close()
 			return nil, fmt.Errorf("invalid vector metadata: %w", err)
 		}
-		if len(meta.IDs) > len(m)/(dim+8) {
+		if len(meta.IDs) > len(idx.mmap)/(dim+8) {
 			idx.Close()
 			return nil, fmt.Errorf("vector metadata exceeds index capacity")
 		}
@@ -117,7 +150,7 @@ func newMMapVectorIndex(path string, dim, capacity int) (*MMapVectorIndex, error
 		idx.syncRowInv()
 	}
 	hnswPath := path + ".hnsw"
-	if graphs, err := loadHNSWGraphs(hnswPath); err == nil && validateShards(graphs, idx.count) == nil {
+	if graphs, err := loadHNSWGraphs(hnswPath, enc); err == nil && validateShards(graphs, idx.count) == nil {
 		idx.graphs = graphs
 	} else {
 		// The graph is only written on Close, so a crash leaves rows in the mmap
@@ -240,26 +273,9 @@ func (idx *MMapVectorIndex) writeMetadata(durable bool) error {
 	if err != nil {
 		return err
 	}
+	_ = durable
 	path := idx.file.Name() + ".meta"
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0600); err != nil {
-		return err
-	}
-	if durable {
-		f, openErr := os.OpenFile(tmp, os.O_RDWR, 0600)
-		if openErr != nil {
-			os.Remove(tmp)
-			return openErr
-		}
-		err = f.Sync()
-		f.Close()
-		if err != nil {
-			os.Remove(tmp)
-			return err
-		}
-	}
-	os.Remove(path) // Windows fix for Access Denied on Rename
-	return os.Rename(tmp, path)
+	return isolation.WriteSealedFile(path, data, idx.atRest)
 }
 
 func (idx *MMapVectorIndex) startSearchWorkers() {
@@ -295,13 +311,19 @@ func (idx *MMapVectorIndex) Close() {
 	defer idx.mu.Unlock()
 	if idx.mmap != nil {
 		_ = idx.writeMetadata(true)
-		_ = idx.mmap.Flush()
+		if idx.heapBacked {
+			_ = idx.persistSealedRows()
+		} else {
+			_ = idx.mmap.Flush()
+		}
 	}
 	if len(idx.graphs) > 0 && idx.file != nil {
-		_ = saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs)
+		_ = saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs, idx.atRest)
 	}
 	if idx.mmap != nil {
-		_ = idx.mmap.Unmap()
+		if !idx.heapBacked {
+			_ = idx.mmap.Unmap()
+		}
 		idx.mmap = nil
 	}
 	if idx.file != nil {
@@ -309,6 +331,14 @@ func (idx *MMapVectorIndex) Close() {
 		_ = idx.file.Close()
 		idx.file = nil
 	}
+}
+
+func (idx *MMapVectorIndex) persistSealedRows() error {
+	if idx.file == nil || idx.atRest == nil {
+		return nil
+	}
+	path := idx.file.Name()
+	return isolation.WriteSealedFile(path, append([]byte(nil), idx.mmap...), idx.atRest)
 }
 
 func (idx *MMapVectorIndex) ensureCapacity(neededBytes int) error {
@@ -319,6 +349,12 @@ func (idx *MMapVectorIndex) ensureCapacity(neededBytes int) error {
 	newSize := oldSize * 2
 	if newSize < neededBytes {
 		newSize = neededBytes
+	}
+	if idx.heapBacked {
+		grown := make([]byte, newSize)
+		copy(grown, idx.mmap)
+		idx.mmap = grown
+		return nil
 	}
 	if err := idx.mmap.Flush(); err != nil {
 		return err
@@ -351,6 +387,7 @@ type VectorStore struct {
 	dataDir    string
 	maxVectors int
 	maxMemory  int64
+	atRest     *security.Encryptor
 }
 
 const (
@@ -363,6 +400,9 @@ func NewVectorStore(kv *KVStore, dataDir string, maxVectors int) *VectorStore {
 	os.MkdirAll(dataDir, 0755)
 	return &VectorStore{kv: kv, dataDir: dataDir, maxVectors: maxVectors}
 }
+
+// SetAtRest encrypts vector files on disk. Search still runs over plaintext rows in memory.
+func (s *VectorStore) SetAtRest(enc *security.Encryptor) { s.atRest = enc }
 
 // SetMemoryLimit applies the tenant's shared no-eviction memory limit.
 func (s *VectorStore) SetMemoryLimit(bytes int64) { s.maxMemory = bytes }
@@ -450,7 +490,7 @@ func (s *VectorStore) getOrCreate(key string, dim int) (*MMapVectorIndex, func()
 	e, unlock := s.kv.GetForWrite(key)
 	if e == nil {
 		path := filepath.Join(s.dataDir, vectorIndexFilename(key))
-		idx, err := newMMapVectorIndex(path, dim, s.maxVectors)
+		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest)
 		if err != nil {
 			unlock()
 			return nil, func() {}, err
@@ -465,7 +505,7 @@ func (s *VectorStore) getOrCreate(key string, dim int) (*MMapVectorIndex, func()
 	}
 	if e.Value == nil {
 		path := filepath.Join(s.dataDir, vectorIndexFilename(key))
-		idx, err := newMMapVectorIndex(path, dim, s.maxVectors)
+		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest)
 		if err != nil {
 			unlock()
 			return nil, func() {}, err
@@ -856,17 +896,23 @@ func (s *VectorStore) VCompact(key string) (int, error) {
 	}
 	idx.count = len(activeIDs)
 	idx.syncRowInv()
-	if err := idx.mmap.Flush(); err != nil {
-		return 0, err
-	}
-	if err := idx.file.Sync(); err != nil {
-		return 0, err
+	if idx.heapBacked {
+		if err := idx.persistSealedRows(); err != nil {
+			return 0, err
+		}
+	} else {
+		if err := idx.mmap.Flush(); err != nil {
+			return 0, err
+		}
+		if err := idx.file.Sync(); err != nil {
+			return 0, err
+		}
 	}
 	if err := idx.persistMetadata(); err != nil {
 		return 0, err
 	}
 	idx.rebuildGraph()
-	if err := saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs); err != nil {
+	if err := saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs, idx.atRest); err != nil {
 		return 0, err
 	}
 	return removed, nil

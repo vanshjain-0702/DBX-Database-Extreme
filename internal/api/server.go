@@ -22,7 +22,9 @@ import (
 
 	"github.com/dbx/dbx/internal/auth"
 	"github.com/dbx/dbx/internal/config"
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/observability"
+	"github.com/dbx/dbx/internal/persistence"
 	"github.com/dbx/dbx/internal/protocol"
 	"github.com/dbx/dbx/internal/query"
 	"github.com/dbx/dbx/internal/security"
@@ -94,10 +96,13 @@ func NewRESPServer(
 // ListenAndServe starts the TCP listener.
 func (s *RESPServer) ListenAndServe(ctx context.Context) error {
 	addr := fmt.Sprintf("%s:%d", s.cfg.Host, s.cfg.Port)
+	if s.cfg.Socket != "" {
+		addr = s.cfg.Socket
+	}
 	var ln net.Listener
 	var err error
 
-	if s.tlsCfg != nil && s.tlsCfg.Enabled {
+	if s.tlsCfg != nil && s.tlsCfg.Enabled && s.cfg.Socket == "" {
 		cert, err := tls.LoadX509KeyPair(s.tlsCfg.CertFile, s.tlsCfg.KeyFile)
 		if err != nil {
 			return fmt.Errorf("resp: load key pair: %w", err)
@@ -125,11 +130,15 @@ func (s *RESPServer) ListenAndServe(ctx context.Context) error {
 		}
 		s.logger.Info("DBX RESP server listening on %s (mTLS ENABLED)", addr)
 	} else {
-		ln, err = net.Listen("tcp", addr)
+		ln, err = isolation.Listen(addr, s.cfg.PeerPIDs)
 		if err != nil {
 			return fmt.Errorf("resp: listen %s: %w", addr, err)
 		}
-		s.logger.Info("DBX RESP server listening on %s (PLAINTEXT)", addr)
+		if s.cfg.Socket != "" {
+			s.logger.Info("DBX RESP server listening on unix %s", addr)
+		} else {
+			s.logger.Info("DBX RESP server listening on %s (PLAINTEXT)", addr)
+		}
 	}
 
 	s.mu.Lock()
@@ -340,11 +349,19 @@ type HTTPServer struct {
 	internalAPIToken string
 	enforcer         *security.ACLEnforcer
 	auditGuard       *security.AuditGuard
+	backupFn         func(tenantID, outputPath string) (persistence.BackupManifest, error)
+	tenantID         string
 }
 
 // NewHTTPServer creates an HTTP server.
 func NewHTTPServer(cfg *config.ServerConfig, metrics *observability.Metrics, executor *query.Executor, internalAPIToken string, enforcer *security.ACLEnforcer, auditGuard *security.AuditGuard) *HTTPServer {
 	return &HTTPServer{cfg: cfg, metrics: metrics, executor: executor, internalAPIToken: internalAPIToken, enforcer: enforcer, auditGuard: auditGuard}
+}
+
+// SetBackup exposes a maintenance-locked backup endpoint for sandboxed workers.
+func (h *HTTPServer) SetBackup(tenantID string, fn func(tenantID, outputPath string) (persistence.BackupManifest, error)) {
+	h.tenantID = tenantID
+	h.backupFn = fn
 }
 
 // withCORS adds CORS headers to allow the dashboard to connect.
@@ -449,6 +466,30 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/usage", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(h.executorUsage())
+	})))
+	mux.HandleFunc("/internal/backup", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if h.backupFn == nil {
+			http.Error(w, "backup unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var req struct {
+			Output string `json:"output"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Output == "" {
+			http.Error(w, "output path required", http.StatusBadRequest)
+			return
+		}
+		manifest, err := h.backupFn(h.tenantID, req.Output)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(manifest)
 	})))
 	mux.HandleFunc("/metrics/prometheus", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")
@@ -583,6 +624,13 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 		<-ctx.Done()
 		srv.Shutdown(context.Background())
 	}()
+	if h.cfg.HTTPSocket != "" {
+		ln, err := isolation.Listen(h.cfg.HTTPSocket, h.cfg.PeerPIDs)
+		if err != nil {
+			return err
+		}
+		return srv.Serve(ln)
+	}
 	return srv.ListenAndServe()
 }
 

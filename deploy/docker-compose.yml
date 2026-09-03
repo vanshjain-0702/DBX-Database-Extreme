@@ -16,6 +16,8 @@ services:
       DBX_NODE_MEMORY_BUDGET: ${DBX_NODE_MEMORY_BUDGET:-8gb}
       DBX_DEFAULT_PASSWORD: ${DBX_DEFAULT_PASSWORD:-}
       DBX_DATA_DIR: /data
+      DBX_ISOLATION_MODE: ${DBX_ISOLATION_MODE:-strict}
+      DBX_KEK: ${DBX_KEK:?required}
     volumes:
       - dbx-data:/data
     restart: unless-stopped

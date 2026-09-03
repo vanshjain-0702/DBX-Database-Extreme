@@ -38,10 +38,11 @@ mutation families still fail closed. See the
 [measured certification matrix](scripts/benchmarks/performance_analysis.md).
 
 Before you put a customer on a node: enable control-plane TLS (do not ship with
-`-insecure-http`), mint per-tenant keys (a **reader** cannot `SET` or `VADD`),
+`-insecure-http`), set `DBX_KEK` and `DBX_ISOLATION_MODE=strict` on Linux (the
+Docker image defaults to this), mint per-tenant keys (a **reader** cannot `SET` or `VADD`),
 scrape `GET /metrics` with a Bearer JWT or `DBX_INTERNAL_API_TOKEN`, and run
 `make soak` on that hardware. Certification numbers are Windows-only; Linux is
-the CI gate, not that host.
+the CI gate, not that host. Isolation details: [docs/isolation.md](docs/isolation.md).
 
 The WAL/checkpoint format is intentionally incompatible with pre-hardening data. For an
 offline reset that preserves the old directory, run

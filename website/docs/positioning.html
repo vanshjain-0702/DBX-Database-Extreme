@@ -63,12 +63,13 @@
           <li>Fully managed vectors with no infrastructure</li>
           <li>SQL, joins, or a system of record</li>
         </ul>
-        <h2>Four claims that have to stay true</h2>
+        <h2>Five claims that have to stay true</h2>
         <ol>
           <li>The tenant is a first-class object — directory, WAL, HNSW, snapshots.</li>
           <li>State and memory in one engine — one connection, one backup archive. Periodic <code>.rdb</code> is KV-only; vectors live in <code>.vec</code> files.</li>
           <li>Cost scales with active tenants — SQ8 mmap, idle tenants in page cache.</li>
           <li>Self-hosted single binary — embeddings never leave the network.</li>
+          <li>Isolation Kernel — on Linux production a tenant is a sealed process, Landlock filesystem, encrypted durable files, and a Unix socket only the orchestrator can open. Data in use is plaintext inside that worker.</li>
         </ol>
         <h2>Business</h2>
         <p>Self-host free, including inside your own SaaS. Commercial license to offer managed DBX to third parties. Converts to Apache 2.0 after four years.</p>

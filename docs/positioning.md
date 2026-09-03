@@ -69,7 +69,7 @@ None of them is fixed by making that cluster faster.
 
 ## 4. Our unique selling propositions
 
-These are the four claims we make. Each has to remain literally true in the codebase.
+These are the five claims we make. Each has to remain literally true in the codebase.
 
 ### USP 1 — The tenant is a first-class object
 One API call creates a live, isolated engine: its own data directory, its own write-ahead log,
@@ -106,6 +106,21 @@ vector playground are embedded in the binary. There is no separate control-plane
 deploy and no vendor to send data to.
 
 *Proof in code:* `dashboard/` embedded via `cmd/dbx-orchestrator`.
+
+### USP 5 — Isolation Kernel: a tenant is a sealed execution domain
+On Linux production (`DBX_ISOLATION_MODE=strict`) a tenant is its own process,
+Landlock filesystem, cgroup, envelope-encrypted durable files, and a Unix socket
+that only the orchestrator PID can open. Neighbours cannot open its files, connect
+to its sockets, or unwrap its key. Revoking the tenant DEK cryptographically shreds
+data at rest without a scan.
+
+*Proof in code:* `internal/isolation`, `internal/orchestrator/worker.go`,
+`docs/isolation.md`.
+
+*Honest limits:* data in use is plaintext inside the worker (search requires it).
+`inprocess` remains the density/dev profile and is not this USP. User namespaces
+are not applied yet. Windows/macOS run `standard` (encryption + Unix sockets)
+without Landlock. Do not say "the strongest sandbox ever built."
 
 **Not a USP, but our on-ramp:** DBX speaks RESP, so existing clients connect without a custom
 driver. We describe this as "your clients already work," never as "drop-in Redis replacement."
