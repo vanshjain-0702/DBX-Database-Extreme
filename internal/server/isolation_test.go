@@ -114,6 +114,9 @@ func socketCommand(t *testing.T, path, password string, args ...string) string {
 // with different DEKs, so WAL frames must cross the socket as plaintext and be
 // re-sealed by whichever engine receives them.
 func TestSealedPrimaryReplicaReplicationOverUnixSockets(t *testing.T) {
+	if !isolation.UnixAvailable() {
+		t.Skip("unix sockets are not available on this OS")
+	}
 	t.Setenv("DBX_DEFAULT_PASSWORD", "sealed-replica-secret")
 	password := "sealed-replica-secret"
 
@@ -175,6 +178,9 @@ func TestSealedPrimaryReplicaReplicationOverUnixSockets(t *testing.T) {
 // Encryption must not weaken the durability contract for strings either: a
 // restart has to replay the sealed WAL.
 func TestSealedEngineRecoversAfterRestart(t *testing.T) {
+	if !isolation.UnixAvailable() {
+		t.Skip("unix sockets are not available on this OS")
+	}
 	t.Setenv("DBX_DEFAULT_PASSWORD", "sealed-restart-secret")
 	password := "sealed-restart-secret"
 	dir := t.TempDir()
@@ -212,6 +218,9 @@ func TestSealedEngineRecoversAfterRestart(t *testing.T) {
 
 // A wrong key must fail closed rather than silently serve an empty tenant.
 func TestSealedEngineRefusesWrongKey(t *testing.T) {
+	if !isolation.UnixAvailable() {
+		t.Skip("unix sockets are not available on this OS")
+	}
 	t.Setenv("DBX_DEFAULT_PASSWORD", "sealed-wrongkey-secret")
 	dir := t.TempDir()
 	cfg := sealedTestConfig(t, dir, "", "", "")

@@ -2,7 +2,7 @@
 
 > Per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory.
 
-- Site: open website/index.html in the repo (GitHub Pages 404 while the repo is private)
+- Site: https://vanshjain-0702.github.io/DBX-Database-Extreme/
 - Contact: hello@dbxdb.io
 - License: Business Source License 1.1 (Apache 2.0 after four years)
 - Source: https://github.com/vanshjain-0702/DBX-Database-Extreme
@@ -25,8 +25,9 @@ That is not a 100-orchestrator-process soak. 15-minute path: examples/quickstart
 LangChain example: examples/langchain-rag. Next.js SETEX: examples/nextjs-cache.
 Python checks: `make python-check` (pytest skips live AUTH without env).
 
-Public site source: website/. Open website/index.html locally.
-github.io is 404 while the repo is private. dbxdb.io is not registered.
+Public site source: website/.
+Live: https://vanshjain-0702.github.io/DBX-Database-Extreme/
+Local preview: `make site`. dbxdb.io is the intended custom domain once registered.
 Docker: deploy/Dockerfile. GHCR ghcr.io/<owner>/dbx-orchestrator on GitHub Release.
 
 Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default

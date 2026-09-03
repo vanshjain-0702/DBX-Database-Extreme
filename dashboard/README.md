@@ -5,7 +5,8 @@ via [`embed.go`](embed.go) (`//go:embed all:dist`). There is no separate
 control-plane service.
 
 This is not the public marketing site. That lives in [`website/`](../website/)
-and deploys with GitHub Pages.
+and is served at
+[github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/).
 
 ## What it covers
 
@@ -24,10 +25,15 @@ is not this UI; scrape Prometheus with a Bearer token.
 ```bash
 cd dashboard
 npm install
-npm run dev     # or `make run-dashboard` from the repo root
+npm run dev     # Vite on :5173, proxies /api and /t to :8000
 npm run lint
 npm run build   # writes dist/ for the Go embed
 ```
+
+`make run-dev` from the repo root builds `dist/` if it is missing, then starts
+the orchestrator on `:8000` with the UI embedded. Pair `make run-dashboard` with
+that process when you want hot reload (proxy target is `http://127.0.0.1:8000`,
+override with `DBX_ORCHESTRATOR_URL`).
 
 CI builds this package before golangci-lint so a clean checkout embeds a real
 `dist/`.

@@ -62,8 +62,10 @@ the secret is shown once. Console, explorer, and vector playground talk to
 `:8000` with an operator JWT. They are operator tools, not the public tenant API.
 
 The public marketing site is **not** this UI. It is static HTML in `website/`.
-Open `website/index.html` (or `make site`). GitHub Pages is 404 while the
-repository is private; `dbxdb.io` has no DNS. See `website/README.md`.
+Open it at
+[https://vanshjain-0702.github.io/DBX-Database-Extreme/](https://vanshjain-0702.github.io/DBX-Database-Extreme/)
+or locally with `make site`. `dbxdb.io` is the intended custom domain once
+registered. See `website/README.md`.
 
 ## Data Flow
 
