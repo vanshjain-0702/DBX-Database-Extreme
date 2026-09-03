@@ -83,9 +83,14 @@ Read this section before repeating any of the claims above.
 - **User namespaces are not applied.** Workers run as the orchestrator uid.
   Landlock and peer-PID checks are what stop a sibling worker, not a different
   uid.
-- **Density is not certified under `strict`.** The published 100 tenants/node
-  figure was measured in-process. One OS process per tenant is a different
-  memory profile; re-measure on your hardware.
+- **Density is process-bound under `strict`.** The published 100 tenants/node
+  figure was measured in-process (shared Go runtime, idle data in page cache).
+  Re-measured on Linux 6.12 with Landlock: a freshly started idle worker is
+  about **14–17 MiB RSS**, worst idle GET stayed **2–12 ms** with 8 idle / 4
+  active writers. 100 sealed tenants would therefore cost roughly **1.5 GiB**
+  of process RSS before any corpus. Use `inprocess` when density is the goal;
+  use `strict` when the kernel boundary is the goal. `DBX_LARGE=1 go test
+  ./internal/orchestrator/ -run TestStrictModeDensityAndRSS` re-runs the drill.
 - **`inprocess` is still available** and is the default. It is a density and
   development profile, not the security USP.
 - This is not "the strongest sandbox ever built." Firecracker, gVisor, and Qubes

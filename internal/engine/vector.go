@@ -501,30 +501,67 @@ func (s *VectorStore) CloseAll() {
 
 func (s *VectorStore) getReadOnly(key string) (*MMapVectorIndex, func(), error) {
 	e, unlock := s.kv.GetForRead(key)
-	if e == nil {
-		unlock()
-		metaPath := filepath.Join(s.dataDir, vectorIndexFilename(key)+".meta")
-		data, err := isolation.ReadSealedFile(metaPath, s.atRest)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return nil, func() {}, nil
+	if e != nil {
+		if e.Type != protocol.TypeVector {
+			unlock()
+			return nil, func() {}, util.ErrWrongType
+		}
+		if e.Value != nil {
+			return e.Value.(*MMapVectorIndex), unlock, nil
+		}
+	}
+	unlock()
+	return s.openPersistedIndex(key)
+}
+
+// openPersistedIndex reopens a mmap index from sealed metadata. Snapshots
+// store TypeVector keys with a nil value (the graph lives in .vec/.meta),
+// so a search after recovery has to take this path instead of returning
+// an empty result set.
+func (s *VectorStore) openPersistedIndex(key string) (*MMapVectorIndex, func(), error) {
+	metaPath := filepath.Join(s.dataDir, vectorIndexFilename(key)+".meta")
+	data, err := isolation.ReadSealedFile(metaPath, s.atRest)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, func() {}, nil
+		}
+		return nil, func() {}, err
+	}
+	var meta vectorMetadata
+	if err := json.Unmarshal(data, &meta); err != nil || meta.Dim <= 0 {
+		return nil, func() {}, fmt.Errorf("invalid vector metadata")
+	}
+	return s.getOrCreate(key, meta.Dim)
+}
+
+// ReopenPersisted attaches mmap indexes for TypeVector keys that a snapshot
+// restored with a nil value. Called after WAL recovery so usage meters and
+// the first search do not see an empty tenant.
+func (s *VectorStore) ReopenPersisted() error {
+	if s == nil || s.kv == nil {
+		return nil
+	}
+	var keys []string
+	for _, sh := range s.kv.shards {
+		sh.mu.RLock()
+		for key, e := range sh.data {
+			if e.Type == protocol.TypeVector && e.Value == nil {
+				keys = append(keys, key)
 			}
-			return nil, func() {}, err
 		}
-		var meta vectorMetadata
-		if err := json.Unmarshal(data, &meta); err != nil || meta.Dim <= 0 {
-			return nil, func() {}, fmt.Errorf("invalid vector metadata")
+		sh.mu.RUnlock()
+	}
+	for _, key := range keys {
+		idx, unlock, err := s.openPersistedIndex(key)
+		if unlock != nil {
+			unlock()
 		}
-		return s.getOrCreate(key, meta.Dim)
+		if err != nil {
+			return err
+		}
+		_ = idx
 	}
-	if e.Type != protocol.TypeVector {
-		unlock()
-		return nil, func() {}, util.ErrWrongType
-	}
-	if e.Value == nil {
-		return nil, unlock, nil
-	}
-	return e.Value.(*MMapVectorIndex), unlock, nil
+	return nil
 }
 
 // VAdd adds a vector to the mmap index.
@@ -684,7 +721,9 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 		}(shard)
 	}
 	wg.Wait()
-	return nil
+	// Persist ids/tombstones on every batch so a checkpoint that stores the
+	// TypeVector key as nil can reopen the mmap after restart.
+	return idx.writeMetadata(false)
 }
 
 func validateVector(id string, vec []float32) error {

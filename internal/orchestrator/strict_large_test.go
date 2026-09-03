@@ -251,7 +251,12 @@ func TestStrictModeLargeDataSurvivesRestart(t *testing.T) {
 		}
 	}
 
-	const batch = 100
+	// RESP caps arrays at 4096 items. Each vector is 1 id + dim floats,
+	// plus VADD_BATCH / key / dim. Stay well under that ceiling.
+	batch := 3500 / (dim + 1)
+	if batch < 1 {
+		batch = 1
+	}
 	for start := 0; start < vectors; start += batch {
 		end := start + batch
 		if end > vectors {

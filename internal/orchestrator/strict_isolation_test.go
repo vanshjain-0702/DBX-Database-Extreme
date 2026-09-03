@@ -87,8 +87,12 @@ func waitRunning(t *testing.T, m *Manager, id string) {
 	t.Helper()
 	deadline := time.Now().Add(20 * time.Second)
 	for time.Now().Before(deadline) {
-		if m.TenantRunning(id) {
-			return
+		if tenant, ok := m.GetTenant(id); ok && m.TenantRunning(id) {
+			_, respErr := os.Stat(isolation.RESPSocket(tenant.DataDir))
+			_, httpErr := os.Stat(isolation.HTTPSocket(tenant.DataDir))
+			if respErr == nil && httpErr == nil {
+				return
+			}
 		}
 		time.Sleep(50 * time.Millisecond)
 	}

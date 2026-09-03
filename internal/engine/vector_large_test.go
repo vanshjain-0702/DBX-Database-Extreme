@@ -61,8 +61,11 @@ func TestSealedLargeVectorIndexRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if bytes.Contains(metaRaw, []byte("v0")) || bytes.Contains(metaRaw, []byte("v1")) {
-		t.Fatal("vector metadata stored ids in plaintext under the sealed path")
+	if !bytes.HasPrefix(metaRaw, []byte("DBXENC1\n")) {
+		t.Fatal("vector metadata was not sealed")
+	}
+	if bytes.Contains(metaRaw, []byte(`"ids"`)) || bytes.Contains(metaRaw, []byte("doc1")) {
+		t.Fatal("vector metadata stored json in plaintext under the sealed path")
 	}
 
 	second := NewVectorStore(New(64), dir, count)

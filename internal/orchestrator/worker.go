@@ -229,19 +229,24 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 		httpCl: unixHTTPClient(isolation.HTTPSocket(t.DataDir)),
 		token:  token,
 	}
-	m.mu.Lock()
-	if m.workers == nil {
-		m.workers = make(map[string]*isolatedWorker)
-	}
-	m.workers[t.ID] = worker
-	m.mu.Unlock()
 	go func() {
 		err := cmd.Wait()
 		worker.errCh <- err
 	}()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(isolation.RESPSocket(t.DataDir)); err == nil {
+		_, respErr := os.Stat(isolation.RESPSocket(t.DataDir))
+		_, httpErr := os.Stat(isolation.HTTPSocket(t.DataDir))
+		if respErr == nil && httpErr == nil {
+			// Publish only after both sockets exist. TenantRunning used to
+			// return true the instant exec succeeded, so mint-key / ACL
+			// reload raced the bind and tests dialed a missing path.
+			m.mu.Lock()
+			if m.workers == nil {
+				m.workers = make(map[string]*isolatedWorker)
+			}
+			m.workers[t.ID] = worker
+			m.mu.Unlock()
 			return nil
 		}
 		select {
