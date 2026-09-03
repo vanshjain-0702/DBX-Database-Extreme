@@ -61,7 +61,25 @@ macOS or Windows as Landlock-isolated.
    PID on the RESP and HTTP sockets. Public `:6380` and `:8000` stay TCP (TLS on
    the control plane). mTLS *on* the Unix sockets is deliberately not used: peer
    credentials plus POSIX permissions are the correct same-host control, and
-   loopback TLS handshakes are a measured cost.
+   loopback TLS handshakes are a measured cost. Replication uses
+   `isolation.DialTimeout` so Unix-socket replicas get the same 1-second
+   connect timeout as TCP replicas.
+
+## Implementation notes
+
+- **VADD_BATCH metadata persist.** Every batch write flushes ids/tombstones to
+  the sealed `.meta` file so a checkpoint that stores the TypeVector key as nil
+  can reopen the mmap on restart.
+- **Vector reopen after snapshot.** Recovery calls `VectorStore.ReopenPersisted`
+  after WAL replay to attach mmap indexes for TypeVector keys that the snapshot
+  restored with a nil value. Without this, VSEARCH returns an empty list while
+  KV still has the index key.
+- **Worker HTTP timeout.** The Unix-socket HTTP client for worker control
+  endpoints has a 2-minute timeout so large-tenant backup downloads do not
+  time out.
+- **Per-worker tokens.** Each sandboxed worker receives a unique
+  `DBX_INTERNAL_API_TOKEN` at spawn. The HTTP proxy resolves it per request so
+  a worker restart does not leave the cached proxy holding a stale credential.
 
 ## What this does not claim
 

@@ -71,7 +71,7 @@
           <div>
             <h2>Isolation Kernel</h2>
             <p>On Linux production a tenant is a sealed execution domain: its own process, a Landlock-restricted view of the filesystem, and Unix sockets that only the orchestrator can open. The WAL, checkpoints, vector ids, and the HNSW graph are encrypted under a per-tenant key. Destroying that key makes what is left on disk unreadable without a scan.</p>
-            <p class="note">Honest limits: SQ8 vector rows stay memory-mapped and unencrypted so idle tenants remain cheap — use fscrypt or LUKS for those. Data in use is plaintext inside the worker. Density under this profile is not re-certified. The in-process profile shares one process and is not this claim.</p>
+            <p class="note">Honest limits: SQ8 vector rows stay memory-mapped and unencrypted so idle tenants remain cheap — use fscrypt or LUKS for those. Data in use is plaintext inside the worker. Re-measured density under strict: ~14–17 MiB RSS per idle worker, worst idle GET ~3–12 ms. The in-process profile shares one process and is not this claim.</p>
           </div>
         </article>
       </div>

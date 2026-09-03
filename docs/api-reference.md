@@ -146,7 +146,7 @@ tenant can hold several independent indexes.
 | Command | Example | Notes |
 |---|---|---|
 | `VADD` | `["VADD", "memories", "doc:1", "0.1", "0.2", "0.9"]` | Adds or replaces one vector. Prefer the batch form for bulk loads. |
-| `VADD_BATCH` | `["VADD_BATCH", "memories", "3", "doc:1", "0.1", "0.2", "0.9", ...]` | Writes the batch then inserts into HNSW; metadata is flushed on close/checkpoint. |
+| `VADD_BATCH` | `["VADD_BATCH", "memories", "3", "doc:1", "0.1", "0.2", "0.9", ...]` | Writes the batch then inserts into HNSW; metadata is flushed after every batch so checkpoint-restore works. RESP caps arrays at 4096 items; use `VADDBIN` for large dims. |
 | `VDEL` | `["VDEL", "memories", "doc:1"]` | Writes a generation tombstone. Deleted rows may be traversed but are never returned. |
 | `VCOMPACT` | `["VCOMPACT", "memories"]` | Rewrites active rows and rebuilds HNSW; tenant-admin only. |
 | `VSEARCH` | `["VSEARCH", "memories", "0.1", "0.2", "0.8", "5"]` | Cosine similarity over the HNSW index, top-k last. |
@@ -155,6 +155,28 @@ There is no `VGET` or `VSET`. The 100k-vector recall@10, ingest, and search-late
 gates pass on the certified profile. See the
 [certification matrix](../scripts/benchmarks/performance_analysis.md) before selecting
 a production capacity.
+
+---
+
+## Python SDK — TenantMemory
+
+The product-level API is `TenantMemory` in `sdk/python/dbx.py`. It wraps
+RESP and the control plane into one-customer verbs:
+
+```python
+from dbx import ControlPlane, TenantMemory
+
+plane = ControlPlane("http://127.0.0.1:8000")
+plane.login("admin", password)
+mem = TenantMemory.open(plane, "acme-corp")
+mem.remember("pref", "likes dark mode", vector=[0.1, 0.2, 0.9])
+hits = mem.recall([0.1, 0.2, 0.8])
+mem.forget("pref")
+plane.shred("acme-corp")
+```
+
+`DBXClient` is still available for raw RESP (`SET`, `VADD`, `VSEARCH`).
+Worker HTTP endpoints use a 2-minute timeout for large-tenant backups.
 
 ---
 

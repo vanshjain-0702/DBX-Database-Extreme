@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Security — DBX</title>
-  <meta name="description" content="How DBX authenticates operators and tenants: JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
+  <meta name="description" content="How DBX isolates and authenticates tenants: Isolation Kernel (process + Landlock + encryption), JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
   <meta property="og:title" content="Security — DBX">
   <meta property="og:description" content="How DBX authenticates operators and tenants: JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
   <meta property="og:type" content="website">
@@ -30,7 +30,7 @@
     <header class="page-band">
       <div class="wrap">
         <p class="kicker">What is true in the binary</p>
-        <h1>Isolation is a directory. Auth is hashed.</h1>
+        <h1>Isolation is a kernel boundary. Auth is hashed.</h1>
         <p>Security page for diligence, not a compliance badge wall. We are not SOC 2 certified. If your questionnaire needs that line, say so — do not infer it from this site.</p>
       </div>
     </header>
