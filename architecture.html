@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture — DBX</title>
+  <meta name="description" content="How a DBX request flows: HTTP control plane, authenticated RESP ingress, one isolated engine per tenant with KV, SQ8 mmap HNSW, and its own WAL.">
+  <meta property="og:title" content="Architecture — DBX">
+  <meta property="og:description" content="Control plane on :8000. RESP ingress on :6380. Each tenant is an isolated engine — KV, HNSW, WAL, snapshots.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/architecture.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/architecture.html">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="architecture">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Control plane and data plane</p>
+        <h1>Isolated engines. One orchestrator.</h1>
+        <p>The orchestrator owns tenant lifecycle. Each tenant owns its data. There is no shared keyspace underneath the labels.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>The machine</h2>
+        <p class="lede">HTTP control plane on <code>:8000</code> — tenant lifecycle, scoped credentials, routing, backups. Authenticated RESP ingress on <code>:6380</code>. Below that, one engine per customer.</p>
+
+        <figure class="schematic" aria-label="Architecture schematic">
+          <svg viewBox="0 0 920 340" role="img">
+            <title>DBX control plane above three isolated tenant engines</title>
+            <desc>HTTP port 8000 and RESP port 6380 sit on a shared control plane. Tenant A, Tenant B, and Tenant N sit below as separate boxes, each containing KV, HNSW SQ8 mmap, WAL, and snapshots.</desc>
+            <rect x="8" y="8" width="904" height="324" fill="#0b0b0d" stroke="#2a2a2e"/>
+            <rect x="24" y="24" width="872" height="88" fill="#18181b" stroke="#d45312"/>
+            <text x="44" y="56" fill="#d45312" font-family="IBM Plex Mono, monospace" font-size="13" letter-spacing="2">CONTROL PLANE</text>
+            <text x="44" y="82" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="16">HTTP :8000  ·  tenant lifecycle, scoped credentials, routing</text>
+            <text x="44" y="102" fill="#9a958c" font-family="IBM Plex Sans, sans-serif" font-size="15">RESP ingress :6380  ·  AUTH tenant:key_id secret, then route</text>
+            <line x1="24" y1="128" x2="896" y2="128" stroke="#2a2a2e"/>
+            <g>
+              <rect x="24" y="148" width="272" height="164" fill="#101012" stroke="#d45312"/>
+              <text x="44" y="178" fill="#d45312" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="2">TENANT A</text>
+              <text x="44" y="206" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">KV + TTL</text>
+              <text x="44" y="230" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">HNSW (SQ8, mmap)</text>
+              <text x="44" y="254" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">Own WAL</text>
+              <text x="44" y="278" fill="#9a958c" font-family="IBM Plex Sans, sans-serif" font-size="15">Own snapshots</text>
+            </g>
+            <g>
+              <rect x="324" y="148" width="272" height="164" fill="#101012" stroke="#d45312"/>
+              <text x="344" y="178" fill="#d45312" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="2">TENANT B</text>
+              <text x="344" y="206" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">KV + TTL</text>
+              <text x="344" y="230" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">HNSW (SQ8, mmap)</text>
+              <text x="344" y="254" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">Own WAL</text>
+              <text x="344" y="278" fill="#9a958c" font-family="IBM Plex Sans, sans-serif" font-size="15">Own snapshots</text>
+            </g>
+            <g>
+              <rect x="624" y="148" width="272" height="164" fill="#101012" stroke="#2a2a2e"/>
+              <text x="644" y="178" fill="#d45312" font-family="IBM Plex Mono, monospace" font-size="12" letter-spacing="2">TENANT N</text>
+              <text x="644" y="206" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">KV + TTL</text>
+              <text x="644" y="230" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">HNSW (SQ8, mmap)</text>
+              <text x="644" y="254" fill="#f4f1ea" font-family="IBM Plex Sans, sans-serif" font-size="15">Own WAL</text>
+              <text x="644" y="278" fill="#9a958c" font-family="IBM Plex Sans, sans-serif" font-size="15">Own snapshots</text>
+            </g>
+          </svg>
+        </figure>
+        <p class="muted">They do not share a pool. Air gap is the point.</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <h2>How a request flows</h2>
+        <p class="lede">Watch the hop. AUTH binds the connection to one engine. The others never see the command.</p>
+        <div class="hop" data-hop>
+          <div class="hop-stage is-hot" data-hop-stage>
+            <span>1 · client</span>
+            <p>AUTH acme:key_id secret on :6380</p>
+          </div>
+          <div class="hop-stage" data-hop-stage>
+            <span>2 · ingress</span>
+            <p>Verify hash, re-resolve on every command</p>
+          </div>
+          <div class="hop-stage" data-hop-stage>
+            <span>3 · acme only</span>
+            <p>WAL append, ack locally, apply KV / HNSW</p>
+          </div>
+          <div class="hop-stage" data-hop-stage>
+            <span>4 · replica</span>
+            <p>Optional async stream. No extra write RTT.</p>
+          </div>
+        </div>
+        <ol class="flow">
+          <li>
+            <div>
+              <strong>RESP ingress :6380</strong>
+              <p>Require <code>AUTH tenantID:keyID secret</code>. Verify the persistent scoped credential. Route to that tenant’s loopback listener. Re-resolve the key on every command so revocation is immediate.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Tenant server (loopback)</strong>
+              <p>Enforce role and every affected-key pattern. Append one WAL v2 state-image transaction and ack locally. Apply to the KV engine or the vector engine. Return a RESP response.</p>
+            </div>
+          </li>
+          <li>
+            <div>
+              <strong>Replicas, if provisioned</strong>
+              <p>Optional async WAL replicas receive frames on a side channel. No extra write RTT. The primary acks locally; replica lag is possible. Data-plane Raft and cluster mode fail closed.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>WAL, mmap, HNSW</h2>
+        <p class="lede">Two-layer persistence. Vectors are not smuggled into the KV snapshot.</p>
+        <div class="layers">
+          <div class="layer">
+            <span class="layer-tag">WAL v2</span>
+            <p><strong>Durability for mutations.</strong> Length-framed, sequenced, CRC-protected state-image transactions are appended before apply. <code>always</code> fsyncs before acknowledgement; <code>everysec</code> defines a one-second loss window.</p>
+          </div>
+          <div class="layer">
+            <span class="layer-tag">.rdb</span>
+            <p><strong>KV checkpoint only.</strong> A sequence-bearing KV snapshot is atomically installed before covered WAL segments are removed. Vector entries are skipped — they do not live in the RDB.</p>
+          </div>
+          <div class="layer">
+            <span class="layer-tag">SQ8 mmap</span>
+            <p><strong>Vector payload.</strong> 8-bit scalar-quantized rows, generation tombstones, metadata, and a rebuildable checksummed HNSW cache live as files in the tenant directory.</p>
+          </div>
+          <div class="layer">
+            <span class="layer-tag">HNSW</span>
+            <p><strong>ANN for a working set.</strong> Sized for per-tenant corpora (certified at 100k vectors/tenant), not a billion-vector shared index. Asymmetric distance at query time.</p>
+          </div>
+          <div class="layer">
+            <span class="layer-tag">Backup</span>
+            <p><strong>One customer, one archive.</strong> A maintenance lock produces a manifest with SHA-256 checksums for both KV and vector surfaces. Restore validates into a sibling directory and swaps with rollback. Export/import are the same artifact. Hibernate stops the process and keeps the directory.</p>
+          </div>
+        </div>
+        <p class="note">Do not read “backup archive” as “atomic KV+vector point-in-time snapshot.” The archive is a consistent cut of the tenant directory under a lock. The periodic <code>.rdb</code> is still KV only.</p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Numbers, with hardware attached.</h2>
+        <div class="btn-row">
+          <a class="btn" href="performance.html">Certification</a>
+          <a class="btn btn-ghost" href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/main/docs/architecture.md">Architecture doc</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

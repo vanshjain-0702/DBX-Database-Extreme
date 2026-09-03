@@ -1,0 +1,50 @@
+# DBX
+
+> Per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory.
+
+- Site: open website/index.html in the repo (GitHub Pages 404 while the repo is private)
+- Contact: hello@dbxdb.io
+- License: Business Source License 1.1 (Apache 2.0 after four years)
+- Source: https://github.com/vanshjain-0702/DBX-Database-Extreme
+
+## What it is
+
+Self-hosted single binary. Orchestrator HTTP on :8000. Authenticated RESP on :6380.
+Each tenant is a directory with its own WAL, HNSW (SQ8), and snapshots — not a key prefix on a shared cluster.
+
+v1 supported profile: 100 tenants/node, 100k vectors/tenant, durable strings + vectors.
+Async WAL replicas optional (primary acks locally). Raft, cluster, and non-string RESP mutations fail closed.
+
+Operator HTTP (JWT on :8000): provision, keys, backup/restore, export/import,
+hibernate/wake, GET /api/v1/tenants/{id}/usage, GET /api/usage.
+Dashboard Tenant keys: /cluster/{id}/keys (secret shown once).
+Prometheus: GET /metrics (Bearer JWT or internal token in production). JSON: GET /t/{id}/metrics.
+
+Density: CI soaks 12 idle / 4 active. Operators run `make soak` (100 idle / 25 active).
+That is not a 100-orchestrator-process soak. 15-minute path: examples/quickstart.py.
+LangChain example: examples/langchain-rag. Next.js SETEX: examples/nextjs-cache.
+Python checks: `make python-check` (pytest skips live AUTH without env).
+
+Public site source: website/. Open website/index.html locally.
+github.io is 404 while the repo is private. dbxdb.io is not registered.
+Docker: deploy/Dockerfile. GHCR ghcr.io/<owner>/dbx-orchestrator on GitHub Release.
+
+Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default
+superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.
+
+## Do not say
+
+Redis replacement. All-in-one AI database. Cheaper than Pinecone. Scales to billions of vectors. SOC 2.
+
+## Pages
+
+- [Home](https://vanshjain-0702.github.io/DBX-Database-Extreme/)
+- [Docs](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/)
+- [Quickstart](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/quickstart.html)
+- [Architecture](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/architecture.html)
+- [API](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/api.html)
+- [Positioning](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/positioning.html)
+- [Pricing](https://vanshjain-0702.github.io/DBX-Database-Extreme/pricing.html)
+- [Security](https://vanshjain-0702.github.io/DBX-Database-Extreme/security.html)
+- [Performance](https://vanshjain-0702.github.io/DBX-Database-Extreme/performance.html)
+- [License](https://vanshjain-0702.github.io/DBX-Database-Extreme/license.html)

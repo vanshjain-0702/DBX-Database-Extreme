@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Positioning — DBX Docs</title>
+  <meta name="description" content="DBX is the per-tenant memory engine for AI products. Not a Redis replacement, not an all-in-one AI database, not cheaper than Pinecone.">
+  <meta property="og:title" content="Positioning — DBX Docs">
+  <meta property="og:description" content="DBX is the per-tenant memory engine for AI products. Not a Redis replacement, not an all-in-one AI database, not cheaper than Pinecone.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/docs/positioning.html">
+  <meta property="og:image" content="../assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Positioning — DBX Docs">
+  <meta name="twitter:description" content="DBX is the per-tenant memory engine for AI products. Not a Redis replacement, not an all-in-one AI database, not cheaper than Pinecone.">
+  <meta name="twitter:image" content="../assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/docs/positioning.html">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-root=".." data-page="docs-positioning">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <div class="docs-shell">
+      <div id="docs-rail"></div>
+      <article class="docs-body">
+        <p class="kicker">Docs</p>
+        <h1>Positioning</h1>
+        <p class="lede">Source of truth for what DBX is. If a landing page contradicts this, the landing page is wrong.</p>
+        <blockquote>
+          <p>DBX is the per-tenant memory engine for AI products: one isolated store per customer, holding both their working state and their vector memory.</p>
+        </blockquote>
+        <h2>Say / don’t say</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Say</th><th>Don’t say</th></tr></thead>
+            <tbody>
+              <tr><td>Per-tenant memory engine for AI products</td><td>All-in-one AI database</td></tr>
+              <tr><td>Your existing RESP clients work</td><td>Drop-in Redis replacement</td></tr>
+              <tr><td>One isolated engine per customer</td><td>Multi-tenant namespaces</td></tr>
+              <tr><td>Cost per active tenant</td><td>Cheaper than Pinecone</td></tr>
+              <tr><td>Sized for per-tenant working sets</td><td>Scales to billions of vectors</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h2>Who it is for</h2>
+        <ul>
+          <li>AI agent platforms — private recall per end-customer</li>
+          <li>Vertical AI SaaS — per-client RAG (legal, medical, support, finance)</li>
+          <li>On-prem / regulated — one binary inside their network</li>
+          <li>Teams running a cache and a vector DB and hand-rolling tenancy on both</li>
+        </ul>
+        <h2>Walk away if</h2>
+        <ul>
+          <li>One tenant, one workload</li>
+          <li>Billion-vector ANN, sharding, heavy filtering</li>
+          <li>Fully managed vectors with no infrastructure</li>
+          <li>SQL, joins, or a system of record</li>
+        </ul>
+        <h2>Five claims that have to stay true</h2>
+        <ol>
+          <li>The tenant is a first-class object — directory, WAL, HNSW, snapshots.</li>
+          <li>State and memory in one engine — one connection, one backup archive. Periodic <code>.rdb</code> is KV-only; vectors live in <code>.vec</code> files.</li>
+          <li>Cost scales with active tenants — SQ8 mmap, idle tenants in page cache.</li>
+          <li>Self-hosted single binary — embeddings never leave the network.</li>
+          <li>Isolation Kernel — on Linux production a tenant is a sealed process with a Landlock-restricted filesystem, an encrypted WAL/checkpoint/index, and a Unix socket only the orchestrator can open. SQ8 rows stay mmap'd and unencrypted (use fscrypt); data in use is plaintext inside the worker.</li>
+        </ol>
+        <h2>Business</h2>
+        <p>Self-host free, including inside your own SaaS. Commercial license to offer managed DBX to third parties. Converts to Apache 2.0 after four years.</p>
+      </article>
+    </div>
+  </main>
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

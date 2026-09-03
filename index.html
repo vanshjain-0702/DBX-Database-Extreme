@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DBX — Per-tenant memory engine for AI products</title>
+  <meta name="description" content="DBX is the per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory. Self-hosted, single binary.">
+  <meta property="og:title" content="DBX — Per-tenant memory engine for AI products">
+  <meta property="og:description" content="One isolated store per customer, holding working state and vector memory. Not a shared cluster with a prefix.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="DBX — Per-tenant memory engine for AI products">
+  <meta name="twitter:description" content="One isolated store per customer, holding working state and vector memory.">
+  <meta name="twitter:image" content="assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "DBX",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "license": "https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/main/LICENSE",
+    "description": "Per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory.",
+    "url": "https://dbxdb.io/",
+    "email": "hello@dbxdb.io",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD",
+      "description": "Self-host under Business Source License 1.1, including inside your own SaaS."
+    }
+  }
+  </script>
+</head>
+<body data-root="." data-page="home">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <section class="hero">
+      <div class="wrap-wide hero-grid">
+        <div class="hero-copy">
+          <p class="kicker">Memory engine, not a shared cluster.</p>
+          <h1>One isolated engine <em>per customer.</em></h1>
+          <p class="lede">DBX holds working state and vector memory in the same process — and that process belongs to one tenant. Isolation is a directory, a WAL, and an HNSW index. Not a prefix you hope nobody forgets.</p>
+          <div class="btn-row">
+            <a class="btn" href="start.html">Run it locally</a>
+            <a class="btn btn-ghost" href="architecture.html">How a request lands</a>
+          </div>
+        </div>
+
+        <div class="bench" data-bench aria-label="Interactive isolation demo">
+          <div class="bench-title">Isolation · in-browser</div>
+          <div class="bench-bar">
+            <div class="bench-picks" role="group" aria-label="Select tenant">
+              <button type="button" class="chip is-on" data-pick="acme">acme</button>
+              <button type="button" class="chip" data-pick="harbor">harbor</button>
+              <button type="button" class="chip" data-pick="lumen">lumen</button>
+            </div>
+            <span class="auth-badge" data-auth-badge>AUTH acme</span>
+            <button type="button" class="chip" data-replay>Replay</button>
+          </div>
+          <div class="cabinets">
+            <article class="cabinet is-live" data-cabinet="acme">
+              <h3>acme</h3>
+              <div class="cab-row">session <b data-kv>empty</b></div>
+              <div class="cab-row">vectors <b data-vec>0</b></div>
+              <div class="cab-row">WAL seq <b data-wal>0</b></div>
+            </article>
+            <article class="cabinet" data-cabinet="harbor">
+              <h3>harbor</h3>
+              <div class="cab-row">session <b data-kv>empty</b></div>
+              <div class="cab-row">vectors <b data-vec>0</b></div>
+              <div class="cab-row">WAL seq <b data-wal>0</b></div>
+            </article>
+            <article class="cabinet" data-cabinet="lumen">
+              <h3>lumen</h3>
+              <div class="cab-row">session <b data-kv>empty</b></div>
+              <div class="cab-row">vectors <b data-vec>0</b></div>
+              <div class="cab-row">WAL seq <b data-wal>0</b></div>
+            </article>
+          </div>
+          <div class="term">
+            <div class="term-out" data-term aria-live="polite"></div>
+          </div>
+        </div>
+      </div>
+      <p class="wrap-wide muted" style="margin-top:0.85rem;font-size:0.9rem;">
+        Browser sketch of the product, not a live node.
+        <span class="scribble">GET on harbor cannot see acme’s session.</span>
+      </p>
+    </section>
+
+    <aside class="limits" aria-label="Supported production profile">
+      <div class="limits-inner">
+        <span class="stamp">v1 · single node</span>
+        <p>
+          Supported profile:
+          <strong>100 tenants/node</strong>,
+          <strong>100k vectors/tenant</strong>,
+          durable <strong>strings + vectors</strong>.
+          Async WAL replicas optional (primary acks locally).
+          Raft, cluster, and non-string RESP mutations <strong>fail closed</strong>.
+        </p>
+      </div>
+    </aside>
+
+    <section class="section">
+      <div class="wrap catalog" data-in>
+        <p class="catalog-index">Why it exists</p>
+        <div>
+          <h2>Shared clusters make tenancy your job.</h2>
+          <p class="lede">The stores you already run assume one pool. You bolt customers on with names. That works until it doesn’t.</p>
+          <ol class="pain-list">
+            <li>
+              <span class="pain-num">01</span>
+              <div>
+                <h3>Tenancy is a key prefix</h3>
+                <p>One missing <code>tenant:{id}:</code> in one query is a cross-customer data leak.</p>
+              </div>
+            </li>
+            <li>
+              <span class="pain-num">02</span>
+              <div>
+                <h3>Two systems drift</h3>
+                <p>Session in a cache, embeddings in a vector DB. Dual writes. Two pages at 3am.</p>
+              </div>
+            </li>
+            <li>
+              <span class="pain-num">03</span>
+              <div>
+                <h3>Backup is cluster-wide</h3>
+                <p>You cannot restore one customer. You snapshot the whole machine.</p>
+              </div>
+            </li>
+            <li>
+              <span class="pain-num">04</span>
+              <div>
+                <h3>Delete-my-data is a sprint</h3>
+                <p>A scan, a prefix sweep, a blast radius. Off-boarding becomes a project.</p>
+              </div>
+            </li>
+            <li>
+              <span class="pain-num">05</span>
+              <div>
+                <h3>Noisy neighbor eviction</h3>
+                <p>One busy tenant evicts a quiet tenant’s working set from a shared pool.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap" data-in>
+        <p class="kicker">What has to stay true in the code</p>
+        <h2>The tenant is the unit of everything.</h2>
+        <p class="lede">Five claims. RESP is how you connect, not why you buy.</p>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">01</div>
+            <div>
+              <h3>Tenant is a first-class object</h3>
+              <p><code>POST /api/provision</code> creates a live isolated engine — own data directory, WAL, HNSW, snapshots. Backup and delete hit exactly one customer.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">02</div>
+            <div>
+              <h3>State and memory in one engine</h3>
+              <p>KV with TTL and HNSW vectors, one process, one connection, one directory, one backup archive.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">03</div>
+            <div>
+              <h3>Cost scales with active tenants</h3>
+              <p>SQ8 mmap vectors. Idle tenants sit in page cache. You pay for who is awake, not who signed.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">04</div>
+            <div>
+              <h3>Self-hosted single binary</h3>
+              <p>Dashboard, console, explorer, playground — compiled in. Embeddings never leave the network.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">05</div>
+            <div>
+              <h3>Isolation Kernel</h3>
+              <p>Linux production seals each tenant as its own process with a Landlock-restricted filesystem, an encrypted WAL and index, and a Unix socket only the orchestrator can open.</p>
+            </div>
+          </article>
+        </div>
+        <p class="note">redis-py, ioredis, go-redis already speak RESP. Useful for trying DBX. Not a substitute for a tuned shared KV cluster.</p>
+        <p><a href="features.html">Lifecycle API →</a></p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap-wide" data-in>
+        <p class="kicker">Operator UI, in the binary</p>
+        <h2>This is the console you actually get.</h2>
+        <p class="lede">Not a mock. Screens from the embedded dashboard: tenants, overview, and the RESP console.</p>
+        <div class="product-shots">
+          <figure>
+            <img src="assets/product/tenants.png" width="1600" height="1000" alt="DBX dashboard tenant list with isolated engines">
+            <figcaption>Tenants — each row is an engine, not a namespace</figcaption>
+          </figure>
+          <div class="shot-stack">
+            <figure>
+              <img src="assets/product/overview.png" width="1200" height="800" alt="DBX dashboard overview for one tenant">
+              <figcaption>Overview</figcaption>
+            </figure>
+            <figure>
+              <img src="assets/product/console.png" width="1200" height="800" alt="DBX interactive console">
+              <figcaption>Console</figcaption>
+            </figure>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap" data-in>
+        <p class="kicker">Fit</p>
+        <h2>Who it is for. Who it is not.</h2>
+        <div class="split">
+          <div>
+            <h3>Build this if</h3>
+            <ul>
+              <li>AI agent platforms — each end-customer’s agent needs private recall</li>
+              <li>Vertical AI SaaS — legal, medical, support, finance RAG per client</li>
+              <li>On-prem / regulated — one binary inside their network</li>
+              <li>Teams tired of running a cache and a vector DB</li>
+            </ul>
+          </div>
+          <div class="split--not">
+            <h3>Walk away if</h3>
+            <ul>
+              <li>One tenant, one workload</li>
+              <li>You need billion-vector ANN, sharding, or heavy filtering</li>
+              <li>You want a fully managed vector service with no infrastructure</li>
+              <li>You need SQL, joins, or a system of record</li>
+            </ul>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <caption>The right tool for the other jobs</caption>
+            <thead>
+              <tr>
+                <th>If you need</th>
+                <th>Use</th>
+                <th>Why not DBX</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Peak shared KV throughput</td>
+                <td>Redis / Dragonfly</td>
+                <td>Their design target. Ours is isolation.</td>
+              </tr>
+              <tr>
+                <td>Billion-vector ANN</td>
+                <td>Qdrant / Milvus</td>
+                <td>DBX is sized for per-tenant working sets.</td>
+              </tr>
+              <tr>
+                <td>Fully managed vectors</td>
+                <td>Pinecone</td>
+                <td>DBX is software you run. Deliberately.</td>
+              </tr>
+              <tr>
+                <td>System of record</td>
+                <td>Postgres + pgvector</td>
+                <td>DBX sits in front of the system of record and underneath the agent.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
+    <section class="section">
+      <div class="wrap" data-in data-film>
+        <p class="kicker">Operator walkthrough</p>
+        <h2>The dashboard, frame by frame.</h2>
+        <p class="lede">Real screens from the embedded UI. No stock footage. Advance with the arrows or sit with the loop.</p>
+        <div class="film">
+          <figure class="film-stage">
+            <img data-film-frame src="assets/product/tenants.png" width="1600" height="1000" alt="DBX dashboard tenant list">
+            <figcaption data-film-cap>Tenants — each row is an isolated engine</figcaption>
+          </figure>
+          <div class="film-controls">
+            <button type="button" data-film-prev>Prev</button>
+            <div class="film-thumbs" data-film-thumbs></div>
+            <button type="button" data-film-next>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <p class="kicker">BSL 1.1</p>
+        <h2>Install it in your rack. Measure it on your hardware.</h2>
+        <p class="lede">Free to self-host, including inside your own SaaS. Cannot offer managed DBX to third parties without a commercial deal.</p>
+        <div class="btn-row">
+          <a class="btn" href="start.html">Get started</a>
+          <a class="btn btn-ghost" href="pricing.html">Pricing</a>
+          <a class="btn btn-ghost" href="contact.html">Talk to us</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

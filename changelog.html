@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Changelog — DBX</title>
+  <meta name="description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness, and the 15-minute Python path shipped 28 August 2026. Releases on GitHub.">
+  <meta property="og:title" content="Changelog — DBX">
+  <meta property="og:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/changelog.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Changelog — DBX">
+  <meta name="twitter:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
+  <meta name="twitter:image" content="assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/changelog.html">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="changelog">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">What shipped</p>
+        <h1>Changelog</h1>
+        <p>Signed notes live on <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases">GitHub Releases</a>. This page is the public summary, not a substitute for git tags.</p>
+      </div>
+    </header>
+    <section class="section">
+      <div class="wrap">
+        <div class="change-list">
+          <article class="change">
+            <time datetime="2026-09-03">03 Sep 2026</time>
+            <div>
+              <h2>Isolation Kernel — kernel-enforced per-tenant seals</h2>
+              <p>Each tenant is a separate <code>dbx-server</code> process on Linux <code>strict</code> mode. Landlock LSM stops cross-tenant file access. WAL, snapshots, <code>.vec.meta</code>, and <code>.hnsw</code> are AES-256-GCM sealed under a per-tenant DEK; shredding the DEK provides O(1) cryptographic deletion. Unix sockets with <code>SO_PEERCRED</code> accept only the orchestrator PID. Per-worker control tokens prevent neighbour authentication. Production (TLS or <code>DBX_PRODUCTION=1</code>) refuses <code>inprocess</code> unless <code>DBX_ALLOW_INPROCESS=1</code>. Set <code>DBX_REQUIRE_DISK_ENCRYPTION=1</code> to refuse boot on a plaintext volume.</p>
+              <p>Python SDK: <code>TenantMemory.remember</code> / <code>recall</code> / <code>forget</code> plus <code>ControlPlane.shred</code>. Measured under strict: 50k keys + 20k vectors survived restart; 100k sealed vectors at recall@10 0.950; idle worker ~14–17 MiB RSS. Honest limits: SQ8 rows unencrypted (use LUKS/fscrypt), Landlock governs file opens only, cgroup best-effort in containers.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
+              <h2>Public site, Python tests, orchestrator image</h2>
+              <p>Marketing and docs pages live in <code>website/</code> and deploy from GitHub Pages (<code>.github/workflows/pages.yml</code>). Intended hostname <code>dbxdb.io</code> via <code>website/CNAME</code>. Python Lint runs flake8, Black, and pytest; live AUTH tests skip without env. <code>make python-check</code> is the local match. Docker publish and the root Dockerfile build <code>deploy/Dockerfile</code> (<code>cmd/dbx-orchestrator</code>), not the old <code>cmd/orchestrator</code> entrypoint. GHCR tags appear when a GitHub Release is published.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
+              <h2>v1.0.0 — industry launch profile</h2>
+              <p>Reader keys cannot <code>SET</code> or <code>VADD</code> (tested). Orchestrator tenants have no default superuser. Production <code>/metrics</code> requires a Bearer JWT or <code>DBX_INTERNAL_API_TOKEN</code>. Dashboard Tenant keys mints reader/writer/tenant-admin credentials. Still a single-node profile: 100 tenants/node, 100k vectors/tenant. Not SOC 2. Not a cluster.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">28 Aug 2026</time>
+            <div>
+              <h2>Usage, hibernate, soak harness</h2>
+              <p>Per-tenant usage API and Prometheus <code>/metrics</code>. Export/import aliases for the portable tenant archive. Hibernate/wake evicts a cold engine without deleting it. CI runs a 12/4 density soak plus backup/restore; operators run <code>make soak</code> for 100 idle / 25 active. Python 15-minute path: <code>examples/quickstart.py</code>. Durable <code>SETEX</code> (node-redis <code>setEx</code>) sits on the same WAL path as <code>SET … EX</code>. Next.js and LangChain examples AUTH on <code>:6380</code>.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-27">27 Aug 2026</time>
+            <div>
+              <h2>v1 GO — single-node profile</h2>
+              <p>Cleared for production under <strong>100 tenants/node</strong>, <strong>100k vectors/tenant</strong>, durable strings + vectors. Windows certification: SET 186,147 ops/s, GET 284,785, ingest 7,233 vec/s, search p50/p95/p99 2.304 / 3.132 / 3.730 ms, recall@10 0.920 / p05 0.800. Hardware is attached on the <a href="performance.html">performance</a> page.</p>
+              <p>WAL v2, quotas, bounded expiry, panic boundaries, scoped keys, single RESP ingress on <code>:6380</code>, tombstones, and checksummed restore shipped in the August hardening. Optional async WAL replicas ack locally. Raft, cluster, tiering, and non-string RESP mutations fail closed.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-08-28">Later</time>
+            <div>
+              <h2>Engine-package coverage</h2>
+              <p>Remaining follow-up from the roadmap is raising engine-package test coverage. Async replicas are available; they do not replace an operator 100/25 soak on your hardware.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+  </main>
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

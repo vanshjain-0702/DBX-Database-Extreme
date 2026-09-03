@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Architecture — DBX Docs</title>
+  <meta name="description" content="Orchestrator on :8000, authenticated RESP on :6380, one isolated engine per tenant with its own WAL, HNSW, and snapshots.">
+  <meta property="og:title" content="Architecture — DBX Docs">
+  <meta property="og:description" content="Orchestrator on :8000, authenticated RESP on :6380, one isolated engine per tenant with its own WAL, HNSW, and snapshots.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/docs/architecture.html">
+  <meta property="og:image" content="../assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Architecture — DBX Docs">
+  <meta name="twitter:description" content="Orchestrator on :8000, authenticated RESP on :6380, one isolated engine per tenant with its own WAL, HNSW, and snapshots.">
+  <meta name="twitter:image" content="../assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/docs/architecture.html">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body data-root=".." data-page="docs-architecture">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <div class="docs-shell">
+      <div id="docs-rail"></div>
+      <article class="docs-body">
+        <p class="kicker">Docs</p>
+        <h1>Architecture</h1>
+        <p>Every tenant gets its own isolated in-memory store: KV working state and HNSW-indexed vector memory, with its own WAL and snapshot lineage. The orchestrator owns lifecycle; each tenant owns its data.</p>
+        <p>The wire protocol is RESP2-compatible so existing clients connect without a custom driver. That is an on-ramp, not a claim that DBX substitutes for a tuned shared KV cluster. See <a href="positioning.html">positioning</a>.</p>
+        <h2>Orchestrator</h2>
+        <p><code>cmd/dbx-orchestrator</code> is the control plane: JWT auth, provision / promote / backup / restore / export / import / hibernate / wake / delete, per-tenant usage, Prometheus <code>GET /metrics</code>, one public RESP ingress on <code>:6380</code>, and reverse-proxying to the current primary. Data-plane Raft and cluster mode fail closed. Sentinel does not restart a hibernated tenant.</p>
+        <p>Because each tenant owns a separate directory, every lifecycle operation affects exactly one customer.</p>
+        <h2>Tenant server</h2>
+        <p><code>cmd/dbx-server</code> is the data plane. One instance per tenant member. On Linux production (<code>DBX_ISOLATION_MODE=strict</code>) that instance is a sealed worker process: Landlock, cgroup, envelope-encrypted files, Unix sockets with <code>SO_PEERCRED</code>. See the Isolation Kernel in the repo docs.</p>
+        <h2>Request path</h2>
+        <ol>
+          <li>RESP ingress requires <code>AUTH tenantID:keyID secret</code>.</li>
+          <li>The scoped credential is verified and the command is routed to that tenant’s loopback listener.</li>
+          <li>The key is re-resolved on every command so revocation is immediate.</li>
+          <li>The tenant engine enforces role and key patterns, appends a WAL v2 transaction, acks locally, then applies.</li>
+        </ol>
+        <h2>Persistence</h2>
+        <ul>
+          <li><strong>WAL v2</strong> — length-framed, sequenced, CRC-protected. <code>always</code> fsyncs before ack; <code>everysec</code> is a one-second loss window.</li>
+          <li><strong>Checkpoints</strong> — sequence-bearing KV snapshots. Vector rows live in mmap files, not in the periodic <code>.rdb</code> image. Do not claim a single atomic KV+vector snapshot.</li>
+          <li><strong>Backup</strong> — maintenance lock, SHA-256 manifest, restore into a sibling directory with rollback. Export/import are aliases. Hibernate stops the engine and keeps the directory; wake rehydrates it.</li>
+          <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak. The Isolation Kernel’s <code>strict</code> profile is a security mode, not that density drill.</li>
+        </ul>
+        <h2>Isolation Kernel</h2>
+        <p>Linux production (<code>DBX_ISOLATION_MODE=strict</code>) seals each tenant as its own process with a Landlock-restricted filesystem view, per-tenant AES-256-GCM over the WAL, checkpoints, vector ids and HNSW graph, and Unix sockets that only the orchestrator PID can open.</p>
+        <p>Limits worth stating: SQ8 rows stay mmap'd and unencrypted so idle tenants stay in page cache — use fscrypt or LUKS for row confidentiality. Landlock covers file opens, not <code>connect()</code>; peer credentials stop cross-tenant sockets. cgroup limits require a host that delegates cgroup writes. Data in use is plaintext inside the worker. <code>inprocess</code> is the default density/dev profile and is not the security claim.</p>
+        <h2>Dashboard</h2>
+        <p>React UI compiled into the orchestrator binary. <strong>Tenant keys</strong> (<code>/cluster/{id}/keys</code>) mints reader/writer/tenant-admin credentials; the secret is shown once. Console, explorer, and vector playground use an operator JWT on <code>:8000</code>. They are operator tools, not the public tenant API.</p>
+        <h2>Public site</h2>
+        <p>Static HTML in <code>website/</code>. Open <code>website/index.html</code> locally. GitHub Pages is 404 while the repository is private; <code>dbxdb.io</code> is not registered. See <code>website/README.md</code>.</p>
+      </article>
+    </div>
+  </main>
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

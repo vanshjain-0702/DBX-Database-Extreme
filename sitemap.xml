@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://dbxdb.io/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://dbxdb.io/features.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/architecture.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/start.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/performance.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/pricing.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/security.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/contact.html</loc><changefreq>yearly</changefreq></url>
+  <url><loc>https://dbxdb.io/changelog.html</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://dbxdb.io/license.html</loc><changefreq>yearly</changefreq></url>
+  <url><loc>https://dbxdb.io/privacy.html</loc><changefreq>yearly</changefreq></url>
+  <url><loc>https://dbxdb.io/terms.html</loc><changefreq>yearly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/index.html</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/quickstart.html</loc><changefreq>weekly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/architecture.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/api.html</loc><changefreq>monthly</changefreq></url>
+  <url><loc>https://dbxdb.io/docs/positioning.html</loc><changefreq>monthly</changefreq></url>
+</urlset>

@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Get started — DBX</title>
+  <meta name="description" content="Run DBX with Docker, Compose, or source. Connect with Python or Node. AUTH is tenant:key_id plus secret. Supported profile: 100 tenants/node, 100k vectors/tenant.">
+  <meta property="og:title" content="Get started — DBX">
+  <meta property="og:description" content="Docker, source, or Compose. Python SDK and RESP AUTH. Single-node production under the supported profile.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/start.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/start.html">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="start">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Docker, source, or Compose</p>
+        <h1>Run the binary. Provision a tenant.</h1>
+        <p>Dashboard on <code>:8000</code>. RESP on <code>:6380</code>. Your existing RESP clients work once you AUTH.</p>
+      </div>
+    </header>
+
+    <aside class="limits" aria-label="Supported production profile">
+      <div class="limits-inner">
+        <span class="stamp">v1 certified</span>
+        <p>
+          Single-node production under the supported profile:
+          <strong>100 tenants/node</strong>,
+          <strong>100k vectors/tenant</strong>,
+          durable <strong>strings + vectors</strong>.
+          Optional async WAL replicas (primary acks locally; replica lag possible).
+          Data-plane Raft, cluster/sharding, tiering, and non-string RESP mutation families <strong>fail closed</strong>.
+        </p>
+      </div>
+    </aside>
+
+    <section class="section">
+      <div class="wrap">
+        <p class="kicker">Pick a path</p>
+        <h2>Install</h2>
+        <div data-tabs>
+          <div class="tabs" role="tablist">
+            <button type="button" class="is-on" data-tab="docker" aria-selected="true">Docker</button>
+            <button type="button" data-tab="source" aria-selected="false">From source</button>
+            <button type="button" data-tab="compose" aria-selected="false">Compose</button>
+          </div>
+          <div data-panel="docker">
+            <div class="code-panel">
+              <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+docker build -t dbx:dev -f deploy/Dockerfile .
+docker run -p 8000:8000 -p 6380:6380 \
+  -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
+  -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
+  -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
+  -e DBX_NODE_MEMORY_BUDGET=8gb \
+  dbx:dev</pre>
+            </div>
+            <p>Open the dashboard at <a href="http://localhost:8000">http://localhost:8000</a> and log in with <code>admin</code> / your password. Mint a writer key on <strong>Tenant keys</strong>. Images published when you create a GitHub Release are <code>ghcr.io/vanshjain-0702/dbx-orchestrator</code>. Until then, build with <code>deploy/Dockerfile</code>.</p>
+          </div>
+          <div data-panel="source" hidden>
+            <p class="muted">Prerequisites: Go 1.25+, Node.js 20+.</p>
+            <div class="code-panel">
+              <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+
+make build      # build all binaries
+make run-dev    # start the local development stack</pre>
+            </div>
+          </div>
+          <div data-panel="compose" hidden>
+            <div class="code-panel">
+              <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
+cd DBX-Database-Extreme
+make docker-up</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <h2>AUTH, then talk</h2>
+        <p class="lede">The first RESP command must be <code>AUTH &lt;tenantID&gt;:&lt;keyID&gt; &lt;secret&gt;</code>. Scoped credentials are per tenant. HTTP <code>/t/{tenantID}/query</code> is operator tooling, not the public tenant API.</p>
+
+        <div data-tabs>
+          <div class="tabs" role="tablist">
+            <button type="button" class="is-on" data-tab="py" aria-selected="true">Python</button>
+            <button type="button" data-tab="node" aria-selected="false">Node.js</button>
+          </div>
+          <div data-panel="py">
+            <div class="code-panel">
+              <header><span>python</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>from dbx import DBXClient
+
+db = DBXClient(
+    host="localhost",
+    port=6380,
+    tenant="acme-corp",
+    key_id="key-id",
+    secret="one-time-key-secret",
+)
+
+# Working state for this customer's agent
+db.set("session:42", '{"thread": "onboarding", "step": 3}')
+
+# Semantic memory for the same customer, same engine, same backup
+db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
+results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)</pre>
+            </div>
+          </div>
+          <div data-panel="node" hidden>
+            <div class="code-panel">
+              <header><span>typescript</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>import { createClient } from 'redis'; // DBX speaks RESP, so existing clients work
+
+const client = createClient({ url: 'redis://localhost:6380' });
+await client.connect();
+await client.sendCommand(['AUTH', 'acme-corp:key-id', 'one-time-key-secret']);
+await client.set('session:abc', JSON.stringify({ userId: 42 }));</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Provision a customer</h2>
+        <p>Bearer token from <code>POST /api/login</code>. Then create a live isolated engine:</p>
+        <div class="code-panel">
+          <header><span>HTTP</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>curl -X POST http://localhost:8000/api/provision \
+  -H "Authorization: Bearer $DBX_TOKEN" \
+  -d '{"id": "acme-corp", "name": "Acme Corp"}'</pre>
+        </div>
+        <p class="muted">Backup, restore, export/import, hibernate/wake, and delete take the same token and a tenant id. Meter a customer with <code>GET /api/v1/tenants/{id}/usage</code>. Full sequence on <a href="features.html">Features</a>. The 15-minute path in Python is <code>examples/quickstart.py</code> (login, provision, AUTH, SET, VADD, usage, export, purge). LangChain session memory is <code>examples/langchain-rag</code>. Next.js <code>SETEX</code> is <code>examples/nextjs-cache</code>.</p>
+        <p><a href="docs/api.html">API reference →</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

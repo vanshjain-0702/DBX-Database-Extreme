@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Performance certification — DBX</title>
+  <meta name="description" content="DBX v1 certification: measured 27 Aug 2026 on Windows 10 build 26200, one node, single tenant. SET, GET, vector ingest, ANN latency, and Recall@10 with methodology and caveats.">
+  <meta property="og:title" content="Performance certification — DBX">
+  <meta property="og:description" content="Measured on one node, single tenant. Hardware attached. Not a competitor ranking.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/performance.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/performance.html">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="performance">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Measured 27 Aug 2026 · one node · one tenant</p>
+        <h1>Isolation is not expensive.</h1>
+        <p>These numbers exist to show that per-tenant isolation does not cost an order of magnitude — not to rank DBX against a tuned cluster of something else. Measured on one node, single tenant. Measure on your own hardware before you rely on any of this.</p>
+      </div>
+    </header>
+
+    <aside class="limits" aria-label="Supported production profile">
+      <div class="limits-inner">
+        <span class="stamp">v1 certified</span>
+        <p>
+          Single-node production under the supported profile:
+          <strong>100 tenants/node</strong>,
+          <strong>100k vectors/tenant</strong>,
+          durable <strong>strings + vectors</strong>.
+          Optional async WAL replicas (primary acks locally; replica lag possible).
+          Data-plane Raft, cluster/sharding, tiering, and non-string RESP mutation families <strong>fail closed</strong>.
+        </p>
+      </div>
+    </aside>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Lab log</h2>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Date</td>
+                <td>27 Aug 2026</td>
+              </tr>
+              <tr>
+                <td>OS</td>
+                <td>Windows 10 build 26200</td>
+              </tr>
+              <tr>
+                <td>CPU</td>
+                <td>18 logical processors</td>
+              </tr>
+              <tr>
+                <td>RAM</td>
+                <td>15.6 GiB</td>
+              </tr>
+              <tr>
+                <td>Topology</td>
+                <td>Single-node, local. One tenant.</td>
+              </tr>
+              <tr>
+                <td>Purpose</td>
+                <td>Windows-only certification. This page does not claim Linux numbers.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="metrics">
+          <div class="metric-cell">
+            <p class="kicker">SET</p>
+            <p class="metric">186,147 <span class="metric-unit">ops/s</span></p>
+            <p>RESP, 64 connections, pipeline 64, WAL everysec</p>
+          </div>
+          <div class="metric-cell">
+            <p class="kicker">GET</p>
+            <p class="metric">284,785 <span class="metric-unit">ops/s</span></p>
+            <p>Same run, 128k operations</p>
+          </div>
+          <div class="metric-cell">
+            <p class="kicker">Vector ingest</p>
+            <p class="metric">7,233 <span class="metric-unit">vec/s</span></p>
+            <p>100k × 128-dim, batches of 1,000, 8-way HNSW</p>
+          </div>
+          <div class="metric-cell">
+            <p class="kicker">ANN search</p>
+            <p class="metric">2.304 <span class="metric-unit">ms p50</span></p>
+            <p>p95 3.132 ms · p99 3.730 ms · 100k, 128-dim, efSearch=80, 50 queries</p>
+          </div>
+          <div class="metric-cell">
+            <p class="kicker">Recall@10</p>
+            <p class="metric">0.920 <span class="metric-unit">mean</span></p>
+            <p>p05 0.800 · SQ8 HNSW vs float32 brute force</p>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <caption>Same numbers, as a table</caption>
+            <thead>
+              <tr>
+                <th>Operation</th>
+                <th>Number</th>
+                <th>Measured with</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>SET</td>
+                <td>186,147 ops/s</td>
+                <td>RESP, 64 conns, pipeline 64, WAL everysec</td>
+              </tr>
+              <tr>
+                <td>GET</td>
+                <td>284,785 ops/s</td>
+                <td>Same run, 128k ops</td>
+              </tr>
+              <tr>
+                <td>Vector ingest</td>
+                <td>7,233 vec/s</td>
+                <td>100k × 128-dim, batches 1000, 8-way HNSW</td>
+              </tr>
+              <tr>
+                <td>ANN search</td>
+                <td>p50 2.304 / p95 3.132 / p99 3.730 ms</td>
+                <td>100k, 128-dim, efSearch=80, 50 queries</td>
+              </tr>
+              <tr>
+                <td>Recall@10</td>
+                <td>mean 0.920 / p05 0.800</td>
+                <td>SQ8 HNSW vs float32 brute force</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <h2>How to read these numbers</h2>
+        <ol class="pain-list">
+          <li>
+            <span class="pain-num">01</span>
+            <div>
+              <h3>Hardware is attached</h3>
+              <p>Date, OS build, logical processors, RAM, client shape, connection count, and whether the run was pipelined. A number without those is marketing.</p>
+            </div>
+          </li>
+          <li>
+            <span class="pain-num">02</span>
+            <div>
+              <h3>Single tenant, said out loud</h3>
+              <p>This run is one node, one tenant, local. Density — how many active tenants fit on one node, and what an idle tenant costs — is the interesting product metric. Do not derive a cluster ranking from these rows.</p>
+            </div>
+          </li>
+          <li>
+            <span class="pain-num">03</span>
+            <div>
+              <h3>Recall travels with latency</h3>
+              <p>SQ8 is a quality trade. Publishing ANN milliseconds without Recall@10 would make the page untrustworthy. Mean 0.920, p05 0.800 against float32 brute force, on this corpus.</p>
+            </div>
+          </li>
+          <li>
+            <span class="pain-num">04</span>
+            <div>
+              <h3>Windows, not Linux</h3>
+              <p>Certification was Windows 10 build 26200 as documented. This page does not claim Linux numbers.</p>
+            </div>
+          </li>
+        </ol>
+        <p class="note">We do not quote a competitor’s number we did not measure ourselves under the same conditions. We do not derive throughput from a latency percentile. If a claim requires naming a competitor to make sense, it is a weak claim.</p>
+        <p><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/main/scripts/benchmarks/performance_analysis.md">Methodology notes in the repo →</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

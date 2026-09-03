@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Security — DBX</title>
+  <meta name="description" content="How DBX isolates and authenticates tenants: Isolation Kernel (process + Landlock + encryption), JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
+  <meta property="og:title" content="Security — DBX">
+  <meta property="og:description" content="How DBX authenticates operators and tenants: JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.io/security.html">
+  <meta property="og:image" content="assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Security — DBX">
+  <meta name="twitter:description" content="How DBX authenticates operators and tenants: JWT, hashed 256-bit keys, roles, login lockout, WAL CRC, SHA-256 backups, control-plane TLS. No SOC 2 claim.">
+  <meta name="twitter:image" content="assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.io/security.html">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="security">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">What is true in the binary</p>
+        <h1>Isolation is a kernel boundary. Auth is hashed.</h1>
+        <p>Security page for diligence, not a compliance badge wall. We are not SOC 2 certified. If your questionnaire needs that line, say so — do not infer it from this site.</p>
+      </div>
+    </header>
+    <section class="section">
+      <div class="wrap">
+        <div class="callout">
+          <p>Report issues to <a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a>. Preferred language: English. See also <a href=".well-known/security.txt">security.txt</a>.</p>
+        </div>
+        <div class="secure-grid">
+          <article class="secure-card">
+            <h3>Operator JWT</h3>
+            <p>Control-plane Bearer tokens from <code>POST /api/login</code>. Dashboard and lifecycle APIs sit behind them. HTTP <code>/t/{id}/query</code> is operator tooling, not the public tenant API.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Tenant keys</h3>
+            <p>256-bit secrets, stored only as hashes. Create, list metadata, revoke immediately — including live RESP connections. Secrets are never returned after mint. A <code>reader</code> key can <code>GET</code> and <code>VSEARCH</code> and cannot <code>SET</code> or <code>VADD</code>. Mint from Tenant keys in the dashboard.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Roles and scopes</h3>
+            <p><code>reader</code>, <code>writer</code>, and <code>tenant-admin</code>, with optional key-pattern scopes. AUTH is <code>tenantID:keyID</code> plus secret. The key is re-resolved on every command.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Login lockout</h3>
+            <p>Per-IP brute-force protection on <code>/api/login</code>: five failures, sixty-second lockout. Admin passwords are bcrypt, never plaintext.</p>
+          </article>
+          <article class="secure-card">
+            <h3>WAL integrity</h3>
+            <p>Length-framed, sequenced, CRC-protected state-image transactions. CRC corruption is fatal. Checkpoints are sequence-bearing KV snapshots.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Backup checksums</h3>
+            <p>A maintenance lock writes a versioned SHA-256 manifest for KV and vector files. Restore validates into a sibling directory and swaps with rollback.</p>
+          </article>
+          <article class="secure-card">
+            <h3>TLS</h3>
+            <p>Control plane TLS by default. <code>-insecure-http</code> is local development only. RESP ingress can require mTLS when configured.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Prometheus</h3>
+            <p>Orchestrator <code>GET /metrics</code> is open only with <code>-insecure-http</code>. In production scrape with <code>Authorization: Bearer</code> — operator JWT or <code>DBX_INTERNAL_API_TOKEN</code>. Do not expose <code>:8000</code> to the internet without TLS.</p>
+          </article>
+          <article class="secure-card">
+            <h3>Blast radius</h3>
+            <p>Provision, backup, restore, and purge operate on one tenant directory. There is no cluster-wide keyscan to “delete my data.”</p>
+          </article>
+        </div>
+        <p class="muted">v1 is a single-node profile. Raft and cluster mode fail closed. Optional async WAL replicas ack on the primary; replica lag is possible. Details in <a href="docs/architecture.html">architecture</a>.</p>
+      </div>
+    </section>
+  </main>
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>
