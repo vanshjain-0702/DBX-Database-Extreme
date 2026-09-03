@@ -3,15 +3,17 @@ package orchestrator
 import (
 	"fmt"
 	"net"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/hashicorp/raft"
 )
 
 // restartRecord tracks restart attempts for a single tenant.
 type restartRecord struct {
-	attempts  int
+	attempts    int
 	windowStart time.Time
 }
 
@@ -100,7 +102,14 @@ func (s *Sentinel) checkHealth() {
 			continue
 		}
 		addr := fmt.Sprintf("127.0.0.1:%d", t.RESPPort)
-		conn, err := net.DialTimeout("tcp", addr, healthDialTimeout)
+		network := "tcp"
+		if t.DataDir != "" {
+			sock := isolation.RESPSocket(t.DataDir)
+			if _, err := os.Stat(sock); err == nil {
+				network, addr = "unix", sock
+			}
+		}
+		conn, err := net.DialTimeout(network, addr, healthDialTimeout)
 		if err != nil {
 			fmt.Printf("[Sentinel] WARN: Tenant %s (%s) is unreachable.\n", t.ID, addr)
 

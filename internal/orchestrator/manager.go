@@ -10,8 +10,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dbx/dbx/internal/auth"
 	"github.com/dbx/dbx/internal/config"
+	"github.com/dbx/dbx/internal/isolation"
+	"github.com/dbx/dbx/internal/security"
 	"github.com/dbx/dbx/internal/server"
 	"github.com/hashicorp/raft"
 	"gopkg.in/yaml.v3"
@@ -46,6 +47,7 @@ type Manager struct {
 	nextHTTPPort int
 	nextRESPPort int
 	instances    map[string]*server.Instance
+	workers      map[string]*isolatedWorker
 	startMu      sync.Mutex
 	starting     map[string]bool
 	restarts     map[string]int
@@ -53,6 +55,7 @@ type Manager struct {
 	nodeBudget   int64
 	nextReplPort int
 	RaftNode     *RaftNode
+	profile      isolation.Profile
 }
 
 func NewManager(stateFile string) (*Manager, error) {
@@ -63,9 +66,11 @@ func NewManager(stateFile string) (*Manager, error) {
 		nextRESPPort: 6401,
 		nextReplPort: defaultReplicationPort,
 		instances:    make(map[string]*server.Instance),
+		workers:      make(map[string]*isolatedWorker),
 		starting:     make(map[string]bool),
 		restarts:     make(map[string]int),
 		tenantQuotas: make(map[string]int64),
+		profile:      isolation.FromEnv(),
 	}
 	if configured := os.Getenv("DBX_NODE_MEMORY_BUDGET"); configured != "" {
 		budget, err := config.ParseBytes(configured)
@@ -365,7 +370,9 @@ func (m *Manager) DeleteTenant(id string, purge bool) error {
 func (m *Manager) removeTenant(t *Tenant, purge bool) error {
 	m.mu.Lock()
 	inst := m.instances[t.ID]
+	worker := m.workers[t.ID]
 	delete(m.instances, t.ID)
+	delete(m.workers, t.ID)
 	delete(m.tenantQuotas, t.ID)
 	delete(m.tenants, t.ID)
 	saveErr := m.saveState()
@@ -374,6 +381,9 @@ func (m *Manager) removeTenant(t *Tenant, purge bool) error {
 	if inst != nil {
 		inst.Stop()
 	}
+	if worker != nil {
+		worker.Stop()
+	}
 	if saveErr != nil {
 		return saveErr
 	}
@@ -381,6 +391,7 @@ func (m *Manager) removeTenant(t *Tenant, purge bool) error {
 	_ = os.Remove(fmt.Sprintf("./configs/tenant-%s.yaml", t.ID))
 
 	if purge {
+		_ = isolation.ShredDEK(t.DataDir)
 		if err := os.RemoveAll(t.DataDir); err != nil {
 			return fmt.Errorf("tenant %s removed from control plane but data purge failed: %w", t.ID, err)
 		}
@@ -400,8 +411,9 @@ func (m *Manager) GetTenant(id string) (*Tenant, bool) {
 func (m *Manager) TenantRunning(id string) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	_, ok := m.instances[id]
-	return ok
+	_, inst := m.instances[id]
+	_, worker := m.workers[id]
+	return inst || worker
 }
 
 func (m *Manager) ListTenants() []*Tenant {
@@ -435,8 +447,11 @@ type TenantView struct {
 func (m *Manager) ListTenantViews() []TenantView {
 	m.mu.RLock()
 	views := make([]TenantView, 0, len(m.tenants))
-	running := make(map[string]bool, len(m.instances))
+	running := make(map[string]bool, len(m.instances)+len(m.workers))
 	for id := range m.instances {
+		running[id] = true
+	}
+	for id := range m.workers {
 		running[id] = true
 	}
 	for _, t := range m.tenants {
@@ -493,8 +508,9 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}
 	m.mu.RLock()
 	_, alreadyRunning := m.instances[t.ID]
+	_, alreadyWorker := m.workers[t.ID]
 	m.mu.RUnlock()
-	if alreadyRunning {
+	if alreadyRunning || alreadyWorker {
 		m.startMu.Unlock()
 		return nil
 	}
@@ -507,29 +523,71 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}()
 
 	// Create data dir
-	if err := os.MkdirAll(t.DataDir, 0755); err != nil {
+	if err := os.MkdirAll(t.DataDir, 0700); err != nil {
 		return err
 	}
 
+	profile := m.profile
+	if profile.Mode == "" {
+		profile = isolation.FromEnv()
+	}
+
+	var atRest *security.Encryptor
+	var dek []byte
+	if profile.Encryption {
+		kek, err := isolation.LoadKEK()
+		if err != nil {
+			return err
+		}
+		dek, err = isolation.EnsureDEK(t.DataDir, kek)
+		if err != nil {
+			return err
+		}
+		atRest, err = isolation.NewEncryptor(dek)
+		if err != nil {
+			return err
+		}
+	}
+
 	cfgObj := config.TenantEngine(t.DataDir, t.RESPPort, t.HTTPPort)
+	cfgObj.Auth.ACLFile = isolation.ACLFile(t.DataDir)
+	if profile.UnixIPC {
+		cfgObj.Server.Socket = isolation.RESPSocket(t.DataDir)
+		cfgObj.Server.HTTPSocket = isolation.HTTPSocket(t.DataDir)
+		cfgObj.Server.PeerPIDs = []int{os.Getpid()}
+	}
 	role, listenAddr, primaryAddr := "", "", ""
 	switch t.Role {
 	case "primary":
 		role = "primary"
 		listenAddr = fmt.Sprintf("127.0.0.1:%d", t.ReplicationPort)
+		if profile.UnixIPC {
+			listenAddr = isolation.ReplSocket(t.DataDir)
+		}
 	case "replica":
 		role = "replica"
 		m.mu.RLock()
-		if primary, ok := m.tenants[t.ReplicaOf]; ok && primary.ReplicationPort > 0 {
-			primaryAddr = fmt.Sprintf("127.0.0.1:%d", primary.ReplicationPort)
+		if primary, ok := m.tenants[t.ReplicaOf]; ok {
+			if profile.UnixIPC {
+				primaryAddr = isolation.ReplSocket(primary.DataDir)
+			} else if primary.ReplicationPort > 0 {
+				primaryAddr = fmt.Sprintf("127.0.0.1:%d", primary.ReplicationPort)
+			}
 		}
 		m.mu.RUnlock()
 	}
 	if err := config.ApplyReplication(cfgObj, role, listenAddr, primaryAddr); err != nil {
 		return err
 	}
+	enginePath := filepath.Join(t.DataDir, "engine.yaml")
 	if out, err := yaml.Marshal(cfgObj); err == nil {
-		_ = os.WriteFile(filepath.Join(t.DataDir, "engine.yaml"), out, 0644)
+		_ = os.WriteFile(enginePath, out, 0600)
+	}
+	m.mu.RLock()
+	users := collectTenantUsers(m.tenants, t)
+	m.mu.RUnlock()
+	if err := writeUsersACL(t.DataDir, users); err != nil {
+		return err
 	}
 	quota, err := config.ParseBytes(cfgObj.Engine.MaxMemory)
 	if err != nil {
@@ -549,30 +607,30 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}
 	m.mu.Unlock()
 
+	if profile.Process {
+		fmt.Printf("[Orchestrator] Starting isolated tenant %s (%s)\n", t.ID, profile)
+		if err := m.startIsolatedWorker(t, enginePath, dek, quota); err != nil {
+			return err
+		}
+		m.mu.RLock()
+		worker := m.workers[t.ID]
+		m.mu.RUnlock()
+		go m.superviseWorker(t, worker)
+		return nil
+	}
+
 	inst, err := server.NewInstance(cfgObj)
 	if err != nil {
 		return err
 	}
 	inst.SkipBuiltinUser()
-	m.mu.RLock()
-	users := make([]*auth.User, 0)
-	addKeys := func(keys map[string]*TenantKey) {
-		for _, key := range keys {
-			if key != nil && !key.Revoked {
-				users = append(users, tenantUser(key))
-			}
-		}
+	inst.SetTenantID(t.ID)
+	if atRest != nil {
+		inst.SetAtRest(atRest)
 	}
-	addKeys(t.Keys)
-	if t.Role == "replica" {
-		if primary, ok := m.tenants[t.ReplicaOf]; ok {
-			addKeys(primary.Keys)
-		}
-	}
-	m.mu.RUnlock()
 	inst.SetInitialUsers(users)
 
-	fmt.Printf("[Orchestrator] Starting tenant %s on HTTP:%d RESP:%d\n", t.ID, t.HTTPPort, t.RESPPort)
+	fmt.Printf("[Orchestrator] Starting tenant %s on HTTP:%d RESP:%d isolation=%s\n", t.ID, t.HTTPPort, t.RESPPort, profile.Mode)
 	if err := inst.Start(context.Background()); err != nil {
 		return err
 	}
@@ -598,6 +656,34 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}
 	go m.superviseTenant(t, inst)
 	return nil
+}
+
+func (m *Manager) superviseWorker(t *Tenant, worker *isolatedWorker) {
+	if worker == nil {
+		return
+	}
+	err := <-worker.ErrorChannel()
+	if err == nil {
+		return
+	}
+	m.mu.Lock()
+	if t.Hibernated || m.workers[t.ID] != worker {
+		m.mu.Unlock()
+		return
+	}
+	delete(m.workers, t.ID)
+	m.restarts[t.ID]++
+	attempt := m.restarts[t.ID]
+	m.mu.Unlock()
+	worker.Stop()
+	if attempt > 3 {
+		fmt.Printf("[Orchestrator] tenant %s worker unhealthy after %d restart attempts: %v\n", t.ID, attempt-1, err)
+		return
+	}
+	time.Sleep(time.Duration(attempt) * time.Second)
+	if startErr := m.StartTenant(t); startErr != nil {
+		fmt.Printf("[Orchestrator] tenant %s worker restart %d failed: %v\n", t.ID, attempt, startErr)
+	}
 }
 
 func (m *Manager) superviseTenant(t *Tenant, inst *server.Instance) {
@@ -656,10 +742,15 @@ func (m *Manager) promoteLocal(replicaID string) error {
 	}
 	stopIDs := append([]string{primary.ID}, primary.Replicas...)
 	instances := make([]*server.Instance, 0, len(stopIDs))
+	workers := make([]*isolatedWorker, 0, len(stopIDs))
 	for _, id := range stopIDs {
 		if inst := m.instances[id]; inst != nil {
 			instances = append(instances, inst)
 			delete(m.instances, id)
+		}
+		if worker := m.workers[id]; worker != nil {
+			workers = append(workers, worker)
+			delete(m.workers, id)
 		}
 	}
 	primary.DataDir, replica.DataDir = replica.DataDir, primary.DataDir
@@ -674,11 +765,14 @@ func (m *Manager) promoteLocal(replicaID string) error {
 	}
 	saveErr := m.saveState()
 	primaryCopy := primary
-	hadEngines := len(instances) > 0
+	hadEngines := len(instances) > 0 || len(workers) > 0
 	m.mu.Unlock()
 
 	for _, inst := range instances {
 		inst.Stop()
+	}
+	for _, worker := range workers {
+		worker.Stop()
 	}
 	if saveErr != nil {
 		return saveErr
@@ -704,9 +798,17 @@ func (m *Manager) StopAll() {
 	for _, inst := range m.instances {
 		instances = append(instances, inst)
 	}
+	workers := make([]*isolatedWorker, 0, len(m.workers))
+	for _, worker := range m.workers {
+		workers = append(workers, worker)
+	}
 	m.instances = make(map[string]*server.Instance)
+	m.workers = make(map[string]*isolatedWorker)
 	m.mu.Unlock()
 	for _, inst := range instances {
 		inst.Stop()
+	}
+	for _, worker := range workers {
+		worker.Stop()
 	}
 }

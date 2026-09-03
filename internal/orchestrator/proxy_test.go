@@ -74,6 +74,45 @@ func TestProxyUnavailableWhenEngineNotRunning(t *testing.T) {
 	}
 }
 
+func TestProxyInjectsPerWorkerToken(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("X-DBX-Internal-Token"); got != "worker-secret" {
+			t.Fatalf("internal token = %q, want worker-secret", got)
+		}
+		fmt.Fprint(w, "ok")
+	}))
+	defer backend.Close()
+
+	_, portText, err := net.SplitHostPort(backend.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, err := strconv.Atoi(portText)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	manager := &Manager{
+		tenants: map[string]*Tenant{
+			"tenant-a": {ID: "tenant-a", HTTPPort: port},
+		},
+		workers: map[string]*isolatedWorker{
+			"tenant-a": {token: "worker-secret"},
+		},
+	}
+	proxy := NewProxy(manager, "orchestrator-secret")
+	request := httptest.NewRequest(http.MethodGet, "/t/tenant-a/info", nil)
+	response := httptest.NewRecorder()
+
+	proxy.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response.Body.String() != "ok" {
+		t.Fatalf("body = %q", response.Body.String())
+	}
+}
+
 func TestProxyRewritesBackendForbidden(t *testing.T) {
 	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "engine HTTP API requires orchestrator authentication", http.StatusForbidden)

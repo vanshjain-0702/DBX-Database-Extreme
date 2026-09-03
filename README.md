@@ -38,10 +38,11 @@ mutation families still fail closed. See the
 [measured certification matrix](scripts/benchmarks/performance_analysis.md).
 
 Before you put a customer on a node: enable control-plane TLS (do not ship with
-`-insecure-http`), mint per-tenant keys (a **reader** cannot `SET` or `VADD`),
+`-insecure-http`), set `DBX_KEK` and `DBX_ISOLATION_MODE=strict` on Linux (the
+Docker image defaults to this), mint per-tenant keys (a **reader** cannot `SET` or `VADD`),
 scrape `GET /metrics` with a Bearer JWT or `DBX_INTERNAL_API_TOKEN`, and run
 `make soak` on that hardware. Certification numbers are Windows-only; Linux is
-the CI gate, not that host.
+the CI gate, not that host. Isolation details: [docs/isolation.md](docs/isolation.md).
 
 The WAL/checkpoint format is intentionally incompatible with pre-hardening data. For an
 offline reset that preserves the old directory, run
@@ -67,6 +68,16 @@ you bolt on yourself:
 **DBX makes the tenant the unit of the database.** One API call gives you an isolated engine
 with its own data directory, its own write-ahead log, its own HNSW vector index, and its own
 snapshot lineage. Isolation is structural, not a naming convention.
+
+Two profiles, pick one. Do not claim both at once:
+
+| Profile | When | What you get | Cost |
+|---|---|---|---|
+| `inprocess` | `make run-dev`, CI, density soak | Directory + ACL + quotas | Shared Go runtime; 100 tenants/node path |
+| `strict` | Linux production (Compose/Helm default) | Process + Landlock + encrypted WAL/meta/graph + `SO_PEERCRED` | ~15 MiB RSS per idle tenant |
+
+Production (TLS, or `DBX_PRODUCTION=1`) **refuses `inprocess`** unless you set
+`DBX_ALLOW_INPROCESS=1`. See [docs/isolation.md](docs/isolation.md).
 
 ---
 
@@ -99,10 +110,18 @@ Embeddings never leave your VPC. The admin dashboard, interactive console, data 
 vector playground are compiled into the same binary you deploy. No sidecar, no separate
 control-plane service to run.
 
-### 5. Your existing clients already work
+### 5. Isolation Kernel (Linux `strict`)
+A tenant is its own `dbx-server` process. The kernel stops it opening a neighbour's
+files. WAL, snapshots, vector ids, and the HNSW graph are sealed with a per-tenant
+key you can shred. This is the security USP. It is not free, and `.vec` rows stay
+mmap'd (put the volume on LUKS/fscrypt if embeddings must be ciphertext).
+`inprocess` is a density profile, not this claim.
+
+### 6. Your existing clients already work
 DBX speaks RESP, so `redis-py`, `ioredis`, and `go-redis` connect without a custom driver.
 This is an adoption on-ramp — you don't have to learn a new protocol to try DBX — not a claim
-that DBX is a substitute for a tuned Redis cluster.
+that DBX is a substitute for a tuned Redis cluster. The product API is
+`TenantMemory.remember` / `recall` / `forget` in the Python SDK.
 
 ---
 

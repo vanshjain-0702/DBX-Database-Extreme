@@ -16,11 +16,13 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/dbx/dbx/internal/security"
 )
 
 // DecodeRecord decodes one length-framed replication payload.
 func DecodeRecord(data []byte) (*WALRecord, error) {
-	records, err := decodeFrames(bytes.NewReader(data), false)
+	records, err := decodeFrames(bytes.NewReader(data), false, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -42,6 +44,7 @@ const (
 )
 
 var walV2Magic = []byte("DBXWAL2\n")
+var walEncMagic = []byte("DBXWALe2")
 
 const maxWALFrameSize = 64 << 20
 
@@ -84,6 +87,7 @@ type WAL struct {
 	doneCh   chan struct{}
 	subsMu   sync.RWMutex
 	subs     []func(*WALRecord)
+	enc      *security.Encryptor
 }
 
 // Subscribe registers a callback invoked after a record is accepted by the WAL.
@@ -125,17 +129,23 @@ func (w *WAL) notifySubs(rec *WALRecord) {
 
 // OpenWAL opens or creates a WAL in dir.
 func OpenWAL(dir, syncMode string, maxSizeMB int) (*WAL, error) {
+	return OpenWALEncrypted(dir, syncMode, maxSizeMB, nil)
+}
+
+// OpenWALEncrypted opens a WAL and, when enc is set, stores frames as AES-256-GCM.
+func OpenWALEncrypted(dir, syncMode string, maxSizeMB int, enc *security.Encryptor) (*WAL, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, fmt.Errorf("wal: mkdir %s: %w", dir, err)
 	}
 	path := filepath.Join(dir, "wal.log")
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, fmt.Errorf("wal: open %s: %w", path, err)
 	}
 	info, _ := f.Stat()
+	header := walHeader(enc)
 	if info.Size() == 0 {
-		if _, err := f.Write(walV2Magic); err != nil {
+		if _, err := f.Write(header); err != nil {
 			f.Close()
 			return nil, fmt.Errorf("wal: write v2 header: %w", err)
 		}
@@ -145,7 +155,7 @@ func OpenWAL(dir, syncMode string, maxSizeMB int) (*WAL, error) {
 		}
 		info, _ = f.Stat()
 	} else {
-		if err := repairWALTail(f); err != nil {
+		if err := repairWALTail(f, enc); err != nil {
 			f.Close()
 			return nil, fmt.Errorf("wal: open v2 log: %w (legacy WALs require offline reset/migration)", err)
 		}
@@ -164,6 +174,7 @@ func OpenWAL(dir, syncMode string, maxSizeMB int) (*WAL, error) {
 		lastSync: time.Now(),
 		recordCh: make(chan *WALRecord, 10000), // Bounded buffer for backpressure
 		doneCh:   make(chan struct{}),
+		enc:      enc,
 	}
 	records, readErr := w.ReadAll()
 	if readErr != nil {
@@ -179,15 +190,29 @@ func OpenWAL(dir, syncMode string, maxSizeMB int) (*WAL, error) {
 	return w, nil
 }
 
-func repairWALTail(f *os.File) error {
+func walHeader(enc *security.Encryptor) []byte {
+	if enc != nil {
+		return walEncMagic
+	}
+	return walV2Magic
+}
+
+func repairWALTail(f *os.File, enc *security.Encryptor) error {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
 	header := make([]byte, len(walV2Magic))
-	if _, err := io.ReadFull(f, header); err != nil || !bytes.Equal(header, walV2Magic) {
+	if _, err := io.ReadFull(f, header); err != nil {
 		return fmt.Errorf("unsupported WAL format")
 	}
-	validOffset := int64(len(walV2Magic))
+	if enc != nil {
+		if !bytes.Equal(header, walEncMagic) {
+			return fmt.Errorf("unsupported WAL format")
+		}
+	} else if !bytes.Equal(header, walV2Magic) {
+		return fmt.Errorf("unsupported WAL format")
+	}
+	validOffset := int64(len(header))
 	for {
 		var length [4]byte
 		if _, err := io.ReadFull(f, length[:]); err != nil {
@@ -200,7 +225,11 @@ func repairWALTail(f *os.File) error {
 			return err
 		}
 		frameLen := int(binary.BigEndian.Uint32(length[:]))
-		if frameLen < 25 || frameLen > maxWALFrameSize {
+		minLen := 25
+		if enc != nil {
+			minLen = 12 + 16
+		}
+		if frameLen < minLen || frameLen > maxWALFrameSize {
 			return fmt.Errorf("invalid WAL frame length %d", frameLen)
 		}
 		frame := make([]byte, frameLen)
@@ -211,7 +240,7 @@ func repairWALTail(f *os.File) error {
 			return err
 		}
 		encoded := append(length[:], frame...)
-		if _, err := decodeFrames(bytes.NewReader(encoded), false); err != nil {
+		if _, err := decodeFrames(bytes.NewReader(encoded), false, enc); err != nil {
 			return err
 		}
 		validOffset += int64(4 + frameLen)
@@ -320,7 +349,11 @@ func (w *WAL) flusher() {
 				close(w.doneCh)
 				return
 			}
-			data := w.encodeRecord(rec)
+			data, encErr := w.encodeRecord(rec)
+			if encErr != nil {
+				ackWAL(rec, encErr)
+				continue
+			}
 			w.mu.Lock()
 			n, err := w.writer.Write(data)
 			w.size += int64(n)
@@ -385,7 +418,7 @@ func (w *WAL) flusher() {
 	}
 }
 
-func (w *WAL) encodeRecord(rec *WALRecord) []byte {
+func encodeRecordPlain(rec *WALRecord) []byte {
 	effects := rec.Effects
 	if len(effects) == 0 {
 		effects = []WALEffect{{Type: rec.Type, Key: rec.Key, Value: rec.Value, ExpiresAt: rec.TTLNano}}
@@ -425,9 +458,24 @@ func (w *WAL) encodeRecord(rec *WALRecord) []byte {
 	return buf
 }
 
+func (w *WAL) encodeRecord(rec *WALRecord) ([]byte, error) {
+	plain := encodeRecordPlain(rec)
+	if w == nil || w.enc == nil {
+		return plain, nil
+	}
+	sealed, err := w.enc.Encrypt(plain[4:])
+	if err != nil {
+		return nil, err
+	}
+	out := make([]byte, 4+len(sealed))
+	binary.BigEndian.PutUint32(out[:4], uint32(len(sealed)))
+	copy(out[4:], sealed)
+	return out, nil
+}
+
 // EncodeRecord serializes one WAL record for replication transport.
 func EncodeRecord(rec *WALRecord) []byte {
-	return (&WAL{}).encodeRecord(rec)
+	return encodeRecordPlain(rec)
 }
 
 // Sync forces a sync to disk.
@@ -461,7 +509,7 @@ func (w *WAL) ReadAll() ([]*WALRecord, error) {
 		if _, seekErr := w.file.Seek(0, io.SeekStart); seekErr != nil {
 			return nil, err
 		}
-		records, readErr := decodeRecords(w.file)
+		records, readErr := decodeRecords(w.file, w.enc)
 		_, _ = w.file.Seek(0, io.SeekEnd)
 		if readErr != nil {
 			return nil, readErr
@@ -488,9 +536,9 @@ func (w *WAL) ReadAll() ([]*WALRecord, error) {
 		var records []*WALRecord
 		var readErr error
 		if filepath.Base(path) == "wal.log" {
-			records, readErr = decodeRecords(f)
+			records, readErr = decodeRecords(f, w.enc)
 		} else {
-			records, readErr = decodeRecordsMode(f, false)
+			records, readErr = decodeRecordsMode(f, false, w.enc)
 		}
 		f.Close()
 		if readErr != nil {
@@ -502,22 +550,26 @@ func (w *WAL) ReadAll() ([]*WALRecord, error) {
 	return all, nil
 }
 
-func decodeRecords(r io.Reader) ([]*WALRecord, error) {
-	return decodeRecordsMode(r, true)
+func decodeRecords(r io.Reader, enc *security.Encryptor) ([]*WALRecord, error) {
+	return decodeRecordsMode(r, true, enc)
 }
 
-func decodeRecordsMode(r io.Reader, allowPartialTail bool) ([]*WALRecord, error) {
+func decodeRecordsMode(r io.Reader, allowPartialTail bool, enc *security.Encryptor) ([]*WALRecord, error) {
 	header := make([]byte, len(walV2Magic))
 	if _, err := io.ReadFull(r, header); err != nil {
 		return nil, fmt.Errorf("missing WAL v2 header: %w", err)
 	}
-	if !bytes.Equal(header, walV2Magic) {
+	if enc != nil {
+		if !bytes.Equal(header, walEncMagic) {
+			return nil, fmt.Errorf("unsupported WAL format")
+		}
+	} else if !bytes.Equal(header, walV2Magic) {
 		return nil, fmt.Errorf("unsupported WAL format")
 	}
-	return decodeFrames(r, allowPartialTail)
+	return decodeFrames(r, allowPartialTail, enc)
 }
 
-func decodeFrames(r io.Reader, allowPartialTail bool) ([]*WALRecord, error) {
+func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) ([]*WALRecord, error) {
 	var records []*WALRecord
 	for {
 		var lengthBuf [4]byte
@@ -531,7 +583,11 @@ func decodeFrames(r io.Reader, allowPartialTail bool) ([]*WALRecord, error) {
 			return nil, fmt.Errorf("WAL frame length: %w", err)
 		}
 		frameLen := int(binary.BigEndian.Uint32(lengthBuf[:]))
-		if frameLen < 1+8+8+4+4 || frameLen > maxWALFrameSize {
+		minLen := 1 + 8 + 8 + 4 + 4
+		if enc != nil {
+			minLen = 12 + 16
+		}
+		if frameLen < minLen || frameLen > maxWALFrameSize {
 			return nil, fmt.Errorf("invalid WAL frame length %d", frameLen)
 		}
 		frame := make([]byte, frameLen)
@@ -540,6 +596,16 @@ func decodeFrames(r io.Reader, allowPartialTail bool) ([]*WALRecord, error) {
 				return records, nil
 			}
 			return nil, fmt.Errorf("WAL frame payload: %w", err)
+		}
+		if enc != nil {
+			plain, err := enc.Decrypt(frame)
+			if err != nil {
+				return nil, fmt.Errorf("WAL decrypt: %w", err)
+			}
+			frame = plain
+			if len(frame) < 1+8+8+4+4 {
+				return nil, fmt.Errorf("invalid WAL frame length %d", len(frame))
+			}
 		}
 		body := frame[:len(frame)-4]
 		expectedCRC := binary.BigEndian.Uint32(frame[len(frame)-4:])
@@ -618,13 +684,13 @@ func (w *WAL) Rotate() error {
 	if err := os.Rename(old, archived); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(old, os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(old, os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
 	w.file = f
 	w.writer = bufio.NewWriterSize(f, 64*1024)
-	if _, err := w.writer.Write(walV2Magic); err != nil {
+	if _, err := w.writer.Write(walHeader(w.enc)); err != nil {
 		return err
 	}
 	if err := w.writer.Flush(); err != nil {
@@ -633,7 +699,7 @@ func (w *WAL) Rotate() error {
 	if err := w.file.Sync(); err != nil {
 		return err
 	}
-	w.size = int64(len(walV2Magic))
+	w.size = int64(len(walHeader(w.enc)))
 	return nil
 }
 

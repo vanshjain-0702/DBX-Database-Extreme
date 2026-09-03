@@ -25,6 +25,7 @@ func (m *Manager) TenantUsage(id string) (TenantUsage, error) {
 	m.mu.RLock()
 	tenant, ok := m.tenants[id]
 	inst := m.instances[id]
+	worker := m.workers[id]
 	m.mu.RUnlock()
 	if !ok {
 		return TenantUsage{}, errTenantNotFound
@@ -35,6 +36,16 @@ func (m *Manager) TenantUsage(id string) (TenantUsage, error) {
 	} else if inst != nil {
 		usage.Status = "running"
 		snap := inst.UsageSnapshot()
+		usage.Keys = snap.Keys
+		usage.Vectors = snap.Vectors
+		usage.MemoryUsedBytes = snap.MemoryUsedBytes
+		usage.MemoryLimitBytes = snap.MemoryLimitBytes
+		usage.Commands = snap.Commands
+		usage.Errors = snap.Errors
+		usage.AvgLatencyNs = snap.AvgLatencyNs
+	} else if worker != nil {
+		usage.Status = "running"
+		snap := worker.UsageSnapshot()
 		usage.Keys = snap.Keys
 		usage.Vectors = snap.Vectors
 		usage.MemoryUsedBytes = snap.MemoryUsedBytes

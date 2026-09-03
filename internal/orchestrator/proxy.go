@@ -1,15 +1,20 @@
 package orchestrator
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dbx/dbx/internal/isolation"
 )
 
 type Proxy struct {
@@ -30,32 +35,57 @@ func NewProxy(manager *Manager, internalAPIToken string) *Proxy {
 }
 
 func (p *Proxy) getTenantProxy(tenant *Tenant) *httputil.ReverseProxy {
+	httpSock := isolation.HTTPSocket(tenant.DataDir)
+	useUnix := tenant.DataDir != ""
+	if useUnix {
+		if _, err := os.Stat(httpSock); err != nil {
+			useUnix = false
+		}
+	}
 	cacheKey := tenant.ID + ":" + strconv.Itoa(tenant.HTTPPort)
+	if useUnix {
+		cacheKey = tenant.ID + ":unix:" + httpSock
+	}
 	if cached, ok := p.proxies.Load(cacheKey); ok {
 		return cached.(*httputil.ReverseProxy)
 	}
 
-	targetAddr := fmt.Sprintf("http://127.0.0.1:%d", tenant.HTTPPort)
-	targetURL, _ := url.Parse(targetAddr)
+	targetURL, _ := url.Parse("http://127.0.0.1")
+	if !useUnix {
+		targetURL, _ = url.Parse(fmt.Sprintf("http://127.0.0.1:%d", tenant.HTTPPort))
+	}
 
 	proxy := httputil.NewSingleHostReverseProxy(targetURL)
-
-	// Configure connection pooling to prevent TCP socket exhaustion
-	proxy.Transport = &http.Transport{
+	transport := &http.Transport{
 		MaxIdleConns:          10000,
 		MaxIdleConnsPerHost:   1000,
 		IdleConnTimeout:       90 * time.Second,
 		ResponseHeaderTimeout: 10 * time.Second,
 		ExpectContinueTimeout: 1 * time.Second,
 	}
+	if useUnix {
+		sock := httpSock
+		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			var d net.Dialer
+			return d.DialContext(ctx, "unix", sock)
+		}
+	}
+	proxy.Transport = transport
 
 	originalDirector := proxy.Director
+	tenantID := tenant.ID
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		// Never trust a caller-provided internal token. The proxy injects
-		// the service credential for the engine on every request.
+		// the service credential for the engine on every request. A sandboxed
+		// worker has its own token, resolved per request so a worker restart
+		// does not leave the cached proxy holding a stale one.
 		req.Header.Del("X-DBX-Internal-Token")
-		req.Header.Set("X-DBX-Internal-Token", p.internalAPIToken)
+		token := p.internalAPIToken
+		if workerToken, ok := p.manager.WorkerToken(tenantID); ok {
+			token = workerToken
+		}
+		req.Header.Set("X-DBX-Internal-Token", token)
 	}
 
 	p.proxies.Store(cacheKey, proxy)

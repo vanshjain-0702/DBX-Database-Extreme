@@ -49,6 +49,11 @@ func (r *Recovery) Recover(kv *engine.KVStore, vecStore *engine.VectorStore) err
 			}
 		}
 	}
+	if vecStore != nil {
+		if err := vecStore.ReopenPersisted(); err != nil {
+			return fmt.Errorf("recovery: reopen vector indexes: %w", err)
+		}
+	}
 	return nil
 }
 

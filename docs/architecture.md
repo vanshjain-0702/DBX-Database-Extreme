@@ -114,3 +114,4 @@ DBX uses a two-layer persistence model:
 - **DoS Protection:** `http.MaxBytesReader` limits on all data plane request bodies.
 - **Admin Credentials:** Stored as bcrypt hashes; never in plaintext.
 - **TLS:** Supported on the control plane; disabled with `-insecure-http` flag for local development only.
+- **Isolation Kernel:** Linux production (`DBX_ISOLATION_MODE=strict`) seals each tenant as its own process, Landlock filesystem, cgroup, envelope-encrypted WAL/vectors, and Unix sockets restricted by `SO_PEERCRED`. Each worker gets a unique control token; the HTTP proxy resolves it per request. Replication dials through `isolation.DialTimeout` (Unix socket + 1s timeout). Production (TLS or `DBX_PRODUCTION=1`) refuses `inprocess` unless `DBX_ALLOW_INPROCESS=1`. Set `DBX_REQUIRE_DISK_ENCRYPTION=1` to refuse boot on a plaintext volume (`.vec` rows are otherwise unencrypted). See [isolation.md](isolation.md).

@@ -118,6 +118,72 @@ class DBXClient:
         return bool(res)
 
 
+class TenantMemory:
+    """One customer's working state and recall.
+
+    This is the product surface: remember a fact (optional embedding),
+    recall by vector, forget one key, or shred the tenant through the
+    control plane. It is not a generic Redis wrapper.
+    """
+
+    def __init__(self, client: DBXClient, index: str = "memory") -> None:
+        self.client = client
+        self.index = index
+
+    @classmethod
+    def open(
+        cls,
+        plane: "ControlPlane",
+        tenant_id: str,
+        name: str = "",
+        host: str = "127.0.0.1",
+        port: int = 6380,
+        index: str = "memory",
+    ) -> "TenantMemory":
+        try:
+            plane.provision(tenant_id, name or tenant_id)
+        except DBXError as exc:
+            text = str(exc).lower()
+            if "already" not in text and "exist" not in text:
+                raise
+        minted = plane.create_key(tenant_id, name="memory-writer", role="writer")
+        key = minted.get("key") or {}
+        client = DBXClient(
+            host=host,
+            port=port,
+            tenant=tenant_id,
+            key_id=str(key.get("id") or minted.get("id") or ""),
+            secret=str(minted.get("secret") or ""),
+        )
+        return cls(client, index=index)
+
+    def remember(
+        self, key: str, value: str, vector: Optional[List[float]] = None
+    ) -> None:
+        if not self.client.set(key, value):
+            raise DBXError("SET failed")
+        if vector is not None:
+            if not self.client.vadd(self.index, key, vector):
+                raise DBXError("VADD failed")
+
+    def recall(
+        self, vector: List[float], top_k: int = 4
+    ) -> List[Tuple[str, str, float]]:
+        hits = self.client.vsearch(self.index, vector, top_k)
+        out: List[Tuple[str, str, float]] = []
+        for doc_id, score in hits:
+            stored = self.client.get(doc_id)
+            out.append((doc_id, stored or "", score))
+        return out
+
+    def get(self, key: str) -> Optional[str]:
+        return self.client.get(key)
+
+    def forget(self, key: str) -> None:
+        self.client.delete(key)
+        self.client.vdel(self.index, key)
+
+
 class ControlPlane:
     """Operator HTTP client for lifecycle, usage, backup, and hibernate."""
 
@@ -181,6 +247,10 @@ class ControlPlane:
         return self._json(
             "POST", "/api/tenants/delete", {"id": tenant_id, "purge": purge}
         )
+
+    def shred(self, tenant_id: str) -> Dict[str, Any]:
+        """Purge one tenant and shred its wrapped DEK. O(1) at-rest deletion."""
+        return self.delete(tenant_id, purge=True)
 
     def _json(
         self,

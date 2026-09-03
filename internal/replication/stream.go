@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/persistence"
 	"github.com/dbx/dbx/internal/protocol"
 )
@@ -46,7 +47,7 @@ func (p *PrimaryStream) Start(addr string, wal *persistence.WAL) error {
 	if wal == nil {
 		return fmt.Errorf("replication: WAL is required")
 	}
-	listener, err := net.Listen("tcp", addr)
+	listener, err := isolation.Listen(addr, nil)
 	if err != nil {
 		return err
 	}
@@ -264,7 +265,7 @@ func (rs *ReplicaStream) Start() {
 			default:
 			}
 
-			conn, err := net.DialTimeout("tcp", rs.PrimaryAddr, time.Second)
+			conn, err := isolation.DialTimeout(rs.PrimaryAddr, time.Second)
 			if err != nil {
 				select {
 				case <-rs.done:

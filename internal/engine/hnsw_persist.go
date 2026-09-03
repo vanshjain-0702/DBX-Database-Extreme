@@ -8,6 +8,9 @@ import (
 	"hash/crc32"
 	"io"
 	"os"
+
+	"github.com/dbx/dbx/internal/isolation"
+	"github.com/dbx/dbx/internal/security"
 )
 
 var hnswMagic = []byte("DBXHNSW3")
@@ -161,40 +164,16 @@ type persistedHNSWBundle struct {
 	Shards  []persistedHNSW
 }
 
-func writeChecksummedHNSW(path string, magic []byte, payload []byte) error {
-	tmpPath := path + ".tmp"
-	f, err := os.Create(tmpPath)
-	if err != nil {
-		return err
-	}
+func writeChecksummedHNSW(path string, magic []byte, payload []byte, enc *security.Encryptor) error {
 	header := make([]byte, len(magic)+8)
 	copy(header, magic)
 	binary.BigEndian.PutUint32(header[len(magic):], uint32(len(payload)))
 	binary.BigEndian.PutUint32(header[len(magic)+4:], crc32.ChecksumIEEE(payload))
-	if _, err := f.Write(header); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-	if _, err := f.Write(payload); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmpPath)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-	_ = os.Remove(path)
-	return os.Rename(tmpPath, path)
+	raw := append(header, payload...)
+	return isolation.WriteSealedFile(path, raw, enc)
 }
 
-func saveHNSWGraphs(path string, graphs []*HNSWGraph) error {
+func saveHNSWGraphs(path string, graphs []*HNSWGraph, enc *security.Encryptor) error {
 	shards := make([]persistedHNSW, len(graphs))
 	for i, g := range graphs {
 		if g == nil {
@@ -211,15 +190,15 @@ func saveHNSWGraphs(path string, graphs []*HNSWGraph) error {
 	if err := gob.NewEncoder(&payload).Encode(persistedHNSWBundle{Version: 4, Shards: shards}); err != nil {
 		return err
 	}
-	return writeChecksummedHNSW(path, hnswBundleMagic, payload.Bytes())
+	return writeChecksummedHNSW(path, hnswBundleMagic, payload.Bytes(), enc)
 }
 
-func loadHNSWGraphs(path string) ([]*HNSWGraph, error) {
-	f, err := os.Open(path)
+func loadHNSWGraphs(path string, enc *security.Encryptor) ([]*HNSWGraph, error) {
+	raw, err := isolation.ReadSealedFile(path, enc)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	f := bytes.NewReader(raw)
 	magic := make([]byte, len(hnswBundleMagic))
 	if _, err := io.ReadFull(f, magic); err != nil {
 		return nil, err

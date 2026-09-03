@@ -1,12 +1,16 @@
 package engine
 
 import (
+	"bytes"
 	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"testing"
+
+	"github.com/dbx/dbx/internal/protocol"
+	"github.com/dbx/dbx/internal/security"
 )
 
 func TestVectorStore_VAdd_VSearch(t *testing.T) {
@@ -129,6 +133,99 @@ func TestVectorStoreRebuildsGraphAfterCrash(t *testing.T) {
 	}
 	if len(results) != len(ids) {
 		t.Fatalf("graph was not rebuilt: got %d results, want %d: %#v", len(results), len(ids), results)
+	}
+	if results[0].ID != "doc2" {
+		t.Fatalf("rebuilt graph ranked wrong vector first: %#v", results)
+	}
+}
+
+// Encryption must not change the durability contract. Rows stay mmap'd, so a
+// SIGKILL leaves populated .vec and .meta with no .hnsw, exactly as it does
+// without a key, and the graph rebuilds on open. Buffering rows on the heap and
+// writing them only on Close left a zero-length .vec beside metadata that still
+// listed every id, which bricked the index on reopen.
+// Production shutdown writes a snapshot with TypeVector values set to nil,
+// then CloseAll persists .meta/.hnsw. Recovery must reopen the mmap or
+// VSEARCH returns an empty list while KV still has the index key.
+func TestVectorSearchAfterSnapshotNilValue(t *testing.T) {
+	dir := t.TempDir()
+	kv := New(8)
+	store := NewVectorStore(kv, dir, 0)
+	if err := store.VAddBatch("idx", 2, []string{"a", "b"}, [][]float32{{1, 0}, {0, 1}}); err != nil {
+		t.Fatal(err)
+	}
+	store.CloseAll()
+
+	restored := New(8)
+	restored.Set("idx", nil, protocol.TypeVector, 0)
+	second := NewVectorStore(restored, dir, 0)
+	defer second.CloseAll()
+	if err := second.ReopenPersisted(); err != nil {
+		t.Fatal(err)
+	}
+	if got := second.LiveVectorCount(); got != 2 {
+		t.Fatalf("live vectors after snapshot reopen = %d, want 2", got)
+	}
+	results, err := second.VSearch("idx", []float32{1, 0}, 1, nil)
+	if err != nil || len(results) == 0 || results[0].ID != "a" {
+		t.Fatalf("search after snapshot nil-value = %#v, %v", results, err)
+	}
+}
+
+func TestEncryptedVectorStoreSurvivesCrash(t *testing.T) {
+	dir := t.TempDir()
+	key := "tenant/memories"
+	dek := make([]byte, 32)
+	for i := range dek {
+		dek[i] = byte(i + 7)
+	}
+	enc, err := security.NewEncryptor(dek)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	first := NewVectorStore(New(16), dir, 0)
+	first.SetAtRest(enc)
+	ids := []string{"doc1", "doc2", "doc3"}
+	vecs := [][]float32{{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}
+	for i, id := range ids {
+		if err := first.VAdd(key, id, vecs[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	rowPath := filepath.Join(dir, vectorIndexFilename(key))
+	info, err := os.Stat(rowPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() == 0 {
+		t.Fatal("vector rows were never written to disk before shutdown")
+	}
+
+	first.CloseAll()
+	if err := os.Remove(rowPath + ".hnsw"); err != nil && !os.IsNotExist(err) {
+		t.Fatalf("clearing graph file: %v", err)
+	}
+
+	// Metadata is the encrypted surface and must still open under the same DEK.
+	metaRaw, err := os.ReadFile(rowPath + ".meta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(metaRaw, []byte("doc2")) {
+		t.Fatal("vector metadata stored ids in plaintext")
+	}
+
+	second := NewVectorStore(New(16), dir, 0)
+	second.SetAtRest(enc)
+	defer second.CloseAll()
+	results, err := second.VSearch(key, []float32{0, 1, 0}, 3, nil)
+	if err != nil {
+		t.Fatalf("VSearch after crash: %v", err)
+	}
+	if len(results) != len(ids) {
+		t.Fatalf("encrypted index lost rows: got %d results, want %d: %#v", len(results), len(ids), results)
 	}
 	if results[0].ID != "doc2" {
 		t.Fatalf("rebuilt graph ranked wrong vector first: %#v", results)

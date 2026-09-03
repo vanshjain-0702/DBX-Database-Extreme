@@ -31,5 +31,7 @@ resources:
     cpu: 500m
     memory: 1Gi
 
+isolationMode: strict
+
 autoscaling:
   enabled: false
