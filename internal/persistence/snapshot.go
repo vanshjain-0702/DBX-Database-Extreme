@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dbx/dbx/internal/engine"
@@ -18,13 +19,24 @@ func init() {
 	// gob.Register(engine.VectorIndex{}) removed
 }
 
+const currentName = "CURRENT"
+
+// VectorSeal is the durable identity of one mmap index at checkpoint time.
+type VectorSeal struct {
+	Key      string
+	Dim      int
+	Count    int
+	MetaHash [32]byte
+}
+
 // SnapshotHeader contains snapshot metadata.
 type SnapshotHeader struct {
-	Version   int
-	Timestamp time.Time
-	KeyCount  int
-	Checksum  uint32
-	Sequence  uint64
+	Version     int
+	Timestamp   time.Time
+	KeyCount    int
+	Checksum    uint32
+	Sequence    uint64
+	VectorSeals []VectorSeal
 }
 
 // Snapshotter creates and restores RDB-style snapshots.
@@ -51,6 +63,12 @@ func (s *Snapshotter) Save(kv *engine.KVStore) (string, error) {
 
 // SaveAt writes a checkpoint covering all WAL transactions through sequence.
 func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error) {
+	return s.SaveCheckpoint(kv, sequence, nil)
+}
+
+// SaveCheckpoint writes the KV image, optional vector seals, and a CURRENT
+// pointer so recovery does not pick a snapshot by mtime.
+func (s *Snapshotter) SaveCheckpoint(kv *engine.KVStore, sequence uint64, seals []VectorSeal) (string, error) {
 	snap := kv.Snapshot()
 	filename := fmt.Sprintf("snapshot-%d.rdb", time.Now().UnixNano())
 	finalPath := filepath.Join(s.dir, filename)
@@ -60,10 +78,11 @@ func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error
 		wire[k] = toWireEntry(e)
 	}
 	hdr := SnapshotHeader{
-		Version:   2,
-		Timestamp: time.Now(),
-		KeyCount:  len(wire),
-		Sequence:  sequence,
+		Version:     2,
+		Timestamp:   time.Now(),
+		KeyCount:    len(wire),
+		Sequence:    sequence,
+		VectorSeals: seals,
 	}
 	var payload bytes.Buffer
 	enc := gob.NewEncoder(&payload)
@@ -76,7 +95,30 @@ func (s *Snapshotter) SaveAt(kv *engine.KVStore, sequence uint64) (string, error
 	if err := isolation.WriteSealedFile(finalPath, payload.Bytes(), s.enc); err != nil {
 		return "", fmt.Errorf("snapshot write: %w", err)
 	}
+	if err := s.installCurrent(filename); err != nil {
+		_ = os.Remove(finalPath)
+		return "", fmt.Errorf("snapshot current: %w", err)
+	}
 	return finalPath, nil
+}
+
+func (s *Snapshotter) installCurrent(filename string) error {
+	tmp := filepath.Join(s.dir, currentName+".tmp")
+	if err := os.WriteFile(tmp, []byte(filename+"\n"), 0o600); err != nil {
+		return err
+	}
+	f, err := os.OpenFile(tmp, os.O_RDWR, 0o600)
+	if err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	syncErr := f.Sync()
+	_ = f.Close()
+	if syncErr != nil {
+		_ = os.Remove(tmp)
+		return syncErr
+	}
+	return os.Rename(tmp, filepath.Join(s.dir, currentName))
 }
 
 // Load restores a snapshot into the KV store.
@@ -118,6 +160,15 @@ func (s *Snapshotter) LoadWithHeader(kv *engine.KVStore, path string) (SnapshotH
 
 // Latest returns the path of the most recent snapshot.
 func (s *Snapshotter) Latest() string {
+	if data, err := os.ReadFile(filepath.Join(s.dir, currentName)); err == nil {
+		name := strings.TrimSpace(string(data))
+		if name != "" && !strings.Contains(name, "/") && !strings.Contains(name, "\\") {
+			path := filepath.Join(s.dir, name)
+			if _, statErr := os.Stat(path); statErr == nil {
+				return path
+			}
+		}
+	}
 	entries, err := os.ReadDir(s.dir)
 	if err != nil {
 		return ""

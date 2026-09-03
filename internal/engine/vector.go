@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
@@ -33,7 +34,10 @@ type MMapVectorIndex struct {
 	searchJobs  chan shardSearchJob
 	searchWG    sync.WaitGroup
 	mu          sync.RWMutex
+	mmapHold    sync.RWMutex // exclusive only while remapping; search and graph insert share it
 	atRest      *security.Encryptor
+	metaDirty   int
+	lastMeta    time.Time
 }
 
 type shardSearchJob struct {
@@ -246,7 +250,15 @@ func (idx *MMapVectorIndex) persistMetadata() error {
 	return idx.writeMetadata(true)
 }
 
+const (
+	metaFlushRows = 4096
+	metaFlushAge  = time.Second
+)
+
 func (idx *MMapVectorIndex) writeMetadata(durable bool) error {
+	if !durable && idx.metaDirty < metaFlushRows && !idx.lastMeta.IsZero() && time.Since(idx.lastMeta) < metaFlushAge {
+		return nil
+	}
 	data, err := json.Marshal(vectorMetadata{
 		Version: 2, Dim: idx.dim, IDs: idx.idList,
 		Tombstones: idx.tombstones, Generations: idx.generations,
@@ -254,9 +266,13 @@ func (idx *MMapVectorIndex) writeMetadata(durable bool) error {
 	if err != nil {
 		return err
 	}
-	_ = durable
 	path := idx.file.Name() + ".meta"
-	return isolation.WriteSealedFile(path, data, idx.atRest)
+	if err := isolation.WriteSealedFile(path, data, idx.atRest); err != nil {
+		return err
+	}
+	idx.metaDirty = 0
+	idx.lastMeta = time.Now()
+	return nil
 }
 
 func (idx *MMapVectorIndex) startSearchWorkers() {
@@ -290,6 +306,7 @@ func (idx *MMapVectorIndex) Close() {
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
+	idx.mmapHold.Lock()
 	if idx.mmap != nil {
 		_ = idx.writeMetadata(true)
 		_ = idx.mmap.Flush()
@@ -301,6 +318,7 @@ func (idx *MMapVectorIndex) Close() {
 		_ = idx.mmap.Unmap()
 		idx.mmap = nil
 	}
+	idx.mmapHold.Unlock()
 	if idx.file != nil {
 		_ = idx.file.Sync()
 		_ = idx.file.Close()
@@ -309,6 +327,11 @@ func (idx *MMapVectorIndex) Close() {
 }
 
 func (idx *MMapVectorIndex) ensureCapacity(neededBytes int) error {
+	if neededBytes <= len(idx.mmap) {
+		return nil
+	}
+	idx.mmapHold.Lock()
+	defer idx.mmapHold.Unlock()
 	if neededBytes <= len(idx.mmap) {
 		return nil
 	}
@@ -499,6 +522,77 @@ func (s *VectorStore) CloseAll() {
 	}
 }
 
+// IndexSeal is the checkpoint record for one mmap index: enough to reopen
+// and to notice a torn .vec.meta after WAL rotation.
+type IndexSeal struct {
+	Key      string
+	Dim      int
+	Count    int
+	MetaHash [32]byte
+}
+
+// FlushDurable writes every dirty .vec.meta and flushes mmap pages. A
+// checkpoint that rotates the WAL must call this first; otherwise a crash
+// after rotation can reopen stale metadata.
+func (s *VectorStore) FlushDurable() error {
+	if s == nil || s.kv == nil {
+		return nil
+	}
+	for _, sh := range s.kv.shards {
+		sh.mu.RLock()
+		for _, e := range sh.data {
+			if e.Type != protocol.TypeVector {
+				continue
+			}
+			idx, ok := e.Value.(*MMapVectorIndex)
+			if !ok || idx == nil {
+				continue
+			}
+			idx.mu.Lock()
+			if idx.mmap != nil {
+				_ = idx.mmap.Flush()
+			}
+			err := idx.writeMetadata(true)
+			idx.mu.Unlock()
+			if err != nil {
+				sh.mu.RUnlock()
+				return err
+			}
+		}
+		sh.mu.RUnlock()
+	}
+	return nil
+}
+
+// IndexSeals hashes on-disk metadata for every live index. Call FlushDurable first.
+func (s *VectorStore) IndexSeals() []IndexSeal {
+	if s == nil || s.kv == nil {
+		return nil
+	}
+	var seals []IndexSeal
+	for _, sh := range s.kv.shards {
+		sh.mu.RLock()
+		for key, e := range sh.data {
+			if e.Type != protocol.TypeVector {
+				continue
+			}
+			idx, ok := e.Value.(*MMapVectorIndex)
+			if !ok || idx == nil || idx.file == nil {
+				continue
+			}
+			idx.mu.RLock()
+			seal := IndexSeal{Key: key, Dim: idx.dim, Count: idx.count}
+			if data, err := os.ReadFile(idx.file.Name() + ".meta"); err == nil {
+				seal.MetaHash = sha256.Sum256(data)
+			}
+			idx.mu.RUnlock()
+			seals = append(seals, seal)
+		}
+		sh.mu.RUnlock()
+	}
+	return seals
+}
+
 func (s *VectorStore) getReadOnly(key string) (*MMapVectorIndex, func(), error) {
 	e, unlock := s.kv.GetForRead(key)
 	if e != nil {
@@ -572,20 +666,21 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 	}
 
 	idx, unlock, err := s.getOrCreate(key, dim)
-	defer unlock()
 	if err != nil {
+		unlock()
 		return err
 	}
+	unlock()
 
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
-
 	if idx.dim != dim {
+		idx.mu.Unlock()
 		return fmt.Errorf("dimension mismatch: expected %d, got %d", idx.dim, dim)
 	}
 
 	if s.maxVectors > 0 && idx.count >= s.maxVectors {
 		if _, exists := idx.idMap[id]; !exists {
+			idx.mu.Unlock()
 			return fmt.Errorf("tenant vector quota exceeded: maximum of %d vectors allowed", s.maxVectors)
 		}
 	}
@@ -596,6 +691,7 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 		neededCount++
 	}
 	if err := idx.ensureCapacity(neededCount * (dim + 8)); err != nil {
+		idx.mu.Unlock()
 		return err
 	}
 
@@ -606,6 +702,7 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 		if idx.tombstones[row] {
 			idx.tombstones[row] = false
 			idx.generations[row]++
+			idx.metaDirty++
 		}
 	} else {
 		idx.idMap[id] = row
@@ -613,20 +710,27 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 		idx.tombstones = append(idx.tombstones, false)
 		idx.generations = append(idx.generations, 1)
 		idx.count++
+		idx.metaDirty++
 		isNew = true
 	}
 
 	off := row * (dim + 8)
 	writeQuantized(idx.mmap[off:off+dim+8], vec)
 	idx.setRowInv(row)
-
-	if isNew {
-		idx.graphs[shardIndex(row)].Insert(row, idx.mmap, dim, idx.rowInv)
-	}
+	graph := idx.graphs[shardIndex(row)]
+	mmap := idx.mmap
+	rowInv := idx.rowInv
 	if err := idx.writeMetadata(false); err != nil {
+		idx.mu.Unlock()
 		return err
 	}
+	idx.mu.Unlock()
 
+	if isNew {
+		idx.mmapHold.RLock()
+		graph.Insert(row, mmap, dim, rowInv)
+		idx.mmapHold.RUnlock()
+	}
 	return nil
 }
 
@@ -654,15 +758,15 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 	}
 
 	idx, unlock, err := s.getOrCreate(key, dim)
-	defer unlock()
 	if err != nil {
+		unlock()
 		return err
 	}
+	unlock()
 
 	idx.mu.Lock()
-	defer idx.mu.Unlock()
-
 	if idx.dim != dim {
+		idx.mu.Unlock()
 		return fmt.Errorf("dimension mismatch: expected %d, got %d", idx.dim, dim)
 	}
 
@@ -675,10 +779,12 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 	newAdditions := len(newIDs)
 
 	if s.maxVectors > 0 && idx.count+newAdditions > s.maxVectors {
+		idx.mu.Unlock()
 		return fmt.Errorf("tenant vector quota exceeded: maximum of %d vectors allowed", s.maxVectors)
 	}
 
 	if err := idx.ensureCapacity((idx.count + newAdditions) * (dim + 8)); err != nil {
+		idx.mu.Unlock()
 		return err
 	}
 
@@ -691,6 +797,7 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 			if idx.tombstones[row] {
 				idx.tombstones[row] = false
 				idx.generations[row]++
+				idx.metaDirty++
 			}
 		} else {
 			idx.idMap[id] = row
@@ -698,6 +805,7 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 			idx.tombstones = append(idx.tombstones, false)
 			idx.generations = append(idx.generations, 1)
 			idx.count++
+			idx.metaDirty++
 			newRows = append(newRows, row)
 		}
 
@@ -706,24 +814,36 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 		idx.setRowInv(row)
 	}
 
+	mmap := idx.mmap
+	rowInv := idx.rowInv
+	graphs := idx.graphs
+	if err := idx.writeMetadata(false); err != nil {
+		idx.mu.Unlock()
+		return err
+	}
+	idx.mu.Unlock()
+
+	if len(newRows) == 0 {
+		return nil
+	}
+	idx.mmapHold.RLock()
 	var wg sync.WaitGroup
 	for shard := 0; shard < hnswShards; shard++ {
 		wg.Add(1)
 		go func(shard int) {
 			defer wg.Done()
-			graph := idx.graphs[shard]
+			graph := graphs[shard]
 			for _, row := range newRows {
 				if shardIndex(row) != shard {
 					continue
 				}
-				graph.Insert(row, idx.mmap, dim, idx.rowInv)
+				graph.Insert(row, mmap, dim, rowInv)
 			}
 		}(shard)
 	}
 	wg.Wait()
-	// Persist ids/tombstones on every batch so a checkpoint that stores the
-	// TypeVector key as nil can reopen the mmap after restart.
-	return idx.writeMetadata(false)
+	idx.mmapHold.RUnlock()
+	return nil
 }
 
 func validateVector(id string, vec []float32) error {
@@ -921,16 +1041,23 @@ type SearchResult struct {
 // VSearch performs ANN cosine KNN search using HNSW over persisted mmap rows.
 func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id string) bool) ([]SearchResult, error) {
 	idx, unlock, err := s.getReadOnly(key)
-	defer unlock()
 	if err != nil {
+		unlock()
 		return nil, err
 	}
-	if idx == nil || idx.count == 0 {
+	if idx == nil {
+		unlock()
 		return []SearchResult{}, nil
 	}
+	unlock()
 
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
+	if idx.count == 0 {
+		return []SearchResult{}, nil
+	}
+	idx.mmapHold.RLock()
+	defer idx.mmapHold.RUnlock()
 
 	if len(query) != idx.dim {
 		return nil, fmt.Errorf("dimension mismatch: expected %d, got %d", idx.dim, len(query))

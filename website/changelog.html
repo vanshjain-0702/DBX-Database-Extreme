@@ -40,6 +40,13 @@
           <article class="change">
             <time datetime="2026-09-03">03 Sep 2026</time>
             <div>
+              <h2>Unix data plane, faster ingest, tenant checkpoints</h2>
+              <p>Orchestrator-managed engines bind Unix sockets on Linux/macOS instead of a loopback TCP port each. Public <code>:6380</code> still AUTH's once, then reuses a small pool of unused worker dials. Vector ingest no longer holds the index write lock across HNSW insert, so search can run during graph construction. Checkpoints flush vector metadata, record per-index seals, and name the live snapshot in <code>CURRENT</code> so recovery does not pick a file by mtime.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-09-03">03 Sep 2026</time>
+            <div>
               <h2>Isolation Kernel — kernel-enforced per-tenant seals</h2>
               <p>Each tenant is a separate <code>dbx-server</code> process on Linux <code>strict</code> mode. Landlock LSM stops cross-tenant file access. WAL, snapshots, <code>.vec.meta</code>, and <code>.hnsw</code> are AES-256-GCM sealed under a per-tenant DEK; shredding the DEK provides O(1) cryptographic deletion. Unix sockets with <code>SO_PEERCRED</code> accept only the orchestrator PID. Per-worker control tokens prevent neighbour authentication. Production (TLS or <code>DBX_PRODUCTION=1</code>) refuses <code>inprocess</code> unless <code>DBX_ALLOW_INPROCESS=1</code>. Set <code>DBX_REQUIRE_DISK_ENCRYPTION=1</code> to refuse boot on a plaintext volume.</p>
               <p>Python SDK: <code>TenantMemory.remember</code> / <code>recall</code> / <code>forget</code> plus <code>ControlPlane.shred</code>. Measured under strict: 50k keys + 20k vectors survived restart; 100k sealed vectors at recall@10 0.950; idle worker ~14–17 MiB RSS. Honest limits: SQ8 rows unencrypted (use LUKS/fscrypt), Landlock governs file opens only, cgroup best-effort in containers.</p>

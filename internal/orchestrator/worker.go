@@ -235,9 +235,7 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 	}()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		_, respErr := os.Stat(isolation.RESPSocket(t.DataDir))
-		_, httpErr := os.Stat(isolation.HTTPSocket(t.DataDir))
-		if respErr == nil && httpErr == nil {
+		if err := waitTenantSockets(t.DataDir, 20*time.Millisecond); err == nil {
 			// Publish only after both sockets exist. TenantRunning used to
 			// return true the instant exec succeeded, so mint-key / ACL
 			// reload raced the bind and tests dialed a missing path.
@@ -253,7 +251,6 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 		case err := <-worker.errCh:
 			return fmt.Errorf("tenant worker exited: %w", err)
 		default:
-			time.Sleep(20 * time.Millisecond)
 		}
 	}
 	worker.Stop()

@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
 )
 
@@ -18,10 +16,11 @@ import (
 type RESPIngress struct {
 	manager *Manager
 	addr    string
+	pool    *backendPool
 }
 
 func NewRESPIngress(manager *Manager, addr string) *RESPIngress {
-	return &RESPIngress{manager: manager, addr: addr}
+	return &RESPIngress{manager: manager, addr: addr, pool: newBackendPool()}
 }
 
 func (p *RESPIngress) ListenAndServe(ctx context.Context) error {
@@ -69,30 +68,21 @@ func (p *RESPIngress) handle(client net.Conn) {
 		_, _ = client.Write([]byte("-WRONGPASS invalid tenant credential\r\n"))
 		return
 	}
-	network, addr := "tcp", fmt.Sprintf("127.0.0.1:%d", tenant.RESPPort)
-	if sock := isolation.RESPSocket(tenant.DataDir); tenant.DataDir != "" {
-		if _, err := os.Stat(sock); err == nil {
-			network, addr = "unix", sock
-		}
-	}
-	var backend net.Conn
-	if network == "unix" {
-		backend, err = net.DialTimeout("unix", addr, 5*time.Second)
-	} else {
-		backend, err = net.DialTimeout("tcp", addr, 5*time.Second)
-	}
+	backend, backendReader, err := p.pool.Acquire(tenant)
 	if err != nil {
 		_, _ = client.Write([]byte("-ERR tenant unavailable\r\n"))
 		return
 	}
-	defer backend.Close()
+	defer func() {
+		_ = backend.Close()
+		p.pool.Prefetch(tenant)
+	}()
 	_ = backend.SetDeadline(time.Now().Add(10 * time.Second))
 	secret := cmd.Arg(1)
 	if _, err := fmt.Fprintf(backend, "*3\r\n$4\r\nAUTH\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n",
 		len(identity[1]), identity[1], len(secret), secret); err != nil {
 		return
 	}
-	backendReader := bufio.NewReaderSize(backend, 64*1024)
 	authResponse, err := backendReader.ReadString('\n')
 	if err != nil || !strings.HasPrefix(authResponse, "+OK") {
 		_, _ = client.Write([]byte("-WRONGPASS invalid tenant credential\r\n"))

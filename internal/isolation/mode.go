@@ -85,6 +85,11 @@ func unixIPCAvailable() bool {
 	}
 }
 
+// UnixAvailable reports whether this kernel can bind filesystem Unix sockets.
+// Orchestrator-managed tenants use them as the only data-plane address so
+// density is not capped by loopback TCP ports.
+func UnixAvailable() bool { return unixIPCAvailable() }
+
 // RequireKEK reports whether this profile must have a wrapping key.
 func (p Profile) RequireKEK() bool {
 	return p.Encryption

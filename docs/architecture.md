@@ -41,7 +41,8 @@ one customer. There is no cross-tenant scan and no shared keyspace to sweep.
 The data plane. One instance runs per tenant member (primary or replica).
 
 **Responsibilities:**
-- Serving the supported RESP2-compatible v1 command surface over loopback TCP
+- Serving the supported RESP2-compatible v1 command surface over a Unix socket
+  (TCP loopback only where Unix sockets are unavailable)
 - Managing durable strings and TTLs; unsupported mutation families are rejected
 - Managing the HNSW Vector index
 - WAL logging and snapshotting for persistence
@@ -74,7 +75,7 @@ Application Request
 RESP Ingress (Port 6380)
   1. Require AUTH tenantID:keyID secret
   2. Verify the persistent scoped credential
-  3. Route to the tenant's loopback listener
+  3. Route to the tenant's Unix socket (TCP loopback only if no socket was bound)
   4. Re-resolve the key on every command for immediate revocation
      │
      ▼
@@ -92,8 +93,11 @@ DBX uses a two-layer persistence model:
 
 1. **WAL v2:** Length-framed, sequenced, CRC-protected state-image transactions are appended
    before apply. `always` fsyncs before acknowledgement; `everysec` defines a one-second loss window.
-2. **Checkpoints:** A sequence-bearing KV snapshot is atomically installed before covered WAL
-   segments are removed. Only a final partial frame may be truncated; CRC corruption is fatal.
+2. **Checkpoints:** A sequence-bearing KV snapshot plus vector seals is atomically
+   installed, then a `CURRENT` pointer names it. Covered WAL segments are removed only
+   after that tuple is durable. Vector metadata is flushed before the snapshot so a
+   crash cannot reopen a nil `TypeVector` key against stale `.vec.meta`. Only a final
+   partial WAL frame may be truncated; CRC corruption is fatal.
 3. **Vector files:** SQ8 rows, generation tombstones, metadata, and a rebuildable checksummed
    HNSW cache live in the tenant directory.
 4. **Backup/restore:** A maintenance lock produces a manifest with SHA-256 checksums. Restore

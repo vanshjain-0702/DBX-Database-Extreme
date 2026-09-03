@@ -138,3 +138,63 @@ func TestTenantQuotaRejectsBeforeWAL(t *testing.T) {
 		t.Fatal("rejected write changed WAL or engine")
 	}
 }
+
+func TestCheckpointFlushesVectorsAndCURRENT(t *testing.T) {
+	dir := t.TempDir()
+	kv := engine.New(8)
+	wal, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vec := engine.NewVectorStore(kv, dir, 0)
+	executor := NewExecutor(
+		kv, vec,
+		transaction.NewMultiManager(), transaction.NewWatchSet(), transaction.NewMVCCStore(8),
+		events.NewPubSub(10, 10), &observability.Metrics{}, wal,
+	)
+	executor.SetMemoryLimit(16 << 20)
+	t.Cleanup(func() { vec.CloseAll() })
+
+	if got := executeForTest(t, executor, "VADD", "mem", "a", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("vadd = %q", got)
+	}
+	if got := executeForTest(t, executor, "VADD", "mem", "b", "0", "1"); got != ":1\r\n" {
+		t.Fatalf("vadd b = %q", got)
+	}
+
+	snap := persistence.NewSnapshotter(filepath.Join(dir, "snapshots"))
+	path, err := executor.Checkpoint(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Latest() != path {
+		t.Fatalf("CURRENT = %s, saved = %s", snap.Latest(), path)
+	}
+	hdr, err := snap.LoadWithHeader(engine.New(8), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hdr.VectorSeals) == 0 {
+		t.Fatal("checkpoint missing vector seals")
+	}
+
+	vec.CloseAll()
+	if err := wal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored := engine.New(8)
+	restoredVec := engine.NewVectorStore(restored, dir, 0)
+	defer restoredVec.CloseAll()
+	if err := persistence.NewRecovery(reopened, snap).Recover(restored, restoredVec); err != nil {
+		t.Fatal(err)
+	}
+	results, err := restoredVec.VSearch("mem", []float32{1, 0}, 1, nil)
+	if err != nil || len(results) == 0 || results[0].ID != "a" {
+		t.Fatalf("search after checkpoint recover = %#v, %v", results, err)
+	}
+}
