@@ -65,7 +65,7 @@ python-check:
 site:
 	@echo "Live:  https://vanshjain-0702.github.io/DBX-Database-Extreme/"
 	@echo "Local: http://127.0.0.1:8765/"
-	python -m http.server 8765 --bind 127.0.0.1 --directory website
+	python3 -m http.server 8765 --bind 127.0.0.1 --directory website
 
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:
