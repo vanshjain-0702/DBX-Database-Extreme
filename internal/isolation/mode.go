@@ -85,6 +85,9 @@ func unixIPCAvailable() bool {
 	}
 }
 
+// UnixAvailable reports whether this kernel can bind filesystem Unix sockets.
+func UnixAvailable() bool { return unixIPCAvailable() }
+
 // RequireKEK reports whether this profile must have a wrapping key.
 func (p Profile) RequireKEK() bool {
 	return p.Encryption
