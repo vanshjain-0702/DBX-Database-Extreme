@@ -3,6 +3,8 @@ package orchestrator
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -130,19 +132,58 @@ func lookupServerBinary() (string, error) {
 	return "", fmt.Errorf("dbx-server binary not found; set DBX_SERVER_BIN")
 }
 
-func childEnv() []string {
+// childEnv builds the worker environment from an allowlist. A tenant worker
+// must never inherit control-plane secrets: with DBX_JWT_SECRET in its environ
+// a compromised worker could mint operator tokens and reach every other
+// tenant, which defeats the point of sandboxing it.
+func childEnv(extra ...string) []string {
+	allowed := map[string]bool{
+		"PATH": true, "HOME": true, "TMPDIR": true, "TZ": true,
+		"LANG": true, "LC_ALL": true, "GOMAXPROCS": true,
+	}
 	var out []string
 	for _, e := range os.Environ() {
-		if strings.HasPrefix(e, "DBX_KEK=") || strings.HasPrefix(e, "DBX_MASTER_KEY=") {
-			continue
+		name, _, found := strings.Cut(e, "=")
+		if found && allowed[name] {
+			out = append(out, e)
 		}
-		out = append(out, e)
 	}
-	return out
+	return append(out, extra...)
+}
+
+func newWorkerToken() (string, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
+
+// ReloadACL tells the worker to re-read acl.json now instead of waiting for its
+// poll interval, so minting and revoking a key take effect immediately.
+func (w *isolatedWorker) ReloadACL() error {
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/internal/acl/reload", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-DBX-Internal-Token", w.token)
+	resp, err := w.httpCl.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("worker acl reload: status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quota int64) error {
 	bin, err := lookupServerBinary()
+	if err != nil {
+		return err
+	}
+	token, err := newWorkerToken()
 	if err != nil {
 		return err
 	}
@@ -151,8 +192,11 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 	cmd.Stdin = bytes.NewReader(dek)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = append(childEnv(),
+	// Each worker gets its own control token, so one worker cannot authenticate
+	// to another worker's control endpoints even if it escapes its sandbox.
+	cmd.Env = childEnv(
 		"DBX_TENANT_ID="+t.ID,
+		"DBX_INTERNAL_API_TOKEN="+token,
 		fmt.Sprintf("DBX_ORCHESTRATOR_PID=%d", os.Getpid()),
 	)
 	cmd.SysProcAttr = workerProcAttr()
@@ -167,7 +211,7 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 		cmd:    cmd,
 		errCh:  make(chan error, 1),
 		httpCl: unixHTTPClient(isolation.HTTPSocket(t.DataDir)),
-		token:  os.Getenv("DBX_INTERNAL_API_TOKEN"),
+		token:  token,
 	}
 	m.mu.Lock()
 	if m.workers == nil {
@@ -222,19 +266,47 @@ func writeUsersACL(dataDir string, users []*auth.User) error {
 	return store.WriteFile(isolation.ACLFile(dataDir))
 }
 
+// syncTenantACL rewrites acl.json for a tenant and its replicas, then tells any
+// live worker to reload immediately. Without the reload call a freshly minted
+// key is rejected until the worker's next poll, and a revoked key keeps working
+// for that window.
 func (m *Manager) syncTenantACL(t *Tenant) {
 	if t == nil {
 		return
 	}
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-	_ = writeUsersACL(t.DataDir, collectTenantUsers(m.tenants, t))
-	if t.Role == "replica" {
-		return
+	targets := []*Tenant{t}
+	if t.Role != "replica" {
+		for _, rid := range t.Replicas {
+			if rt, ok := m.tenants[rid]; ok {
+				targets = append(targets, rt)
+			}
+		}
 	}
-	for _, rid := range t.Replicas {
-		if rt, ok := m.tenants[rid]; ok {
-			_ = writeUsersACL(rt.DataDir, collectTenantUsers(m.tenants, rt))
+	type pending struct {
+		users  []*auth.User
+		dir    string
+		worker *isolatedWorker
+	}
+	work := make([]pending, 0, len(targets))
+	for _, target := range targets {
+		work = append(work, pending{
+			users:  collectTenantUsers(m.tenants, target),
+			dir:    target.DataDir,
+			worker: m.workers[target.ID],
+		})
+	}
+	m.mu.RUnlock()
+
+	for _, item := range work {
+		if err := writeUsersACL(item.dir, item.users); err != nil {
+			fmt.Printf("[Orchestrator] acl write %s failed: %v\n", item.dir, err)
+			continue
+		}
+		if item.worker != nil {
+			if err := item.worker.ReloadACL(); err != nil {
+				fmt.Printf("[Orchestrator] acl reload failed: %v\n", err)
+			}
 		}
 	}
 }

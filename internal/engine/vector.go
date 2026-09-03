@@ -33,7 +33,6 @@ type MMapVectorIndex struct {
 	searchJobs  chan shardSearchJob
 	searchWG    sync.WaitGroup
 	mu          sync.RWMutex
-	heapBacked  bool
 	atRest      *security.Encryptor
 }
 
@@ -62,6 +61,12 @@ func NewMMapVectorIndex(path string, dim int) (*MMapVectorIndex, error) {
 	return newMMapVectorIndex(path, dim, 1000, nil)
 }
 
+// newMMapVectorIndex maps SQ8 rows straight off disk. Rows stay mmap'd even
+// when enc is set: decrypting them into anonymous memory would put every idle
+// tenant's vectors on the Go heap instead of in page cache, and rewriting the
+// whole file per mutation is not affordable. Row confidentiality at rest is a
+// filesystem-level concern (fscrypt/LUKS); see docs/isolation.md. The
+// searchable surface — ids, tombstones, and the HNSW graph — is encrypted.
 func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor) (*MMapVectorIndex, error) {
 	mode := os.FileMode(0644)
 	if enc != nil {
@@ -76,8 +81,20 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor)
 		capacity = 1000
 	}
 	info, _ := f.Stat()
+	if info.Size() == 0 {
+		initialSize := int64(capacity * (dim + 8))
+		f.Truncate(initialSize)
+	}
+
+	m, err := mmap.Map(f, mmap.RDWR, 0)
+	if err != nil {
+		f.Close()
+		return nil, err
+	}
+
 	idx := &MMapVectorIndex{
 		file:        f,
+		mmap:        m,
 		dim:         dim,
 		idMap:       make(map[string]int),
 		idList:      make([]string, 0),
@@ -85,42 +102,6 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor)
 		generations: make([]uint64, 0),
 		graphs:      newHNSWShards(),
 		atRest:      enc,
-	}
-	if enc != nil {
-		idx.heapBacked = true
-		initialSize := capacity * (dim + 8)
-		backing := make([]byte, initialSize)
-		if info.Size() > 0 {
-			onDisk, readErr := os.ReadFile(path)
-			if readErr != nil {
-				f.Close()
-				return nil, readErr
-			}
-			plain, openErr := isolation.OpenSealed(enc, onDisk)
-			if openErr != nil {
-				f.Close()
-				return nil, openErr
-			}
-			if len(plain) > len(backing) {
-				backing = make([]byte, len(plain))
-			}
-			copy(backing, plain)
-			if len(plain) > 0 {
-				backing = backing[:len(plain)]
-			}
-		}
-		idx.mmap = backing
-	} else {
-		if info.Size() == 0 {
-			initialSize := int64(capacity * (dim + 8))
-			f.Truncate(initialSize)
-		}
-		m, mapErr := mmap.Map(f, mmap.RDWR, 0)
-		if mapErr != nil {
-			f.Close()
-			return nil, mapErr
-		}
-		idx.mmap = m
 	}
 	idx.startSearchWorkers()
 	metaPath := path + ".meta"
@@ -311,19 +292,13 @@ func (idx *MMapVectorIndex) Close() {
 	defer idx.mu.Unlock()
 	if idx.mmap != nil {
 		_ = idx.writeMetadata(true)
-		if idx.heapBacked {
-			_ = idx.persistSealedRows()
-		} else {
-			_ = idx.mmap.Flush()
-		}
+		_ = idx.mmap.Flush()
 	}
 	if len(idx.graphs) > 0 && idx.file != nil {
 		_ = saveHNSWGraphs(idx.file.Name()+".hnsw", idx.graphs, idx.atRest)
 	}
 	if idx.mmap != nil {
-		if !idx.heapBacked {
-			_ = idx.mmap.Unmap()
-		}
+		_ = idx.mmap.Unmap()
 		idx.mmap = nil
 	}
 	if idx.file != nil {
@@ -331,14 +306,6 @@ func (idx *MMapVectorIndex) Close() {
 		_ = idx.file.Close()
 		idx.file = nil
 	}
-}
-
-func (idx *MMapVectorIndex) persistSealedRows() error {
-	if idx.file == nil || idx.atRest == nil {
-		return nil
-	}
-	path := idx.file.Name()
-	return isolation.WriteSealedFile(path, append([]byte(nil), idx.mmap...), idx.atRest)
 }
 
 func (idx *MMapVectorIndex) ensureCapacity(neededBytes int) error {
@@ -349,12 +316,6 @@ func (idx *MMapVectorIndex) ensureCapacity(neededBytes int) error {
 	newSize := oldSize * 2
 	if newSize < neededBytes {
 		newSize = neededBytes
-	}
-	if idx.heapBacked {
-		grown := make([]byte, newSize)
-		copy(grown, idx.mmap)
-		idx.mmap = grown
-		return nil
 	}
 	if err := idx.mmap.Flush(); err != nil {
 		return err
@@ -543,7 +504,7 @@ func (s *VectorStore) getReadOnly(key string) (*MMapVectorIndex, func(), error) 
 	if e == nil {
 		unlock()
 		metaPath := filepath.Join(s.dataDir, vectorIndexFilename(key)+".meta")
-		data, err := os.ReadFile(metaPath)
+		data, err := isolation.ReadSealedFile(metaPath, s.atRest)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil, func() {}, nil
@@ -896,17 +857,11 @@ func (s *VectorStore) VCompact(key string) (int, error) {
 	}
 	idx.count = len(activeIDs)
 	idx.syncRowInv()
-	if idx.heapBacked {
-		if err := idx.persistSealedRows(); err != nil {
-			return 0, err
-		}
-	} else {
-		if err := idx.mmap.Flush(); err != nil {
-			return 0, err
-		}
-		if err := idx.file.Sync(); err != nil {
-			return 0, err
-		}
+	if err := idx.mmap.Flush(); err != nil {
+		return 0, err
+	}
+	if err := idx.file.Sync(); err != nil {
+		return 0, err
 	}
 	if err := idx.persistMetadata(); err != nil {
 		return 0, err

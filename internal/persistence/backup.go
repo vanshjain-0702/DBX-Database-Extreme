@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/dbx/dbx/internal/isolation"
 )
 
 type BackupManifest struct {
@@ -44,6 +46,12 @@ func CreateBackupArchive(tenantID, dataDir, snapshotPath, outputPath string, seq
 		name := entry.Name()
 		if strings.HasSuffix(name, ".vec") || strings.HasSuffix(name, ".vec.meta") ||
 			strings.HasSuffix(name, ".vec.hnsw") {
+			candidates = append(candidates, filepath.Join(dataDir, name))
+		}
+		// The wrapped tenant DEK travels with the archive, otherwise restoring
+		// into a purged directory produces ciphertext nobody can open. It is
+		// sealed under the operator KEK, so the archive stays useless without it.
+		if name == isolation.WrappedDEKName {
 			candidates = append(candidates, filepath.Join(dataDir, name))
 		}
 	}

@@ -330,6 +330,11 @@ func (i *Instance) Start(ctx context.Context) error {
 		tenantID = os.Getenv("DBX_TENANT_ID")
 	}
 	i.httpServer.SetBackup(tenantID, i.CreateBackup)
+	if cfg.Auth.ACLFile != "" {
+		i.httpServer.SetACLReload(func() error {
+			return aclStore.LoadFile(cfg.Auth.ACLFile)
+		})
+	}
 
 	go func() {
 		defer i.recoverTenantTask("http-server")

@@ -34,37 +34,63 @@ macOS or Windows as Landlock-isolated.
 
 1. **Process.** The orchestrator `exec`s `dbx-server` per tenant. A panic or
    memory blow-up is one worker. Tenants do not share a Go heap.
-2. **Filesystem.** After bind, the worker calls Landlock so it cannot open paths
-   outside its tenant directory except `/proc`, `/dev`, and `/etc` (Go runtime
-   and timezones). Sibling `$DATA/tenants/{other}` is denied by the kernel.
+2. **Filesystem.** After bind, the worker calls Landlock so it cannot **open**
+   paths outside its tenant directory, except read-only `/proc` and `/etc` and
+   read/write `/dev` (the Go runtime and timezone data need them). Reading a
+   sibling `$DATA/tenants/{other}/...` is denied by the kernel. Each worker also
+   gets its own control token, so it cannot authenticate to a neighbour's
+   control endpoints.
 3. **Memory.** The orchestrator places the worker in a cgroup v2 with
-   `memory.max` equal to the tenant quota when the host delegates cgroup
-   writes. If cgroup writes fail (common in locked-down containers) startup
-   continues and the application quota still rejects writes.
-4. **Crypto.** Each tenant has a 256-bit DEK, wrapped by `DBX_KEK` (also 256-bit,
-   hex). WAL frames, snapshots, `.vec`, `.vec.meta`, and `.hnsw` are AES-256-GCM.
-   The worker receives only its DEK on stdin. It never sees the KEK.
-   `DeleteTenant(purge=true)` shreds the wrapped DEK first: ciphertext on disk
-   becomes unreadable without scanning. Search still runs over plaintext rows
-   **inside** the worker; that is required for mmap/ADC and is why the process
-   seal exists.
+   `memory.max` equal to the tenant quota **when the host delegates cgroup
+   writes**. Most containers do not: expect
+   `cgroup mkdir: permission denied`, which is logged and non-fatal. Treat the
+   cgroup as a bonus on bare metal and the application quota plus
+   `DBX_NODE_MEMORY_BUDGET` as the real limit.
+4. **Crypto.** Each tenant has a 256-bit DEK, wrapped by `DBX_KEK` (also
+   256-bit, hex). WAL frames, snapshots, `.vec.meta` (ids and tombstones), and
+   `.hnsw` (the graph) are AES-256-GCM. The worker receives only its DEK on
+   stdin; it never sees the KEK, and the KEK is stripped from its environment.
+   `DeleteTenant(purge=true)` shreds the wrapped DEK first, so leftover
+   ciphertext is unreadable without a scan. Backups carry the wrapped DEK so a
+   restore can still be opened by an operator holding the KEK.
 5. **IPC.** Tenant RESP/HTTP/replication listen on Unix sockets mode `0600` in
-   the tenant directory. Linux `SO_PEERCRED` accepts only the orchestrator PID.
-   Public `:6380` and `:8000` stay TCP (TLS on the control plane). Combining
-   mTLS *on* those Unix sockets is not used: peer credentials plus POSIX perms
-   are the same-host control, and loopback TLS handshakes are a measured cost.
+   the tenant directory, and Linux `SO_PEERCRED` accepts only the orchestrator
+   PID on the RESP and HTTP sockets. Public `:6380` and `:8000` stay TCP (TLS on
+   the control plane). mTLS *on* the Unix sockets is deliberately not used: peer
+   credentials plus POSIX permissions are the correct same-host control, and
+   loopback TLS handshakes are a measured cost.
 
 ## What this does not claim
 
-- Data in use is plaintext in the worker. A debugger on that PID, or a kernel
-  that ignores Landlock, can read it.
-- User namespaces are not applied yet. Workers run as the orchestrator uid.
+Read this section before repeating any of the claims above.
+
+- **`.vec` rows are not encrypted by DBX.** SQ8 rows stay mmap'd so idle tenants
+  live in page cache (USP 3). Decrypting them into anonymous memory would put
+  every tenant's vectors on the Go heap, and re-encrypting the whole file per
+  insert is not affordable. For embedding confidentiality at rest, run the data
+  directory on fscrypt or LUKS. What DBX encrypts is the searchable surface —
+  ids, tombstones, the graph, the WAL, and checkpoints — so shredding a DEK
+  leaves anonymous SQ8 bytes with no ids and no index.
+- **Landlock governs file opens, not sockets or metadata.** ABI 1–3 has no right
+  covering `connect()` to an existing Unix socket, and `stat()` on a sibling
+  path still succeeds. Cross-tenant socket access is stopped by `SO_PEERCRED`
+  and file mode, not by Landlock. The replication socket has no peer-PID check
+  because a replica worker is a different PID than the orchestrator.
+- **There is no network restriction.** A worker can still open outbound TCP.
+  Landlock ABI 4 network rules are not used.
+- **Data in use is plaintext in the worker.** A debugger on that PID, root, or a
+  kernel that ignores Landlock can read it.
+- **User namespaces are not applied.** Workers run as the orchestrator uid.
   Landlock and peer-PID checks are what stop a sibling worker, not a different
   uid.
-- Backups, S3 copies, and replicas have their own ciphertext. Revoking one DEK
-  shreds that tenant's directory; copies wrapped under the same DEK become
-  inert, copies re-encrypted under another key do not.
-- `inprocess` is still available. It is a density profile, not the security USP.
+- **Density is not certified under `strict`.** The published 100 tenants/node
+  figure was measured in-process. One OS process per tenant is a different
+  memory profile; re-measure on your hardware.
+- **`inprocess` is still available** and is the default. It is a density and
+  development profile, not the security USP.
+- This is not "the strongest sandbox ever built." Firecracker, gVisor, and Qubes
+  are stronger sandboxes. What is unusual here is that the sealed unit is one
+  customer's KV plus vector memory, with a key you can destroy.
 
 ## Operator contract
 

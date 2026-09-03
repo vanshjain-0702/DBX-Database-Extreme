@@ -54,7 +54,8 @@
           <li><strong>Density</strong> — CI soaks 12 idle / 4 active engines. Operators run <code>make soak</code> for 100 idle / 25 active. That is not a 100-orchestrator-process soak. The Isolation Kernel’s <code>strict</code> profile is a security mode, not that density drill.</li>
         </ul>
         <h2>Isolation Kernel</h2>
-        <p>Linux production seals each tenant as its own process, Landlock filesystem, cgroup, per-tenant AES-256-GCM, and Unix sockets that only the orchestrator PID can open. Data in use is plaintext inside that worker because search requires it. <code>inprocess</code> is the density/dev profile and is not the security claim.</p>
+        <p>Linux production (<code>DBX_ISOLATION_MODE=strict</code>) seals each tenant as its own process with a Landlock-restricted filesystem view, per-tenant AES-256-GCM over the WAL, checkpoints, vector ids and HNSW graph, and Unix sockets that only the orchestrator PID can open.</p>
+        <p>Limits worth stating: SQ8 rows stay mmap'd and unencrypted so idle tenants stay in page cache — use fscrypt or LUKS for row confidentiality. Landlock covers file opens, not <code>connect()</code>; peer credentials stop cross-tenant sockets. cgroup limits require a host that delegates cgroup writes. Data in use is plaintext inside the worker. <code>inprocess</code> is the default density/dev profile and is not the security claim.</p>
         <h2>Dashboard</h2>
         <p>React UI compiled into the orchestrator binary. <strong>Tenant keys</strong> (<code>/cluster/{id}/keys</code>) mints reader/writer/tenant-admin credentials; the secret is shown once. Console, explorer, and vector playground use an operator JWT on <code>:8000</code>. They are operator tools, not the public tenant API.</p>
         <h2>Public site</h2>

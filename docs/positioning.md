@@ -117,10 +117,16 @@ data at rest without a scan.
 *Proof in code:* `internal/isolation`, `internal/orchestrator/worker.go`,
 `docs/isolation.md`.
 
-*Honest limits:* data in use is plaintext inside the worker (search requires it).
-`inprocess` remains the density/dev profile and is not this USP. User namespaces
-are not applied yet. Windows/macOS run `standard` (encryption + Unix sockets)
-without Landlock. Do not say "the strongest sandbox ever built."
+*Honest limits:* `.vec` rows stay mmap'd and unencrypted so USP 3 survives —
+embedding confidentiality at rest is an fscrypt/LUKS job, while DBX encrypts the
+searchable surface (ids, graph, WAL, checkpoints). Landlock governs file opens,
+not `connect()` or `stat()`; cross-tenant socket access is stopped by
+`SO_PEERCRED`. cgroup limits need a host that delegates cgroup writes, which
+most containers do not. Data in use is plaintext inside the worker. User
+namespaces are not applied. Density under `strict` is not re-certified.
+`inprocess` remains the default density/dev profile and is not this USP.
+Windows/macOS run `standard` (encryption + Unix sockets) without Landlock.
+Never say "the strongest sandbox ever built" — see `docs/isolation.md`.
 
 **Not a USP, but our on-ramp:** DBX speaks RESP, so existing clients connect without a custom
 driver. We describe this as "your clients already work," never as "drop-in Redis replacement."

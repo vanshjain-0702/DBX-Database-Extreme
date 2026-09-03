@@ -350,6 +350,7 @@ type HTTPServer struct {
 	enforcer         *security.ACLEnforcer
 	auditGuard       *security.AuditGuard
 	backupFn         func(tenantID, outputPath string) (persistence.BackupManifest, error)
+	reloadACL        func() error
 	tenantID         string
 }
 
@@ -362,6 +363,11 @@ func NewHTTPServer(cfg *config.ServerConfig, metrics *observability.Metrics, exe
 func (h *HTTPServer) SetBackup(tenantID string, fn func(tenantID, outputPath string) (persistence.BackupManifest, error)) {
 	h.tenantID = tenantID
 	h.backupFn = fn
+}
+
+// SetACLReload lets the orchestrator push credential changes synchronously.
+func (h *HTTPServer) SetACLReload(fn func() error) {
+	h.reloadACL = fn
 }
 
 // withCORS adds CORS headers to allow the dashboard to connect.
@@ -466,6 +472,22 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 	mux.HandleFunc("/usage", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(h.executorUsage())
+	})))
+	mux.HandleFunc("/internal/acl/reload", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if h.reloadACL == nil {
+			http.Error(w, "acl reload unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if err := h.reloadACL(); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok"}`))
 	})))
 	mux.HandleFunc("/internal/backup", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
