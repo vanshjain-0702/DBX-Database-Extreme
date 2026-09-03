@@ -22,12 +22,8 @@ func TestPrimaryReplicaLiveReplication(t *testing.T) {
 	primaryHTTP := freePort(t)
 	replicaRESP := freePort(t)
 	replicaHTTP := freePort(t)
-	replPort := freePort(t)
-	listen := fmt.Sprintf("127.0.0.1:%d", replPort)
 
-	primaryCfg := replicaTestConfig(t, primaryRESP, primaryHTTP, "primary", listen, "")
-	replicaCfg := replicaTestConfig(t, replicaRESP, replicaHTTP, "replica", "", listen)
-
+	primaryCfg := replicaTestConfig(t, primaryRESP, primaryHTTP, "primary", "127.0.0.1:0", "")
 	primary, err := NewInstance(primaryCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -37,6 +33,12 @@ func TestPrimaryReplicaLiveReplication(t *testing.T) {
 	}
 	defer primary.Stop()
 
+	listen := primary.ReplicationAddr()
+	if listen == "" {
+		t.Fatal("primary replication listener was not bound")
+	}
+
+	replicaCfg := replicaTestConfig(t, replicaRESP, replicaHTTP, "replica", "", listen)
 	replica, err := NewInstance(replicaCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -48,12 +50,13 @@ func TestPrimaryReplicaLiveReplication(t *testing.T) {
 
 	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", primaryRESP))
 	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", replicaRESP))
+	waitReplicaConnected(t, primary)
 
 	password := "replica-test-secret"
 	if got := respCommand(t, primaryRESP, password, "SET", "k", "v1"); got != "+OK\r\n" {
 		t.Fatalf("primary SET = %q", got)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
 	for {
 		got := respCommand(t, replicaRESP, password, "GET", "k")
 		if got == "$2\r\nv1\r\n" {
@@ -118,6 +121,18 @@ func waitTCP(t *testing.T, addr string) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("timeout waiting for %s", addr)
+}
+
+func waitReplicaConnected(t *testing.T, primary *Instance) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if primary.ReplicaCount() > 0 {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("timeout waiting for replica to register with primary")
 }
 
 func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {

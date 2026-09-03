@@ -384,6 +384,22 @@ func (i *Instance) ErrorChannel() <-chan error {
 	return i.serverErr
 }
 
+// ReplicationAddr returns the bound primary replication listener, or empty.
+func (i *Instance) ReplicationAddr() string {
+	if i.primaryStream == nil {
+		return ""
+	}
+	return i.primaryStream.Addr()
+}
+
+// ReplicaCount returns connected WAL replicas for a primary instance.
+func (i *Instance) ReplicaCount() int {
+	if i.primaryStream == nil {
+		return 0
+	}
+	return i.primaryStream.ReplicaCount()
+}
+
 // UsageSnapshot is the billable unit for one running engine: keys, live vectors,
 // memory, and command counters. Disk bytes are filled by the orchestrator.
 type UsageSnapshot struct {
