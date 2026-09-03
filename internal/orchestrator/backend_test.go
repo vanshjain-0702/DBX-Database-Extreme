@@ -3,14 +3,18 @@ package orchestrator
 import (
 	"io"
 	"net"
-	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/dbx/dbx/internal/isolation"
 )
 
 func TestBackendPoolReusesWarmDial(t *testing.T) {
+	if !isolation.UnixAvailable() {
+		t.Skip("unix sockets are not available on this OS")
+	}
 	dir := t.TempDir()
-	sock := filepath.Join(dir, "resp.sock")
+	sock := isolation.RESPSocket(dir)
 	ln, err := net.Listen("unix", sock)
 	if err != nil {
 		t.Fatal(err)
