@@ -1,33 +1,36 @@
-# Publishes website/ to the gh-pages branch.
-# Then: Settings → Pages → Deploy from a branch → gh-pages → / (root).
+# Deploys website/ to GitHub Pages via the deployment API.
+# Settings → Pages → Source must be "GitHub Actions" (not "Deploy from a branch").
 # GitHub Pages stays 404 while this repository is private on a Free plan.
-# Open website/index.html locally, or make the repo public / use GitHub Pro.
 name: Deploy site
 
 on:
   push:
     branches: ["main"]
-    paths:
-      - "website/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - name: Publish website to gh-pages
-        uses: peaceiris/actions-gh-pages@v4
+      - uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./website
-          force_orphan: true
-          enable_jekyll: false
+          path: './website'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
