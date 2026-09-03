@@ -10,7 +10,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "sdk", "python"))
 
-from dbx import ControlPlane, DBXClient, DBXError
+from dbx import ControlPlane, DBXError, TenantMemory
 
 
 def main() -> None:
@@ -22,28 +22,12 @@ def main() -> None:
         raise SystemExit(f"{exc}\nStart the node first: make run-dev") from exc
 
     tenant = "acme-quickstart"
-    try:
-        plane.provision(tenant, "Acme quickstart")
-    except DBXError as exc:
-        if "already" not in str(exc).lower() and "exist" not in str(exc).lower():
-            print("provision:", exc)
-
-    minted = plane.create_key(tenant, name="agent-writer", role="writer")
-    secret = minted["secret"]
-    key_id = minted["key"]["id"]
-
-    db = DBXClient(
-        host="127.0.0.1",
-        port=6380,
-        tenant=tenant,
-        key_id=key_id,
-        secret=secret,
-    )
-    db.set("session:42", '{"thread":"onboarding","step":3}')
-    db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
-    hits = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
-    print("search:", hits)
-    print("session:", db.get("session:42"))
+    mem = TenantMemory.open(plane, tenant, name="Acme quickstart")
+    mem.remember("session:42", '{"thread":"onboarding","step":3}')
+    mem.remember("doc:1", "onboarding notes", vector=[0.1, 0.2, 0.9])
+    hits = mem.recall([0.1, 0.2, 0.8], top_k=5)
+    print("recall:", hits)
+    print("session:", mem.get("session:42"))
     print("usage:", plane.usage(tenant))
 
     exported = plane.export_tenant(tenant)

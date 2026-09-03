@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dbx/dbx/dashboard"
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/orchestrator"
 )
 
@@ -55,6 +56,20 @@ func main() {
 	adminPassword := os.Getenv("DBX_ADMIN_PASSWORD")
 	if len(adminPassword) < 12 {
 		log.Fatal("DBX_ADMIN_PASSWORD must be set to at least 12 characters")
+	}
+
+	dataDir := strings.TrimSpace(os.Getenv("DBX_DATA_DIR"))
+	if dataDir == "" {
+		dataDir = "data"
+	}
+	iso := isolation.FromEnv()
+	boot := isolation.StartupFromEnv(*insecureHTTP, dataDir)
+	if err := isolation.Enforce(iso, boot); err != nil {
+		log.Fatal(err)
+	}
+	log.Println(isolation.Banner(iso, boot))
+	if warn := isolation.DiskEncryptionWarning(dataDir); warn != "" && iso.Encryption {
+		log.Println(warn)
 	}
 
 	internalToken := os.Getenv("DBX_INTERNAL_API_TOKEN")

@@ -123,8 +123,10 @@ searchable surface (ids, graph, WAL, checkpoints). Landlock governs file opens,
 not `connect()` or `stat()`; cross-tenant socket access is stopped by
 `SO_PEERCRED`. cgroup limits need a host that delegates cgroup writes, which
 most containers do not. Data in use is plaintext inside the worker. User
-namespaces are not applied. Density under `strict` is not re-certified.
-`inprocess` remains the default density/dev profile and is not this USP.
+namespaces are not applied. Density under `strict` was re-measured at about
+14–17 MiB RSS per idle worker. `inprocess` remains the local/CI density
+profile and is not this USP. Production (TLS, or `DBX_PRODUCTION=1`) refuses
+`inprocess` unless `DBX_ALLOW_INPROCESS=1`.
 Windows/macOS run `standard` (encryption + Unix sockets) without Landlock.
 Never say "the strongest sandbox ever built" — see `docs/isolation.md`.
 

@@ -27,7 +27,7 @@ When self-hosting DBX in production:
 
 1. **Never disable TLS** in production. Use `-tls-cert` and `-tls-key` flags.
 2. **Set strong secrets:** `DBX_ADMIN_PASSWORD` (min 12 chars), `DBX_JWT_SECRET` (min 32 chars), `DBX_KEK` (64 hex chars) for envelope encryption.
-3. **Run `DBX_ISOLATION_MODE=strict` on Linux.** The image defaults to this. Keep `dbx-server` on `PATH` next to the orchestrator.
+3. **Run `DBX_ISOLATION_MODE=strict` on Linux.** Compose and Helm set this and `DBX_PRODUCTION=1`. A production-shaped process refuses `inprocess` unless you set `DBX_ALLOW_INPROCESS=1`. Keep `dbx-server` on `PATH` next to the orchestrator. Put the data volume on LUKS/fscrypt if embeddings must be ciphertext (`.vec` rows are otherwise plaintext).
 4. **Firewall internal ports** (8081+). Only expose port 8000 (Orchestrator) and 6380 (RESP) to the public.
 5. **Use environment variables** for secrets; never commit them to source control.
 6. **Enable S3 backups** to ensure data durability.

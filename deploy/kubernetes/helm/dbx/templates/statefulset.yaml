@@ -50,6 +50,8 @@ spec:
               key: internal-token
         - name: DBX_ISOLATION_MODE
           value: '{{ .Values.isolationMode | default "strict" }}'
+        - name: DBX_PRODUCTION
+          value: "1"
         - name: DBX_KEK
           valueFrom:
             secretKeyRef:

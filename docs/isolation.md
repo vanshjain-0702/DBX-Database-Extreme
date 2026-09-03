@@ -24,8 +24,11 @@ process, a filesystem, and a key.
 | `standard` | macOS/Windows, or Linux without a worker binary | Envelope encryption, Unix sockets, `SO_PEERCRED` on Linux |
 | `strict` | Linux production (Docker/Helm default) | `standard` plus a dedicated `dbx-server` process, Landlock LSM, cgroup v2 |
 
-Unset `DBX_ISOLATION_MODE` is `inprocess` so CI density tests keep their shape.
-Production images set `strict`.
+Unset `DBX_ISOLATION_MODE` is `inprocess` so CI density tests and
+`make run-dev` (`-insecure-http`) keep their shape. Docker Compose and Helm
+set `strict` and `DBX_PRODUCTION=1`. A production-shaped process **refuses
+to boot in `inprocess`** unless you set `DBX_ALLOW_INPROCESS=1`. That is how
+the security USP stays on when you claim production.
 
 `strict` on a non-Linux kernel degrades to `standard` and says so. Do not market
 macOS or Windows as Landlock-isolated.
@@ -100,8 +103,12 @@ Read this section before repeating any of the claims above.
 ## Operator contract
 
 - Set `DBX_KEK` to 64 hex characters before enabling `standard` or `strict`.
+  Missing KEK is a boot failure, not a silent plaintext fallback.
 - Keep `dbx-server` next to `dbx-orchestrator` (Docker image does this;
   `DBX_SERVER_BIN` overrides).
 - Public TLS is unchanged: do not run `-insecure-http` in production.
+- For embedding confidentiality, put `DBX_DATA_DIR` on LUKS or fscrypt.
+  Set `DBX_REQUIRE_DISK_ENCRYPTION=1` to refuse boot on a plaintext volume.
+  `.vec` rows are otherwise readable after a DEK shred.
 - Hibernating a tenant stops the worker and leaves ciphertext on disk. Wake
   unwraps the DEK again.
