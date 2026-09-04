@@ -1,11 +1,26 @@
 package dashboard
 
-import "embed"
+import (
+	"embed"
+	"fmt"
+	"io/fs"
+)
 
 //go:embed all:dist
-// Force rebuild: 2
 var DistFS embed.FS
-// Force rebuild
-// Force rebuild 3
-// Force rebuild 4
-// Force rebuild 5
+
+// Dist returns the Vite build output. Empty until
+// `cd dashboard && npm ci && npm run build` (CI and Docker do this before
+// `go build`; `make run-dev` / `make build-orchestrator` do it locally).
+func Dist() (fs.FS, error) {
+	sub, err := fs.Sub(DistFS, "dist")
+	if err != nil {
+		return nil, err
+	}
+	f, err := sub.Open("index.html")
+	if err != nil {
+		return nil, fmt.Errorf("dashboard dist is empty; run: cd dashboard && npm ci && npm run build")
+	}
+	_ = f.Close()
+	return sub, nil
+}

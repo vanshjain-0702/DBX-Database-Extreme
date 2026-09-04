@@ -8,8 +8,15 @@ export const fetchWithAuth = async (url: string, options: RequestInit = {}) => {
 
   const res = await fetch(url, { ...options, headers });
   if (res.status === 401) {
-    localStorage.removeItem('dbx_token');
-    window.location.href = '/login';
+    const path = url.startsWith('http')
+      ? new URL(url, window.location.origin).pathname
+      : url.split('?')[0];
+    // Only operator control-plane 401s mean the JWT is dead. A tenant
+    // engine 401 must not wipe the dashboard session.
+    if (path === '/api/login' || path.startsWith('/api/')) {
+      localStorage.removeItem('dbx_token');
+      window.location.href = '/login';
+    }
   }
   return res;
 };

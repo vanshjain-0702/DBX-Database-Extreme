@@ -1,6 +1,7 @@
 # Deploys website/ to GitHub Pages via the deployment API.
 # Settings → Pages → Source must be "GitHub Actions" (not "Deploy from a branch").
-# GitHub Pages stays 404 while this repository is private on a Free plan.
+# Live URL: https://vanshjain-0702.github.io/DBX-Database-Extreme/
+# GitHub Pages on a Free plan 404s only while this repository is private.
 name: Deploy site
 
 on:

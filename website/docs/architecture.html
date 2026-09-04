@@ -8,14 +8,14 @@
   <meta property="og:title" content="Architecture — DBX Docs">
   <meta property="og:description" content="Orchestrator on :8000, authenticated RESP on :6380, one isolated engine per tenant with its own WAL, HNSW, and snapshots.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://dbxdb.io/docs/architecture.html">
-  <meta property="og:image" content="../assets/og-image.jpg">
+  <meta property="og:url" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/architecture.html">
+  <meta property="og:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Architecture — DBX Docs">
   <meta name="twitter:description" content="Orchestrator on :8000, authenticated RESP on :6380, one isolated engine per tenant with its own WAL, HNSW, and snapshots.">
-  <meta name="twitter:image" content="../assets/og-image.jpg">
+  <meta name="twitter:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
   <meta name="theme-color" content="#051c33">
-  <link rel="canonical" href="https://dbxdb.io/docs/architecture.html">
+  <link rel="canonical" href="https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/architecture.html">
   <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
   <link rel="apple-touch-icon" href="../assets/logo.jpg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -59,7 +59,7 @@
         <h2>Dashboard</h2>
         <p>React UI compiled into the orchestrator binary. <strong>Tenant keys</strong> (<code>/cluster/{id}/keys</code>) mints reader/writer/tenant-admin credentials; the secret is shown once. Console, explorer, and vector playground use an operator JWT on <code>:8000</code>. They are operator tools, not the public tenant API.</p>
         <h2>Public site</h2>
-        <p>Static HTML in <code>website/</code>. Open <code>website/index.html</code> locally. GitHub Pages is 404 while the repository is private; <code>dbxdb.io</code> is not registered. See <code>website/README.md</code>.</p>
+        <p>Static HTML in <code>website/</code>. Live: <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/">github.io/DBX-Database-Extreme</a>. Local preview: <code>make site</code>. <code>dbxdb.io</code> is the intended custom domain once registered. See <code>website/README.md</code>.</p>
       </article>
     </div>
   </main>

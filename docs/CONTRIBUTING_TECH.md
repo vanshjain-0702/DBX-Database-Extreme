@@ -34,7 +34,9 @@ make python-check
 golangci-lint run
 ```
 
-Public site: edit [`website/`](../website/). Dashboard: edit [`dashboard/`](../dashboard/),
+Public site: live at
+[github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/);
+source is [`website/`](../website/). Dashboard: edit [`dashboard/`](../dashboard/),
 then `npm run lint` and `npm run build` (CI golangci-lint builds the dashboard first
 so the Go embed is current).
 

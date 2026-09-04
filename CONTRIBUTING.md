@@ -49,8 +49,10 @@ make run-dev
 make run-dashboard
 ```
 
-Public site copy is [`website/`](website/). It deploys from GitHub Actions when
-`website/**` changes ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
+Public site copy is [`website/`](website/), live at
+[github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/).
+It deploys from GitHub Actions on push to `main`
+([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
 Operator UI copy is [`dashboard/`](dashboard/) (Tenant keys, console, explorer).
 
 ## Code Style
