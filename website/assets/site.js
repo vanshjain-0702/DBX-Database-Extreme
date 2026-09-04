@@ -35,7 +35,7 @@
       mast.outerHTML =
         '<header class="site-header">' +
         '<div class="header-inner">' +
-        '<a class="brand" href="' + href("index.html") + '"><img src="' + href("assets/logo.jpg") + '" width="48" height="48" alt="DBX"></a>' +
+        '<a class="brand" href="' + href("index.html") + '"><img src="' + href("assets/logo.jpg") + '" width="48" height="48" alt=""><span>DBX</span></a>' +
         '<span class="live-meta"><span data-clock>00:00:00</span><span class="live-port">:6380</span></span>' +
         '<button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">Menu</button>' +
         '<nav id="site-nav" class="site-nav" aria-label="Primary">' +
@@ -64,7 +64,7 @@
         '<footer class="site-footer">' +
         '<div class="footer-grid">' +
         "<div>" +
-        '<p class="footer-brand"><img src="' + href("assets/logo.jpg") + '" width="56" height="56" alt="DBX"></p>' +
+        '<p class="footer-brand"><img src="' + href("assets/logo.jpg") + '" width="56" height="56" alt=""><span>DBX</span></p>' +
         '<p class="muted">Per-tenant memory for AI products. One engine per customer.</p>' +
         '<p><a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a></p>' +
         "</div>" +
@@ -121,6 +121,17 @@
   var toggle = document.querySelector(".nav-toggle");
   var nav = document.querySelector("#site-nav");
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  if (!reduce) {
+    window.addEventListener(
+      "pointermove",
+      function (e) {
+        document.documentElement.style.setProperty("--mx", e.clientX + "px");
+        document.documentElement.style.setProperty("--my", e.clientY + "px");
+      },
+      { passive: true }
+    );
+  }
 
   function onScroll() {
     if (!header) return;
@@ -306,6 +317,8 @@
     });
     var badge = document.querySelector("[data-auth-badge]");
     if (badge) badge.textContent = "AUTH " + authed;
+    var root = document.querySelector("[data-bench]");
+    if (root) root.style.setProperty("--tenant", "var(--" + authed + ")");
   }
 
   function runScript() {
@@ -424,7 +437,8 @@
       },
       { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
     );
-    document.querySelectorAll("[data-in]").forEach(function (el) {
+    document.querySelectorAll("[data-in]").forEach(function (el, i) {
+      el.style.transitionDelay = Math.min(i, 8) * 70 + "ms";
       io.observe(el);
     });
   } else {
