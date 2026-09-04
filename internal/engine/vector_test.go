@@ -467,3 +467,35 @@ func TestReadSQ8RoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestVAddBatchAllowsConcurrentSearch(t *testing.T) {
+	dir := t.TempDir()
+	store := NewVectorStore(New(8), dir, 0)
+	defer store.CloseAll()
+	if err := store.VAdd("idx", "seed", []float32{1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			if _, err := store.VSearch("idx", []float32{1, 0}, 1, nil); err != nil {
+				t.Errorf("search: %v", err)
+				return
+			}
+		}
+	}()
+	ids := make([]string, 200)
+	vecs := make([][]float32, 200)
+	for i := range ids {
+		ids[i] = "d" + strconv.Itoa(i)
+		vecs[i] = []float32{float32(i), 1}
+	}
+	if err := store.VAddBatch("idx", 2, ids, vecs); err != nil {
+		t.Fatal(err)
+	}
+	<-done
+	if got := store.LiveVectorCount(); got < 201 {
+		t.Fatalf("live = %d", got)
+	}
+}

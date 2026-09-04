@@ -47,6 +47,13 @@
           <article class="change">
             <time datetime="2026-09-03">03 Sep 2026</time>
             <div>
+              <h2>Unix data plane, faster ingest, tenant checkpoints</h2>
+              <p>Orchestrator-managed engines bind Unix sockets on Linux/macOS instead of a loopback TCP port each. Public <code>:6380</code> still AUTH's once, then reuses a small pool of unused worker dials. Vector ingest no longer holds the index write lock across HNSW insert, so search can run during graph construction. Checkpoints flush vector metadata, record per-index seals, and name the live snapshot in <code>CURRENT</code> so recovery does not pick a file by mtime.</p>
+            </div>
+          </article>
+          <article class="change">
+            <time datetime="2026-09-03">03 Sep 2026</time>
+            <div>
               <h2>Public site on GitHub Pages</h2>
               <p>The marketing and docs site is live at <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/">vanshjain-0702.github.io/DBX-Database-Extreme</a>. Canonical URLs, sitemap, and the README globe link point there. <code>dbxdb.io</code> stays the intended custom domain; do not add <code>website/CNAME</code> until DNS is actually pointed at Pages.</p>
             </div>

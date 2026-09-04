@@ -99,8 +99,10 @@ which directly contradicts the claim that a tenant is cheap. HTTP already multip
 `AUTH` / `HELLO` and routes to the right in-process engine. One port, one Kubernetes Service,
 one firewall rule, regardless of tenant count.
 
-**Current limit:** one public port is implemented, while loopback backend listeners remain;
-the certified v1 cap is therefore 100 tenants/node, not 1,000.
+**Current limit:** public ingress is one port. Orchestrator-managed tenants bind
+Unix sockets instead of a loopback TCP port per engine on Linux/macOS, so the
+old port-exhaustion cap is gone. The certified v1 contract remains 100
+tenants/node until a larger soak is published.
 
 ### 2. Per-tenant quotas and usage accounting
 **Status:** implemented; CI density soak is 12/4, operator drill is `make soak` · **Thesis:** USP 1, business model

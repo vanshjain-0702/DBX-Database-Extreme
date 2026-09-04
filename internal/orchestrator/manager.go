@@ -551,10 +551,15 @@ func (m *Manager) StartTenant(t *Tenant) error {
 
 	cfgObj := config.TenantEngine(t.DataDir, t.RESPPort, t.HTTPPort)
 	cfgObj.Auth.ACLFile = isolation.ACLFile(t.DataDir)
-	if profile.UnixIPC {
+	// Every orchestrator-managed tenant binds Unix sockets when the kernel
+	// supports them. Isolated workers already did; in-process engines were
+	// still burning a loopback TCP port each, which is what capped density.
+	if isolation.UnixAvailable() {
 		cfgObj.Server.Socket = isolation.RESPSocket(t.DataDir)
 		cfgObj.Server.HTTPSocket = isolation.HTTPSocket(t.DataDir)
-		cfgObj.Server.PeerPIDs = []int{os.Getpid()}
+		if profile.PeerCred {
+			cfgObj.Server.PeerPIDs = []int{os.Getpid()}
+		}
 	}
 	role, listenAddr, primaryAddr := "", "", ""
 	switch t.Role {
@@ -630,9 +635,15 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}
 	inst.SetInitialUsers(users)
 
-	fmt.Printf("[Orchestrator] Starting tenant %s on HTTP:%d RESP:%d isolation=%s\n", t.ID, t.HTTPPort, t.RESPPort, profile.Mode)
+	fmt.Printf("[Orchestrator] Starting tenant %s isolation=%s unix=%s\n", t.ID, profile.Mode, cfgObj.Server.Socket)
 	if err := inst.Start(context.Background()); err != nil {
 		return err
+	}
+	if cfgObj.Server.Socket != "" {
+		if err := waitTenantSockets(t.DataDir, 5*time.Second); err != nil {
+			inst.Stop()
+			return err
+		}
 	}
 	m.mu.Lock()
 	m.instances[t.ID] = inst

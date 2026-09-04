@@ -10,8 +10,8 @@ import (
 
 // Socket names live inside the tenant directory when the path fits in
 // sockaddr_un. Darwin's sun_path is 104 bytes; a GitHub Actions TempDir plus
-// http.sock does not. Overflow sockets go under a hashed directory in TempDir
-// so Listen does not return "bind: invalid argument".
+// /tenants/<id>/http.sock does not. Overflow sockets go under a hashed
+// directory in TempDir so Listen does not return "bind: invalid argument".
 const (
 	RESPSocketName = "resp.sock"
 	HTTPSocketName = "http.sock"

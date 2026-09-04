@@ -3,11 +3,9 @@ package orchestrator
 import (
 	"fmt"
 	"net"
-	"os"
 	"sync"
 	"time"
 
-	"github.com/dbx/dbx/internal/isolation"
 	"github.com/hashicorp/raft"
 )
 
@@ -101,14 +99,7 @@ func (s *Sentinel) checkHealth() {
 		if t.Hibernated {
 			continue
 		}
-		addr := fmt.Sprintf("127.0.0.1:%d", t.RESPPort)
-		network := "tcp"
-		if t.DataDir != "" {
-			sock := isolation.RESPSocket(t.DataDir)
-			if _, err := os.Stat(sock); err == nil {
-				network, addr = "unix", sock
-			}
-		}
+		network, addr := tenantRESPAddr(t)
 		conn, err := net.DialTimeout(network, addr, healthDialTimeout)
 		if err != nil {
 			fmt.Printf("[Sentinel] WARN: Tenant %s (%s) is unreachable.\n", t.ID, addr)

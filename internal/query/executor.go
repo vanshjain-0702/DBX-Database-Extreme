@@ -499,13 +499,13 @@ func (e *Executor) Checkpoint(snapshotter *persistence.Snapshotter) (string, err
 	e.mutationMu.Lock()
 	defer e.mutationMu.Unlock()
 	if e.wal == nil {
-		return snapshotter.SaveAt(e.kv, 0)
+		return e.saveTenantCheckpoint(snapshotter, 0)
 	}
 	if err := e.wal.Sync(); err != nil {
 		return "", err
 	}
 	sequence := e.wal.Sequence()
-	path, err := snapshotter.SaveAt(e.kv, sequence)
+	path, err := e.saveTenantCheckpoint(snapshotter, sequence)
 	if err != nil {
 		return "", err
 	}
@@ -528,11 +528,26 @@ func (e *Executor) WithMaintenanceCheckpoint(snapshotter *persistence.Snapshotte
 		}
 		sequence = e.wal.Sequence()
 	}
-	path, err := snapshotter.SaveAt(e.kv, sequence)
+	path, err := e.saveTenantCheckpoint(snapshotter, sequence)
 	if err != nil {
 		return err
 	}
 	return fn(sequence, path)
+}
+
+func (e *Executor) saveTenantCheckpoint(snapshotter *persistence.Snapshotter, sequence uint64) (string, error) {
+	var seals []persistence.VectorSeal
+	if e.vec != nil {
+		if err := e.vec.FlushDurable(); err != nil {
+			return "", err
+		}
+		for _, info := range e.vec.IndexSeals() {
+			seals = append(seals, persistence.VectorSeal{
+				Key: info.Key, Dim: info.Dim, Count: info.Count, MetaHash: info.MetaHash,
+			})
+		}
+	}
+	return snapshotter.SaveCheckpoint(e.kv, sequence, seals)
 }
 
 // Dispatch executes the command directly without Raft.

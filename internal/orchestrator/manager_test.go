@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/server"
 )
 
@@ -271,6 +272,14 @@ func TestStartTenantWithoutCheckoutYAML(t *testing.T) {
 		if m.TenantRunning(primary.ID) {
 			if _, err := os.Stat(filepath.Join(primary.DataDir, "engine.yaml")); err != nil {
 				t.Fatalf("engine.yaml: %v", err)
+			}
+			if isolation.UnixAvailable() {
+				if _, err := os.Stat(isolation.RESPSocket(primary.DataDir)); err != nil {
+					t.Fatalf("orchestrator tenant should bind unix socket: %v", err)
+				}
+				if _, err := os.Stat(isolation.HTTPSocket(primary.DataDir)); err != nil {
+					t.Fatalf("orchestrator tenant should bind http socket: %v", err)
+				}
 			}
 			return
 		}
