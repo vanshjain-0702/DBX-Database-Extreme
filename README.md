@@ -11,6 +11,8 @@
   <br />
   <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><strong>Open the site</strong></a>
   ·
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><strong>Show demo video</strong></a>
+  ·
   <a href="docs/architecture.md">Architecture</a>
   ·
   <a href="docs/api-reference.md">API</a>
@@ -21,9 +23,32 @@
 <p align="center">
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg?branch=main&event=push" alt="Build Status" /></a>
   <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><img src="https://img.shields.io/badge/site-github.io-0a66c2" alt="Live site" /></a>
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><img src="https://img.shields.io/badge/demo-watch%20video-0a66c2" alt="Show demo video" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
+</p>
+
+---
+
+## Show demo video
+
+5 min 18 s. Public site, then a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Isolation bench in the recording is a browser sketch, not a live node.
+
+<p align="center">
+  <video src="website/assets/demo.mp4" poster="website/assets/og-image.jpg" width="720" controls playsinline preload="metadata">
+    <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html">
+      <img src="website/assets/og-image.jpg" alt="Show demo video — DBX product walkthrough" width="720" />
+    </a>
+  </video>
+</p>
+
+<p align="center">
+  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><strong>▶ Show demo video</strong></a>
+  ·
+  <a href="website/assets/demo.mp4">Open MP4</a>
+  ·
+  <a href="website/demo.html">Walkthrough page</a>
 </p>
 
 ---
@@ -326,6 +351,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | What | Where |
 |---|---|
 | Public site | [github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/) — source in [`website/`](website/). Local preview: `make site`. `dbxdb.io` is the intended custom domain once registered. See [`website/README.md`](website/README.md). |
+| Show demo video | [Walkthrough](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html) (5 min 18 s). File: [`website/assets/demo.mp4`](website/assets/demo.mp4). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |

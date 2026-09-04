@@ -2,6 +2,8 @@
 
 **Live:** [https://vanshjain-0702.github.io/DBX-Database-Extreme/](https://vanshjain-0702.github.io/DBX-Database-Extreme/)
 
+**Show demo video:** [Walkthrough](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html) (`demo.html` + [`assets/demo.mp4`](assets/demo.mp4)). Also linked from the root [README](../README.md).
+
 That is the URL to open from GitHub. Source for it is this folder; GitHub Actions
 deploys it from `main` (workflow [Deploy site](../.github/workflows/pages.yml)).
 
