@@ -53,7 +53,8 @@
             </select>
           </label>
           <label>Message
-            <textarea name="message" required placeholder="What you are running, and what you need."></textarea>
+            <textarea name="message" required maxlength="4000" placeholder="What you are running, and what you need."></textarea>
+            <span class="form-count" data-chars>0 / 4000</span>
           </label>
           <button class="btn" type="submit">Open email to hello@dbxdb.io</button>
           <p class="form-status" data-contact-status hidden></p>
