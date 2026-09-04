@@ -18,6 +18,7 @@ import json
 import subprocess
 import time
 import urllib.request
+from pathlib import Path
 
 import websocket
 
@@ -110,6 +111,18 @@ class CDP:
             pass
 
 
+T0 = 0.0
+
+
+def mark(name: str) -> None:
+    line = f"{time.time() - T0:.2f} {name}"
+    print(f"MARK {line}", flush=True)
+    p = Path("/tmp/dbx-demo/marks.txt")
+    p.parent.mkdir(parents=True, exist_ok=True)
+    with p.open("a") as fh:
+        fh.write(line + "\n")
+
+
 def xdotool(*args: str) -> None:
     subprocess.check_call(["xdotool", *args], stdout=subprocess.DEVNULL)
 
@@ -124,7 +137,7 @@ def move_click(x: int, y: int, double: bool = False) -> None:
     time.sleep(0.18)
 
 
-def type_text(text: str, delay_ms: int = 28) -> None:
+def type_text(text: str, delay_ms: int = 48) -> None:
     # xdotool type interprets some glyphs; keep to ascii for the demo.
     xdotool("type", "--delay", str(delay_ms), "--", text)
 
@@ -209,11 +222,11 @@ def click_js(cdp: CDP, js_el: str, timeout: float = 10.0) -> None:
     js_click_expr(cdp, js_el, timeout=timeout)
 
 
-def scroll_page(cdp: CDP, pixels: int, steps: int = 6) -> None:
+def scroll_page(cdp: CDP, pixels: int, steps: int = 8) -> None:
     step = pixels / steps
     for _ in range(steps):
         cdp.eval(f"window.scrollBy(0, {step})")
-        time.sleep(0.28)
+        time.sleep(0.42)
 
 
 def pause(seconds: float) -> None:
@@ -252,12 +265,14 @@ def find_exact(text: str) -> str:
 
 
 def run_site(cdp: CDP) -> None:
-    cdp.goto(SITE + "/", settle=2.0)
-    pause(2.5)
-    scroll_page(cdp, 120, steps=3)
-    pause(2.0)
+    mark("site_home")
+    cdp.goto(SITE + "/", settle=2.6)
+    pause(4.5)
+    scroll_page(cdp, 80, steps=3)
+    pause(3.0)
 
     # Isolation bench
+    mark("bench")
     try:
         click_sel(cdp, "[data-pause]")
         pause(0.6)
@@ -276,27 +291,29 @@ def run_site(cdp: CDP) -> None:
         key("Escape")
         pause(0.4)
         click_sel(cdp, "[data-replay]")
-        pause(4.5)
+        pause(6.0)
         click_sel(cdp, "[data-pause]")
     except Exception as exc:
         print("bench failed:", exc)
 
-    scroll_page(cdp, 900, steps=8)
-    pause(2.0)
-    scroll_page(cdp, 900, steps=8)
-    pause(1.6)
+    mark("site_why")
+    scroll_page(cdp, 700, steps=8)
+    pause(3.5)
+    scroll_page(cdp, 700, steps=8)
+    pause(3.0)
 
     # Command palette → features
     try:
         click_sel(cdp, "[data-cmdk-open]")
         pause(0.6)
         type_text("features", delay_ms=40)
-        pause(0.7)
+        pause(1.0)
         key("Return")
-        pause(2.0)
+        pause(3.2)
     except Exception:
         cdp.goto(SITE + "/features.html")
 
+    mark("site_pages")
     for path, scroll in [
         ("/features.html", 1400),
         ("/architecture.html", 1100),
@@ -310,28 +327,39 @@ def run_site(cdp: CDP) -> None:
         ("/contact.html", 500),
         ("/demo.html", 500),
     ]:
-        cdp.goto(SITE + path)
-        pause(1.4)
+        cdp.goto(SITE + path, settle=2.0)
+        if path == "/start.html":
+            mark("start")
+        elif path == "/performance.html":
+            mark("perf")
+        elif path == "/docs/api.html":
+            mark("docs")
+        elif path == "/security.html":
+            mark("security")
+        pause(2.4)
         if path == "/start.html":
             try:
                 click_js(cdp, find_btn("From source"))
-                pause(1.6)
+                pause(2.4)
                 click_js(cdp, find_btn("Compose"))
-                pause(1.6)
+                pause(2.4)
                 click_js(cdp, find_btn("Docker"))
-                pause(1.2)
+                pause(2.0)
             except Exception as exc:
                 print("start tabs:", exc)
-        scroll_page(cdp, scroll, steps=max(4, scroll // 180))
-        pause(1.5)
+        scroll_page(cdp, scroll, steps=max(5, scroll // 160))
+        pause(3.2)
 
 
 def run_dashboard(cdp: CDP) -> None:
-    cdp.goto(DASH + "/login", settle=2.2)
-    pause(1.5)
+    mark("dash_login")
+    cdp.goto(DASH + "/login", settle=2.6)
+    pause(2.5)
+    key("Escape")
+    pause(0.3)
     js_focus(cdp, "#login-password")
-    type_text("adminadminadmin", delay_ms=32)
-    pause(0.4)
+    type_text("adminadminadmin", delay_ms=55)
+    pause(0.8)
     js_click_sel(cdp, "#login-submit-btn")
     cdp.wait_js(
         "document.body.innerText.includes('Tenants') || document.body.innerText.includes('Provision')",
@@ -365,24 +393,27 @@ def run_dashboard(cdp: CDP) -> None:
             "([...document.querySelectorAll('button,h3')].find(e => "
             "(e.textContent||'').includes('Demo Acme'))||null)",
         )
-        pause(2.5)
+        pause(3.5)
     except Exception as exc:
         print("open tenant:", exc)
         cdp.goto(DASH + "/cluster/demo-acme/overview", settle=2.0)
 
+    mark("dash_overview")
+
     pause(2.0)
     try:
         click_js(cdp, find_btn("Backup"))
-        pause(0.6)
+        pause(0.8)
         # confirm() is native; xdotool Return
         key("Return")
-        pause(1.8)
+        pause(2.8)
     except Exception as exc:
         print("backup:", exc)
 
     # Tenant keys
-    cdp.goto(DASH + "/cluster/demo-acme/keys", settle=1.8)
-    pause(1.5)
+    mark("dash_keys")
+    cdp.goto(DASH + "/cluster/demo-acme/keys", settle=2.0)
+    pause(2.4)
     try:
         click_js(cdp, find_btn("Mint key"))
         pause(0.8)
@@ -395,8 +426,9 @@ def run_dashboard(cdp: CDP) -> None:
         key("Escape")
 
     # Console
-    cdp.goto(DASH + "/cluster/demo-acme/terminal", settle=1.8)
-    pause(1.4)
+    mark("dash_console")
+    cdp.goto(DASH + "/cluster/demo-acme/terminal", settle=2.0)
+    pause(2.4)
     for cmd in [
         "PING",
         "SET session:42 onboarding",
@@ -406,15 +438,16 @@ def run_dashboard(cdp: CDP) -> None:
     ]:
         try:
             js_focus(cdp, '.console-term input, form input[placeholder="PING"]')
-            type_text(cmd, delay_ms=24)
+            type_text(cmd, delay_ms=52)
             key("Return")
-            pause(1.3)
+            pause(2.6)
         except Exception as exc:
             print("console", cmd, exc)
 
     # Explorer
-    cdp.goto(DASH + "/cluster/demo-acme/explorer", settle=2.0)
-    pause(2.0)
+    mark("dash_explorer")
+    cdp.goto(DASH + "/cluster/demo-acme/explorer", settle=2.2)
+    pause(3.0)
     try:
         click_js(
             cdp,
@@ -444,9 +477,11 @@ def run_dashboard(cdp: CDP) -> None:
         except Exception:
             pass
 
-    cdp.goto(DASH + "/cluster/demo-acme/vector", settle=1.6)
-    pause(3.0)
+    mark("dash_vector")
+    cdp.goto(DASH + "/cluster/demo-acme/vector", settle=2.0)
+    pause(5.0)
 
+    mark("runtime")
     for path in [
         "/cluster/demo-acme/hardware",
         "/cluster/demo-acme/storage",
@@ -457,16 +492,21 @@ def run_dashboard(cdp: CDP) -> None:
         "/settings/replication",
         "/",
     ]:
-        cdp.goto(DASH + path, settle=1.3)
-        pause(1.8)
+        cdp.goto(DASH + path, settle=1.8)
+        pause(3.0)
 
-    cdp.goto(SITE + "/demo.html", settle=1.8)
-    pause(3.5)
+    mark("close")
+    cdp.goto(SITE + "/demo.html", settle=2.2)
+    pause(6.0)
 
 
 def main() -> None:
     import sys
 
+    global T0
+    T0 = time.time()
+    Path("/tmp/dbx-demo/marks.txt").write_text("")
+    mark("start")
     cdp = connect()
     try:
         if len(sys.argv) > 1 and sys.argv[1] == "dashboard":
