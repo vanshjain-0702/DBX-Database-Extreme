@@ -13,17 +13,15 @@ import (
 	"time"
 
 	"github.com/dbx/dbx/internal/config"
+	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/protocol"
 )
 
 func TestPrimaryReplicaLiveReplication(t *testing.T) {
 	t.Setenv("DBX_DEFAULT_PASSWORD", "replica-test-secret")
-	primaryRESP := freePort(t)
-	primaryHTTP := freePort(t)
-	replicaRESP := freePort(t)
-	replicaHTTP := freePort(t)
+	password := "replica-test-secret"
 
-	primaryCfg := replicaTestConfig(t, primaryRESP, primaryHTTP, "primary", "127.0.0.1:0", "")
+	primaryCfg := replicaTestConfig(t, "primary", "127.0.0.1:0", "")
 	primary, err := NewInstance(primaryCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -32,13 +30,14 @@ func TestPrimaryReplicaLiveReplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer primary.Stop()
+	waitRESP(t, primaryCfg)
 
 	listen := primary.ReplicationAddr()
 	if listen == "" {
 		t.Fatal("primary replication listener was not bound")
 	}
 
-	replicaCfg := replicaTestConfig(t, replicaRESP, replicaHTTP, "replica", "", listen)
+	replicaCfg := replicaTestConfig(t, "replica", "", listen)
 	replica, err := NewInstance(replicaCfg)
 	if err != nil {
 		t.Fatal(err)
@@ -47,41 +46,47 @@ func TestPrimaryReplicaLiveReplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer replica.Stop()
-
-	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", primaryRESP))
-	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", replicaRESP))
+	waitRESP(t, replicaCfg)
 	waitReplicaConnected(t, primary)
+	waitAUTH(t, primaryCfg, password)
+	waitAUTH(t, replicaCfg, password)
 
-	password := "replica-test-secret"
-	if got := respCommand(t, primaryRESP, password, "SET", "k", "v1"); got != "+OK\r\n" {
-		t.Fatalf("primary SET = %q", got)
+	if got, err := replicaCommand(primaryCfg, password, "SET", "k", "v1"); err != nil || got != "+OK\r\n" {
+		t.Fatalf("primary SET = %q err=%v", got, err)
 	}
 	deadline := time.Now().Add(15 * time.Second)
+	var last string
+	var lastErr error
 	for {
-		got := respCommand(t, replicaRESP, password, "GET", "k")
-		if got == "$2\r\nv1\r\n" {
+		last, lastErr = replicaCommand(replicaCfg, password, "GET", "k")
+		if lastErr == nil && last == "$2\r\nv1\r\n" {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("replica GET = %q", got)
+			t.Fatalf("replica GET = %q err=%v", last, lastErr)
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if got := respCommand(t, replicaRESP, password, "SET", "k", "nope"); !strings.Contains(got, "READONLY") {
-		t.Fatalf("replica SET = %q", got)
+	got, err := replicaCommand(replicaCfg, password, "SET", "k", "nope")
+	if err != nil || !strings.Contains(got, "READONLY") {
+		t.Fatalf("replica SET = %q err=%v", got, err)
 	}
 }
 
-func replicaTestConfig(t *testing.T, respPort, httpPort int, role, listen, primaryAddr string) *config.Config {
+func replicaTestConfig(t *testing.T, role, listen, primaryAddr string) *config.Config {
 	t.Helper()
 	cfg := config.Defaults()
 	cfg.Server.Host = "127.0.0.1"
-	cfg.Server.Port = respPort
-	cfg.Server.HTTPPort = httpPort
+	cfg.Server.Port = freePort(t)
+	cfg.Server.HTTPPort = freePort(t)
 	cfg.Server.GRPCPort = 0
+	dir := t.TempDir()
+	if isolation.UnixAvailable() {
+		cfg.Server.Socket = isolation.RESPSocket(dir)
+		cfg.Server.HTTPSocket = isolation.HTTPSocket(dir)
+	}
 	cfg.Security.RateLimit.Enabled = false
 	cfg.Persistence.Enabled = true
-	dir := t.TempDir()
 	cfg.Persistence.DataDir = dir
 	cfg.Persistence.WALDir = filepath.Join(dir, "wal")
 	cfg.Persistence.SnapshotDir = filepath.Join(dir, "snapshots")
@@ -137,9 +142,7 @@ func waitReplicaConnected(t *testing.T, primary *Instance) {
 
 func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {
 	t.Setenv("DBX_DEFAULT_PASSWORD", "should-not-work-on-orchestrated-tenants")
-	respPort := freePort(t)
-	httpPort := freePort(t)
-	cfg := replicaTestConfig(t, respPort, httpPort, "", "", "")
+	cfg := replicaTestConfig(t, "", "", "")
 	inst, err := NewInstance(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -149,9 +152,9 @@ func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer inst.Stop()
-	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", respPort))
+	waitRESP(t, cfg)
 
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", respPort), time.Second)
+	conn, err := dialRESP(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,11 +176,41 @@ func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {
 	}
 }
 
-func respCommand(t *testing.T, port int, password string, args ...string) string {
+func waitRESP(t *testing.T, cfg *config.Config) {
 	t.Helper()
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", port), time.Second)
+	if cfg.Server.Socket != "" {
+		waitSocket(t, cfg.Server.Socket)
+		return
+	}
+	waitTCP(t, fmt.Sprintf("127.0.0.1:%d", cfg.Server.Port))
+}
+
+func waitAUTH(t *testing.T, cfg *config.Config, password string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	var last string
+	var lastErr error
+	for time.Now().Before(deadline) {
+		last, lastErr = replicaCommand(cfg, password, "PING")
+		if lastErr == nil && last == "+PONG\r\n" {
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for replica AUTH/PING: %q err=%v", last, lastErr)
+}
+
+func dialRESP(cfg *config.Config) (net.Conn, error) {
+	if cfg.Server.Socket != "" {
+		return net.DialTimeout("unix", cfg.Server.Socket, time.Second)
+	}
+	return net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", cfg.Server.Port), time.Second)
+}
+
+func replicaCommand(cfg *config.Config, password string, args ...string) (string, error) {
+	conn, err := dialRESP(cfg)
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
@@ -187,52 +220,51 @@ func respCommand(t *testing.T, port int, password string, args ...string) string
 	_ = writer.WriteBulkString([]byte("default"))
 	_ = writer.WriteBulkString([]byte(password))
 	if err := writer.Flush(); err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	reader := bufio.NewReader(conn)
 	authLine, err := reader.ReadString('\n')
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	if !strings.HasPrefix(authLine, "+OK") {
-		t.Fatalf("AUTH = %q", authLine)
+		return "", fmt.Errorf("AUTH = %q", authLine)
 	}
 	if err := writer.WriteArray(len(args)); err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	for _, arg := range args {
 		_ = writer.WriteBulkString([]byte(arg))
 	}
 	if err := writer.Flush(); err != nil {
-		t.Fatal(err)
+		return "", err
 	}
-	return readRESP(t, reader)
+	return readRESPValue(reader)
 }
 
-func readRESP(t *testing.T, reader *bufio.Reader) string {
-	t.Helper()
+func readRESPValue(reader *bufio.Reader) (string, error) {
 	prefix, err := reader.ReadByte()
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	line, err := reader.ReadString('\n')
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	out := string(prefix) + line
 	if prefix != '$' {
-		return out
+		return out, nil
 	}
 	n, err := strconv.Atoi(strings.TrimSpace(line))
 	if err != nil {
-		t.Fatal(err)
+		return "", err
 	}
 	if n < 0 {
-		return out
+		return out, nil
 	}
 	payload := make([]byte, n+2)
 	if _, err := io.ReadFull(reader, payload); err != nil {
-		t.Fatal(err)
+		return "", err
 	}
-	return out + string(payload)
+	return out + string(payload), nil
 }
