@@ -43,6 +43,7 @@
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 5.2rem;
 }
 
 html:focus-within {
@@ -350,11 +351,51 @@ p {
   color: var(--text);
 }
 
+.brand { order: 1; }
+.live-meta { order: 2; }
+.site-nav { order: 3; }
+.cmdk-launch { order: 4; }
+.nav-toggle { order: 5; }
+
+.cmdk-launch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background: rgba(10, 21, 34, 0.7);
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  border-radius: 999px;
+  padding: 0.28rem 0.55rem 0.28rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.cmdk-launch:hover,
+.cmdk-launch:focus-visible {
+  color: var(--text);
+  border-color: var(--ice);
+}
+
+.cmdk-launch kbd {
+  font: inherit;
+  padding: 0.08rem 0.35rem;
+  border-radius: 6px;
+  border: 1px solid var(--hairline);
+  background: #061018;
+  color: var(--ice);
+}
+
+.cmdk-launch--bar {
+  display: none;
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  margin-left: auto;
+  margin-left: 0.4rem;
 }
 
 .nav-actions a:not(.btn) {
@@ -2757,11 +2798,273 @@ body:has(.toast.is-on) .to-top {
   .hop-stage,
   .term-prompt,
   .kicker::before,
-  .bench-title::before {
+  .bench-title::before,
+  .cabinet,
+  .cmdk,
+  main {
     animation: none !important;
     transition: none !important;
     transform: none !important;
     clip-path: none !important;
     opacity: 1 !important;
+  }
+}
+
+/* ——— Dynamic UX ——— */
+
+html.js main {
+  animation: page-in 520ms ease both;
+}
+
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.cabinet.is-flash {
+  animation: cab-flash 640ms ease;
+}
+
+@keyframes cab-flash {
+  0% { background: color-mix(in srgb, var(--tenant, var(--ice)) 22%, transparent); }
+  100% { background: transparent; }
+}
+
+.term-form {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.7rem 0.6rem;
+  border-top: 1px solid var(--hairline);
+  background: #061018;
+}
+
+.term-form .term-prompt {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+}
+
+.term-form input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  outline: none;
+}
+
+.term-form input::placeholder {
+  color: var(--faint);
+}
+
+.cmdk {
+  width: min(92vw, 34rem);
+  max-height: min(72vh, 28rem);
+  padding: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  background: rgba(8, 19, 30, 0.96);
+  color: var(--text);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.55);
+}
+
+.cmdk::backdrop {
+  background: rgba(2, 6, 12, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.cmdk-head {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.cmdk-head input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.cmdk-head kbd {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 0.1rem 0.35rem;
+}
+
+.cmdk-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.cmdk-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font: inherit;
+}
+
+.cmdk-item em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 0.82rem;
+}
+
+.cmdk-item.is-on,
+.cmdk-item:hover {
+  background: color-mix(in srgb, var(--ice) 10%, transparent);
+}
+
+.cmdk-empty {
+  padding: 0.9rem 0.75rem;
+  color: var(--muted);
+}
+
+.cmdk-foot {
+  margin: 0;
+  padding: 0.45rem 0.85rem 0.6rem;
+  border-top: 1px solid var(--hairline);
+  color: var(--faint);
+  font-size: 0.75rem;
+}
+
+.crumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.crumbs a {
+  color: var(--ice);
+  text-decoration: none;
+}
+
+.sec-dots {
+  position: fixed;
+  right: 0.85rem;
+  top: 50%;
+  z-index: 28;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sec-dots a {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(158, 231, 255, 0.28);
+  border: 0;
+  display: block;
+}
+
+.sec-dots a.is-on {
+  background: var(--ice);
+  box-shadow: 0 0 0 4px rgba(158, 231, 255, 0.16);
+}
+
+.form-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--faint);
+}
+
+.form-stack input:focus,
+.form-stack select:focus,
+.form-stack textarea:focus {
+  outline: 2px solid var(--ice);
+  outline-offset: 1px;
+  border-color: var(--ice);
+}
+
+.form-stack :user-invalid {
+  border-color: var(--danger);
+}
+
+.pain-list li {
+  transition: background 180ms ease, box-shadow 180ms ease;
+  border-radius: var(--radius-sm);
+}
+
+.pain-list li.is-hot {
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+}
+
+.kbd {
+  font-family: var(--font-mono);
+  font-size: 0.78em;
+  border: 1px solid var(--hairline);
+  border-radius: 6px;
+  padding: 0.05em 0.35em;
+}
+
+.docs-body h2.has-anchor {
+  scroll-margin-top: 5.2rem;
+}
+
+.table-scroll tbody tr {
+  transition: background 160ms ease;
+}
+
+.table-scroll tbody tr:hover {
+  background: color-mix(in srgb, var(--ice) 7%, transparent);
+}
+
+@media (max-width: 880px) {
+  .sec-dots {
+    display: none;
+  }
+
+  .cmdk-launch--bar {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .cmdk-launch--nav {
+    display: none;
+  }
+
+  .cmdk-launch span {
+    display: none;
+  }
+
+  .nav-toggle {
+    margin-left: 0.35rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.js main,
+  .cabinet.is-flash {
+    animation: none !important;
   }
 }

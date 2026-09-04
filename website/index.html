@@ -47,7 +47,7 @@
   <div id="masthead"></div>
 
   <main id="content">
-    <section class="hero">
+    <section class="hero" id="demo">
       <div class="wrap-wide hero-grid">
         <div class="hero-copy">
           <p class="kicker">Memory engine, not a shared cluster.</p>
@@ -74,6 +74,7 @@
               <button type="button" class="chip" data-pick="lumen">lumen</button>
             </div>
             <span class="auth-badge" data-auth-badge>AUTH acme</span>
+            <button type="button" class="chip" data-pause>Pause</button>
             <button type="button" class="chip" data-replay>Replay</button>
           </div>
           <div class="cabinets">
@@ -98,6 +99,11 @@
           </div>
           <div class="term">
             <div class="term-out" data-term aria-live="polite"></div>
+            <form class="term-form" data-term-form>
+              <span class="term-prompt" data-term-prompt>acme&gt;</span>
+              <input name="cmd" autocomplete="off" spellcheck="false" aria-label="Type a sketch command" placeholder="AUTH harbor · SET session:1 hello · GET · VADD">
+              <button type="submit" class="chip">Send</button>
+            </form>
           </div>
         </div>
       </div>
@@ -112,8 +118,8 @@
         <span class="stamp">v1 · single node</span>
         <p>
           Supported profile:
-          <strong>100 tenants/node</strong>,
-          <strong>100k vectors/tenant</strong>,
+          <strong><span data-count="100">100</span> tenants/node</strong>,
+          <strong><span data-count="100" data-suffix="k">100k</span> vectors/tenant</strong>,
           durable <strong>strings + vectors</strong>.
           Async WAL replicas optional (primary acks locally).
           Raft, cluster, and non-string RESP mutations <strong>fail closed</strong>.
@@ -128,7 +134,7 @@
       </div>
     </div>
 
-    <section class="section">
+    <section class="section" id="why">
       <div class="wrap catalog" data-in>
         <p class="catalog-index">Why it exists</p>
         <div>
@@ -175,7 +181,7 @@
       </div>
     </section>
 
-    <section class="section-tight">
+    <section class="section-tight" id="claims">
       <div class="wrap" data-in>
         <p class="kicker">What has to stay true in the code</p>
         <h2>The tenant is the unit of everything.</h2>
@@ -222,7 +228,7 @@
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="console">
       <div class="wrap-wide" data-in>
         <p class="kicker">Operator UI, in the binary</p>
         <h2>This is the console you actually get.</h2>
@@ -246,7 +252,7 @@
       </div>
     </section>
 
-    <section class="section">
+    <section class="section" id="fit">
       <div class="wrap" data-in>
         <p class="kicker">Fit</p>
         <h2>Who it is for. Who it is not.</h2>
@@ -308,7 +314,7 @@
     </section>
 
 
-    <section class="section">
+    <section class="section" id="walkthrough">
       <div class="wrap" data-in data-film>
         <p class="kicker">Operator walkthrough</p>
         <h2>The dashboard, frame by frame.</h2>
@@ -327,7 +333,7 @@
       </div>
     </section>
 
-    <section class="cta-band">
+    <section class="cta-band" id="install">
       <div class="wrap">
         <p class="kicker">BSL 1.1</p>
         <h2>Install it in your rack. Measure it on your hardware.</h2>
