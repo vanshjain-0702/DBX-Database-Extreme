@@ -29,7 +29,7 @@ VOICE = "en-US-AndrewNeural"
 RATE = "-6%"
 PITCH = "-1Hz"
 # Drop Cursor brand (~2s) from a finished capture; producer also trims via -sseof.
-CURSOR_TRIM = 2.05
+CURSOR_TRIM = 0.15
 
 # Engineer walking a teammate through the product. Contractions, concrete ports, no marketing.
 SCRIPT: list[tuple[str | float, str]] = [
@@ -584,10 +584,10 @@ async def main() -> None:
             # Music stays in the 300–2 kHz band. Duck under speech so the
             # ostinato is obvious in gaps without talking over the VO.
             "[0]asplit=2[vx][sc];"
-            "[1]volume=0.72,highpass=f=90,lowpass=f=2600[mb];"
-            "[mb][sc]sidechaincompress=threshold=0.028:ratio=7:attack=25:"
-            "release=380:level_sc=1:makeup=1[md];"
-            "[vx]volume=1.02[vv];"
+            "[1]volume=0.38,highpass=f=90,lowpass=f=3200[mb];"
+            "[mb][sc]sidechaincompress=threshold=0.022:ratio=10:attack=18:"
+            "release=280:level_sc=1:makeup=1[md];"
+            "[vx]volume=1.05[vv];"
             "[vv][md]amix=inputs=2:duration=first:dropout_transition=2:normalize=0,"
             "alimiter=limit=0.94",
             str(mixed),
