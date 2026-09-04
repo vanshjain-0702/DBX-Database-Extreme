@@ -138,15 +138,13 @@ SCRIPT: list[tuple[str | float, str]] = [
     ),
     (
         "dash_settings",
-        "Settings is control plane. Security is operator password and T L S lives outside this UI. "
-        "API keys are for orchestrator calls, not tenant AUTH. "
-        "Replication is async WAL — it is not Raft. Fail closed.",
+        "Settings is control plane. Operator password lives here. "
+        "API keys are orchestrator calls, not tenant AUTH. Replication is not Raft.",
     ),
     (
         "close",
         "License is B S L 1.1. Self-host is free, including inside your own SaaS. "
-        "You pay only if DBX itself is the product you sell. That's the whole commercial split. "
-        "Alright — that's the tour.",
+        "You pay only if DBX is the product you sell. That's the tour.",
     ),
 ]
 
@@ -360,6 +358,96 @@ def make_music(path: Path, seconds: float) -> None:
     )
 
 
+def pad_picture(src: Path, dest: Path, extra: float) -> None:
+    """Hold the last frame so leftover VO can finish without overlapping."""
+    freeze = dest.parent / "lastframe.png"
+    hold = dest.parent / "hold.mp4"
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-sseof",
+            "-0.05",
+            "-i",
+            str(src),
+            "-frames:v",
+            "1",
+            str(freeze),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loop",
+            "1",
+            "-i",
+            str(freeze),
+            "-t",
+            f"{extra:.3f}",
+            "-r",
+            "30",
+            "-s",
+            "1920x1200",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            str(hold),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    lst = dest.parent / "pad.txt"
+    lst.write_text(f"file '{src}'\nfile '{hold}'\n")
+    try:
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(lst),
+                "-c",
+                "copy",
+                str(dest),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(src),
+                "-i",
+                str(hold),
+                "-filter_complex",
+                "[0][1]concat=n=2:v=1:a=0",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
+                "-preset",
+                "fast",
+                "-crf",
+                "22",
+                str(dest),
+            ]
+        )
+
+
 async def synth(text: str, dest: Path) -> None:
     tmp = dest.with_suffix(".mp3")
     await edge_tts.Communicate(text, VOICE, rate=RATE, pitch=PITCH).save(str(tmp))
@@ -537,12 +625,21 @@ async def main() -> None:
         print(f"tts {i+1}/{len(SCRIPT)}")
         await synth(text, wav)
         dur = duration(wav)
+        # Never pull a cue backward — that stacked the last three lines.
         start = max(abs_t(key), cursor)
-        if start + dur > pic_dur - 0.3:
-            start = max(0.2, pic_dur - dur - 0.4)
         clips.append((start, wav, dur))
-        cursor = start + dur + 0.9
+        cursor = start + dur + 0.55
         print(f"  @{start:.1f}s  {dur:.1f}s")
+
+    last_end = max(s + d for s, _, d in clips) + 0.6
+    if last_end > pic_dur + 0.05:
+        extra = last_end - pic_dur
+        print(f"== pad picture {extra:.1f}s so VO does not overlap")
+        padded = work / "picture_pad.mp4"
+        pad_picture(picture, padded, extra)
+        picture = padded
+        pic_dur = duration(picture)
+        print("picture", pic_dur)
 
     inputs: list[str] = []
     filters = []
