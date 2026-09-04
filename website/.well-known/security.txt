@@ -1,5 +1,5 @@
 Contact: mailto:hello@dbxdb.io
 Expires: 2027-08-28T00:00:00.000Z
 Preferred-Languages: en
-Canonical: https://dbxdb.io/.well-known/security.txt
-Policy: https://dbxdb.io/security.html
+Canonical: https://vanshjain-0702.github.io/DBX-Database-Extreme/.well-known/security.txt
+Policy: https://vanshjain-0702.github.io/DBX-Database-Extreme/security.html
