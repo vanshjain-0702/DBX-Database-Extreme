@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product walkthrough — DBX</title>
+  <meta name="description" content="Watch DBX as it exists today: marketing site, isolation sketch, operator dashboard, provision, keys, console, explorer, and vector search.">
+  <meta property="og:title" content="Product walkthrough — DBX">
+  <meta property="og:description" content="Site plus dashboard: isolation, lifecycle, AUTH, SET/GET, VADD/VSEARCH. Recorded against the live binary, not a mock.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html">
+  <meta property="og:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="demo">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Site + dashboard</p>
+        <h1>Product walkthrough</h1>
+        <p>What shipped so far, shown on the public site and on the operator dashboard from <code>make run-dev</code>. Pause on a chapter if you only need one surface.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <figure class="walk-video">
+          <video controls playsinline preload="metadata" poster="assets/og-image.jpg">
+            <source src="assets/demo.mp4" type="video/mp4">
+            Your browser cannot play this MP4. Use the chapter list below, or open the file from the repo once it is published.
+          </video>
+          <figcaption class="muted">5 min 18 s. Site plus a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Engineer voiceover over a 140 BPM tech bed. The isolation bench is a browser sketch, not a live node.</figcaption>
+        </figure>
+
+        <p class="kicker" style="margin-top:2.5rem">Chapters</p>
+        <h2>What the recording covers</h2>
+        <div class="docs-toc">
+          <a href="#site"><span>01</span> Marketing site — thesis, isolation bench, product pages</a>
+          <a href="#lifecycle"><span>02</span> Features — tenant lifecycle, Isolation Kernel, fail-closed</a>
+          <a href="#run"><span>03</span> Get started — Docker / source / Compose, AUTH on :6380</a>
+          <a href="#dashboard"><span>04</span> Dashboard — login, provision, mint a writer key</a>
+          <a href="#data"><span>05</span> Operations — console SET/GET, explorer, VADD/VSEARCH, backup</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight" id="site">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>Marketing site</h2>
+            <p>Start at the homepage. The certified profile is <strong>100 tenants/node</strong>, <strong>100k vectors/tenant</strong>, durable strings + vectors. Isolation is a directory, a WAL, and an HNSW index — not a key prefix.</p>
+            <p>The isolation bench (acme / harbor / lumen) is an in-browser sketch. Type <code>AUTH harbor</code>, <code>SET session:1 intake</code>, then <code>AUTH acme</code> and <code>GET</code>: acme cannot see harbor’s session. Click a cabinet to inspect that tenant. Pause / Replay controls the scripted loop.</p>
+            <p>Then walk Product → Features, Architecture, Get started, Performance; Docs; Pricing; Security; Contact. ⌘K / Ctrl+K is the command palette.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight" id="lifecycle">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>Features that have to stay true</h2>
+            <p>Tenant is a first-class object: provision, backup, restore, export/import, hibernate/wake, delete. State and vectors live in one engine. Cost is meant to track <em>active</em> tenants (SQ8 mmap). Self-host is a single binary. Isolation Kernel on Linux <code>strict</code> is own process + Landlock + encrypted WAL/meta/graph.</p>
+            <p class="note">Honest limits: default <code>make run-dev</code> is <code>inprocess</code> (shared Go runtime, not the security USP). SQ8 <code>.vec</code> rows stay mmap plaintext. Raft, cluster, tiering, and non-string RESP mutations fail closed. Hibernate/wake are control-plane HTTP APIs; the dashboard today exposes backup from tenant Overview.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight" id="run">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">03</div>
+          <div>
+            <h2>How to run it</h2>
+            <p>Dashboard/control plane on <code>:8000</code>. Public RESP on <code>:6380</code>. First data-plane command is <code>AUTH tenant:key_id secret</code>. On Linux/macOS, orchestrator-managed engines bind Unix sockets; the public port is still <code>:6380</code>.</p>
+            <p>Local demo used in the video:</p>
+            <div class="code-panel">
+              <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
+              <pre>make site          # http://127.0.0.1:8765
+make run-dev       # http://127.0.0.1:8000  (admin / adminadminadmin)</pre>
+            </div>
+            <p>Self-host is free under BSL 1.1, including inside your own SaaS. Paid only if you sell managed DBX. Contact until MX exists: GitHub issues — <code>dbxdb.io</code> is NXDOMAIN, so <code>hello@dbxdb.io</code> cannot receive mail yet.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight" id="dashboard">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">04</div>
+          <div>
+            <h2>Operator dashboard</h2>
+            <p>The dashboard is compiled into <code>dbx-orchestrator</code>. It is not hosted on GitHub Pages. Sign in, provision a tenant (name + id, replicas = none for the certified path), open it, then <strong>Tenant keys → Mint key</strong> as writer. The secret is shown once. Application clients AUTH that pair on <code>:6380</code>. The in-dashboard Console uses the operator JWT against <code>/t/{id}/query</code> — it is not a substitute for AUTH on the public port.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight" id="data">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">05</div>
+          <div>
+            <h2>Operations</h2>
+            <p><strong>Console:</strong> <code>PING</code>, <code>SET session:42 onboarding</code>, <code>GET session:42</code>, <code>VADD memories doc:1 0.1 0.2 0.9</code>, <code>VSEARCH memories 0.1 0.2 0.8 5</code>.</p>
+            <p><strong>Data Explorer:</strong> list keys, inspect a string, add another key.</p>
+            <p><strong>Vector Playground:</strong> search an index (384-d MiniLM in the browser, or a smaller dim without the model). Prefer Console VADD if the model download is slow.</p>
+            <p><strong>Overview:</strong> live ops/memory, point-in-time backup.</p>
+            <p><strong>Runtime:</strong> Hardware, Storage, Network, Hosting. <strong>Control plane:</strong> Settings, Security, Replication (async WAL replicas; not Raft).</p>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>

@@ -1979,6 +1979,22 @@ html.js [data-in].is-in {
   margin-bottom: 0.2rem;
 }
 
+.walk-video {
+  margin: 0;
+}
+
+.walk-video video {
+  display: block;
+  width: 100%;
+  max-height: 70vh;
+  background: #040910;
+  border: 1px solid var(--hairline);
+}
+
+.walk-video figcaption {
+  margin-top: 0.75rem;
+}
+
 /* ——— Pricing ——— */
 
 .price-grid {

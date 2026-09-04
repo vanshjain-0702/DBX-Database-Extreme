@@ -20,7 +20,7 @@
       return page === id ? ' aria-current="page"' : "";
     }
 
-    var productPages = { features: 1, architecture: 1, start: 1, performance: 1 };
+    var productPages = { features: 1, architecture: 1, start: 1, performance: 1, demo: 1 };
     var docsPages = {
       docs: 1,
       "docs-quickstart": 1,
@@ -48,6 +48,7 @@
         "<li><a href=\"" + href("features.html") + '"' + current("features") + ">Features</a></li>" +
         "<li><a href=\"" + href("architecture.html") + '"' + current("architecture") + ">Architecture</a></li>" +
         "<li><a href=\"" + href("start.html") + '"' + current("start") + ">Get started</a></li>" +
+        "<li><a href=\"" + href("demo.html") + '"' + current("demo") + ">Walkthrough</a></li>" +
         "<li><a href=\"" + href("performance.html") + '"' + current("performance") + ">Performance</a></li>" +
         "</ul></li>" +
         "<li><a href=\"" + href("docs/index.html") + '"' + docsMark + ">Docs</a></li>" +
@@ -76,6 +77,7 @@
         "<li><a href=\"" + href("features.html") + '">Features</a></li>' +
         "<li><a href=\"" + href("architecture.html") + '">Architecture</a></li>' +
         "<li><a href=\"" + href("start.html") + '">Get started</a></li>' +
+        "<li><a href=\"" + href("demo.html") + '">Walkthrough</a></li>' +
         "<li><a href=\"" + href("performance.html") + '">Performance</a></li>' +
         "<li><a href=\"" + href("pricing.html") + '">Pricing</a></li>' +
         "</ul></div>" +
@@ -946,6 +948,7 @@
     { t: "Features", s: "Lifecycle and isolation", href: "features.html" },
     { t: "Architecture", s: "How a request lands", href: "architecture.html" },
     { t: "Get started", s: "Docker, source, Compose", href: "start.html" },
+    { t: "Walkthrough", s: "Site + dashboard demo", href: "demo.html" },
     { t: "Performance", s: "Certified single-node profile", href: "performance.html" },
     { t: "Docs", s: "Thesis, then the ports", href: "docs/index.html" },
     { t: "Quickstart", s: "AUTH and first write", href: "docs/quickstart.html" },
@@ -1061,6 +1064,7 @@
     features: ["Features"],
     architecture: ["Architecture"],
     start: ["Get started"],
+    demo: ["Walkthrough"],
     performance: ["Performance"],
     pricing: ["Pricing"],
     security: ["Security"],
