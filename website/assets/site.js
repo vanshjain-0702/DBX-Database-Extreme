@@ -116,11 +116,71 @@
   }
 
   injectChrome();
+  injectSurface();
 
   var header = document.querySelector(".site-header");
   var toggle = document.querySelector(".nav-toggle");
   var nav = document.querySelector("#site-nav");
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var page = document.body.getAttribute("data-page") || "";
+  var root = document.body.getAttribute("data-root") || ".";
+
+  function injectSurface() {
+    if (document.querySelector(".saas-bg")) return;
+    var bg = document.createElement("div");
+    bg.className = "saas-bg";
+    bg.setAttribute("aria-hidden", "true");
+    bg.innerHTML =
+      '<div class="saas-bg__orb saas-bg__orb--a"></div>' +
+      '<div class="saas-bg__orb saas-bg__orb--b"></div>' +
+      '<div class="saas-bg__orb saas-bg__orb--c"></div>' +
+      '<div class="saas-bg__grid"></div>' +
+      '<div class="saas-bg__vignette"></div>' +
+      '<div class="saas-bg__noise"></div>';
+    document.body.insertBefore(bg, document.body.firstChild);
+
+    var bar = document.createElement("div");
+    bar.className = "scroll-progress";
+    bar.setAttribute("aria-hidden", "true");
+    document.body.appendChild(bar);
+
+    var light = document.createElement("dialog");
+    light.className = "lightbox";
+    light.setAttribute("data-lightbox", "");
+    light.innerHTML =
+      '<div class="lightbox-head"><span>Operator UI</span><button class="lightbox-close" type="button" aria-label="Close">×</button></div>' +
+      '<figure class="lightbox-inner"><img alt=""><figcaption></figcaption></figure>';
+    document.body.appendChild(light);
+
+    var pop = document.createElement("dialog");
+    pop.className = "pop";
+    pop.setAttribute("data-pop", "");
+    pop.innerHTML =
+      '<div class="pop-head"><span data-pop-title>Tenant</span><button class="pop-close" type="button" aria-label="Close">×</button></div>' +
+      '<div class="pop-body" data-pop-body></div>';
+    document.body.appendChild(pop);
+
+    var tip = document.createElement("div");
+    tip.className = "tip";
+    tip.hidden = true;
+    tip.setAttribute("role", "tooltip");
+    document.body.appendChild(tip);
+
+    var toast = document.createElement("div");
+    toast.className = "toast";
+    toast.setAttribute("data-toast", "");
+    toast.innerHTML =
+      "<p>Each cabinet is a different engine. GET on harbor cannot see acme’s session.</p>" +
+      '<div class="btn-row"><button type="button" class="btn" data-toast-dismiss>Got it</button></div>';
+    document.body.appendChild(toast);
+
+    var topBtn = document.createElement("button");
+    topBtn.className = "to-top";
+    topBtn.type = "button";
+    topBtn.setAttribute("aria-label", "Back to top");
+    topBtn.textContent = "↑";
+    document.body.appendChild(topBtn);
+  }
 
   if (!reduce) {
     window.addEventListener(
@@ -133,12 +193,22 @@
     );
   }
 
+  var topBtn = document.querySelector(".to-top");
   function onScroll() {
-    if (!header) return;
-    header.classList.toggle("is-compact", window.scrollY > 12);
+    if (header) header.classList.toggle("is-compact", window.scrollY > 12);
+    var max = document.documentElement.scrollHeight - window.innerHeight;
+    var pct = max > 0 ? (window.scrollY / max) * 100 : 0;
+    document.documentElement.style.setProperty("--scroll", pct.toFixed(2) + "%");
+    document.documentElement.style.setProperty("--sy", String(window.scrollY));
+    if (topBtn) topBtn.classList.toggle("is-on", window.scrollY > 420);
   }
   onScroll();
   window.addEventListener("scroll", onScroll, { passive: true });
+  if (topBtn) {
+    topBtn.addEventListener("click", function () {
+      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+    });
+  }
 
   if (toggle && nav) {
     toggle.addEventListener("click", function () {
@@ -351,6 +421,17 @@
         log("operator selected " + authed + " (no shared map)");
       });
     });
+    document.querySelectorAll("[data-cabinet]").forEach(function (cab) {
+      cab.addEventListener("click", function () {
+        inspectTenant(cab.getAttribute("data-cabinet"));
+      });
+      cab.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inspectTenant(cab.getAttribute("data-cabinet"));
+        }
+      });
+    });
     var replay = document.querySelector("[data-replay]");
     if (replay) {
       replay.addEventListener("click", function () {
@@ -539,5 +620,113 @@
       }
       window.location.href = href;
     });
+  });
+
+  function inspectTenant(id) {
+    var pop = document.querySelector("[data-pop]");
+    if (!pop || !stores[id]) return;
+    var row = stores[id];
+    pop.querySelector("[data-pop-title]").textContent = id;
+    pop.querySelector("[data-pop-body]").innerHTML =
+      '<dl class="pop-kv">' +
+      "<div><dt>session</dt><dd>" + (row.session || "empty") + "</dd></div>" +
+      "<div><dt>vectors</dt><dd>" + row.vectors + "</dd></div>" +
+      "<div><dt>WAL seq</dt><dd>" + row.wal + "</dd></div>" +
+      "<div><dt>AUTH</dt><dd>" + (authed === id ? "this engine" : "another engine") + "</dd></div>" +
+      "</dl>" +
+      "<p>Browser sketch. GET on a neighbour cannot see this directory.</p>";
+    if (typeof pop.showModal === "function") pop.showModal();
+  }
+
+  var lightbox = document.querySelector("[data-lightbox]");
+  if (lightbox) {
+    var lightImg = lightbox.querySelector("img");
+    var lightCap = lightbox.querySelector("figcaption");
+    function openLight(src, cap) {
+      if (!lightImg) return;
+      lightImg.src = src;
+      lightImg.alt = cap || "";
+      if (lightCap) lightCap.textContent = cap || "";
+      if (typeof lightbox.showModal === "function") lightbox.showModal();
+    }
+    document.querySelectorAll(".product-shots img, .shot-stack img, .film-stage img").forEach(function (img) {
+      img.addEventListener("click", function () {
+        var fig = img.closest("figure");
+        var cap = fig && fig.querySelector("figcaption") ? fig.querySelector("figcaption").textContent : img.alt;
+        openLight(img.currentSrc || img.src, cap);
+      });
+    });
+    lightbox.querySelector(".lightbox-close").addEventListener("click", function () {
+      lightbox.close();
+    });
+    lightbox.addEventListener("click", function (e) {
+      if (e.target === lightbox) lightbox.close();
+    });
+  }
+
+  var pop = document.querySelector("[data-pop]");
+  if (pop) {
+    pop.querySelector(".pop-close").addEventListener("click", function () {
+      pop.close();
+    });
+    pop.addEventListener("click", function (e) {
+      if (e.target === pop) pop.close();
+    });
+  }
+
+  var tipEl = document.querySelector(".tip");
+  function placeTip(el) {
+    if (!tipEl) return;
+    var text = el.getAttribute("data-tip");
+    if (!text) return;
+    tipEl.textContent = text;
+    tipEl.hidden = false;
+    var r = el.getBoundingClientRect();
+    var left = Math.min(window.innerWidth - 16, Math.max(16, r.left + r.width / 2));
+    tipEl.style.left = left + "px";
+    tipEl.style.top = Math.max(12, r.top) + "px";
+  }
+  function hideTip() {
+    if (tipEl) tipEl.hidden = true;
+  }
+  document.querySelectorAll("[data-tip]").forEach(function (el) {
+    el.setAttribute("tabindex", el.getAttribute("tabindex") || "0");
+    el.addEventListener("mouseenter", function () { placeTip(el); });
+    el.addEventListener("focus", function () { placeTip(el); });
+    el.addEventListener("mouseleave", hideTip);
+    el.addEventListener("blur", hideTip);
+  });
+
+  var live = document.querySelector(".live-meta");
+  if (live && !live.getAttribute("data-tip")) {
+    live.setAttribute("data-tip", "Operator clock. Public RESP ingress is :6380.");
+    live.setAttribute("tabindex", "0");
+    live.addEventListener("mouseenter", function () { placeTip(live); });
+    live.addEventListener("focus", function () { placeTip(live); });
+    live.addEventListener("mouseleave", hideTip);
+    live.addEventListener("blur", hideTip);
+  }
+
+  var toast = document.querySelector("[data-toast]");
+  if (toast && page === "home") {
+    var key = "dbx-isolation-toast";
+    toast.querySelector("[data-toast-dismiss]").addEventListener("click", function () {
+      toast.classList.remove("is-on");
+      try { sessionStorage.setItem(key, "1"); } catch (err) { /* private mode */ }
+    });
+    try {
+      if (!sessionStorage.getItem(key)) {
+        window.setTimeout(function () {
+          toast.classList.add("is-on");
+        }, reduce ? 0 : 1600);
+      }
+    } catch (err) { /* ignore */ }
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key !== "Escape") return;
+    hideTip();
+    if (lightbox && lightbox.open) lightbox.close();
+    if (pop && pop.open) pop.close();
   });
 })();

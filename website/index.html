@@ -58,10 +58,10 @@
             <a class="btn btn-ghost" href="architecture.html">How a request lands</a>
           </div>
           <ul class="proof-row" aria-label="Supported profile">
-            <li><span class="proof-dot proof-dot--ice"></span> Isolated engines</li>
-            <li><span class="proof-dot proof-dot--sage"></span> RESP :6380</li>
-            <li><span class="proof-dot proof-dot--warn"></span> 100 tenants / node</li>
-            <li><span class="proof-dot proof-dot--violet"></span> BSL 1.1</li>
+            <li data-tip="One process, directory, WAL, and HNSW index per tenant — not a key prefix."><span class="proof-dot proof-dot--ice"></span> Isolated engines</li>
+            <li data-tip="Public data plane. First command is AUTH tenant:key_id secret."><span class="proof-dot proof-dot--sage"></span> RESP :6380</li>
+            <li data-tip="Certified single-node profile: 100 tenants/node, 100k vectors/tenant."><span class="proof-dot proof-dot--warn"></span> 100 tenants / node</li>
+            <li data-tip="Free to self-host inside your SaaS. Paid only if you sell managed DBX."><span class="proof-dot proof-dot--violet"></span> BSL 1.1</li>
           </ul>
         </div>
 
@@ -77,19 +77,19 @@
             <button type="button" class="chip" data-replay>Replay</button>
           </div>
           <div class="cabinets">
-            <article class="cabinet is-live" data-cabinet="acme">
+            <article class="cabinet is-live" data-cabinet="acme" tabindex="0" role="button" aria-label="Inspect acme">
               <h3>acme</h3>
               <div class="cab-row">session <b data-kv>empty</b></div>
               <div class="cab-row">vectors <b data-vec>0</b></div>
               <div class="cab-row">WAL seq <b data-wal>0</b></div>
             </article>
-            <article class="cabinet" data-cabinet="harbor">
+            <article class="cabinet" data-cabinet="harbor" tabindex="0" role="button" aria-label="Inspect harbor">
               <h3>harbor</h3>
               <div class="cab-row">session <b data-kv>empty</b></div>
               <div class="cab-row">vectors <b data-vec>0</b></div>
               <div class="cab-row">WAL seq <b data-wal>0</b></div>
             </article>
-            <article class="cabinet" data-cabinet="lumen">
+            <article class="cabinet" data-cabinet="lumen" tabindex="0" role="button" aria-label="Inspect lumen">
               <h3>lumen</h3>
               <div class="cab-row">session <b data-kv>empty</b></div>
               <div class="cab-row">vectors <b data-vec>0</b></div>
@@ -120,6 +120,13 @@
         </p>
       </div>
     </aside>
+
+    <div class="cmd-rail" aria-hidden="true">
+      <div class="cmd-rail__track">
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+      </div>
+    </div>
 
     <section class="section">
       <div class="wrap catalog" data-in>
