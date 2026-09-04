@@ -25,6 +25,8 @@ import websocket
 DEBUG = "http://127.0.0.1:9222"
 SITE = "http://127.0.0.1:8765"
 DASH = "http://127.0.0.1:8000"
+TENANT_ID = "demo-walk"
+TENANT_NAME = "Demo Walk"
 
 
 class CDP:
@@ -264,6 +266,49 @@ def find_exact(text: str) -> str:
     )
 
 
+def seed_bench_vectors(cdp: CDP, tenant: str) -> None:
+    """VADD 128-d docs so Vector Playground search returns real hits."""
+    expr = f"""
+(async () => {{
+  const token = localStorage.getItem('dbx_token');
+  const q = async (command) => {{
+    const res = await fetch({json.dumps('/t/' + tenant + '/query')}, {{
+      method: 'POST',
+      headers: {{
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + token
+      }},
+      body: JSON.stringify({{ command }})
+    }});
+    return await res.json();
+  }};
+  const vec = (seed) => Array.from({{ length: 128 }}, (_, i) =>
+    (Math.sin((seed + 1) * 12.9898 + i * 0.37)).toFixed(5)
+  );
+  const docs = [
+    ['invoice-q3', 'Acme unpaid invoice Q3 enterprise billing and collections'],
+    ['legal-memo', 'Legal memo on tenant isolation and data residency'],
+    ['harbor-session', 'Harbor tenant session token refresh runbook']
+  ];
+  for (const [id, text] of docs) {{
+    await q(['VADD', 'bench_vectors', id, ...vec(id.length)]);
+    await q(['SET', 'doc:bench_vectors:' + id, JSON.stringify({{ page_content: text }})]);
+  }}
+  return 'seeded';
+}})()
+"""
+    print("seed vectors:", cdp.eval(expr, await_promise=True))
+
+
+def console_cmd(cdp: CDP, cmd: str) -> None:
+    js_focus(cdp, '.console-term input, form input[placeholder="PING"]')
+    pause(0.15)
+    key("ctrl+a")
+    type_text(cmd, delay_ms=42)
+    key("Return")
+    pause(2.4)
+
+
 def run_site(cdp: CDP) -> None:
     mark("site_home")
     cdp.goto(SITE + "/", settle=2.6)
@@ -316,16 +361,12 @@ def run_site(cdp: CDP) -> None:
     mark("site_pages")
     for path, scroll in [
         ("/features.html", 1400),
-        ("/architecture.html", 1100),
+        ("/architecture.html", 900),
         ("/start.html", 700),
-        ("/performance.html", 900),
-        ("/docs/index.html", 400),
-        ("/docs/quickstart.html", 700),
-        ("/docs/api.html", 800),
-        ("/pricing.html", 500),
+        ("/performance.html", 800),
+        ("/docs/quickstart.html", 600),
+        ("/docs/api.html", 700),
         ("/security.html", 700),
-        ("/contact.html", 500),
-        ("/demo.html", 500),
     ]:
         cdp.goto(SITE + path, settle=2.0)
         if path == "/start.html":
@@ -336,22 +377,23 @@ def run_site(cdp: CDP) -> None:
             mark("docs")
         elif path == "/security.html":
             mark("security")
-        pause(2.4)
+        pause(2.2)
         if path == "/start.html":
             try:
                 click_js(cdp, find_btn("From source"))
-                pause(2.4)
+                pause(2.2)
                 click_js(cdp, find_btn("Compose"))
-                pause(2.4)
+                pause(2.2)
                 click_js(cdp, find_btn("Docker"))
-                pause(2.0)
+                pause(1.8)
             except Exception as exc:
                 print("start tabs:", exc)
-        scroll_page(cdp, scroll, steps=max(5, scroll // 160))
-        pause(3.2)
+        scroll_page(cdp, scroll, steps=max(5, scroll // 180))
+        pause(2.6)
 
 
 def run_dashboard(cdp: CDP) -> None:
+    tid = TENANT_ID
     mark("dash_login")
     cdp.goto(DASH + "/login", settle=2.6)
     pause(2.5)
@@ -367,52 +409,59 @@ def run_dashboard(cdp: CDP) -> None:
     )
     pause(2.0)
 
+    already = False
     try:
-        click_js(cdp, find_btn("Provision"))
-        pause(0.8)
-        # Name then tenant id
-        click_js(cdp, "document.querySelector('.modal-content input.input-field')")
-        js_focus(cdp, ".modal-content input.input-field")
-        type_text("Demo Acme", delay_ms=30)
-        pause(0.3)
-        cdp.eval(
-            "document.querySelectorAll('.modal-content input.input-field')[1].focus()"
+        already = bool(
+            cdp.eval(
+                f"!![...document.querySelectorAll('h3,button')].find(e => "
+                f"(e.textContent||'').includes({json.dumps(TENANT_NAME)}))"
+            )
         )
-        pause(0.15)
-        type_text("demo-acme", delay_ms=30)
-        pause(0.4)
-        click_js(cdp, "document.querySelector('.modal-content .btn-primary')")
-        pause(2.5)
-    except Exception as exc:
-        print("provision:", exc)
+    except Exception:
+        already = False
 
-    # Open tenant card
+    if not already:
+        try:
+            click_js(cdp, find_btn("Provision"))
+            pause(0.8)
+            click_js(cdp, "document.querySelector('.modal-content input.input-field')")
+            js_focus(cdp, ".modal-content input.input-field")
+            type_text(TENANT_NAME, delay_ms=30)
+            pause(0.3)
+            cdp.eval(
+                "document.querySelectorAll('.modal-content input.input-field')[1].focus()"
+            )
+            pause(0.15)
+            type_text(tid, delay_ms=30)
+            pause(0.4)
+            click_js(cdp, "document.querySelector('.modal-content .btn-primary')")
+            pause(3.0)
+        except Exception as exc:
+            print("provision:", exc)
+
     try:
         click_js(
             cdp,
             "([...document.querySelectorAll('button,h3')].find(e => "
-            "(e.textContent||'').includes('Demo Acme'))||null)",
+            f"(e.textContent||'').includes({json.dumps(TENANT_NAME)}))||null)",
         )
         pause(3.5)
     except Exception as exc:
         print("open tenant:", exc)
-        cdp.goto(DASH + "/cluster/demo-acme/overview", settle=2.0)
+        cdp.goto(DASH + f"/cluster/{tid}/overview", settle=2.0)
 
     mark("dash_overview")
-
-    pause(2.0)
+    pause(2.4)
     try:
         click_js(cdp, find_btn("Backup"))
         pause(0.8)
-        # confirm() is native; xdotool Return
         key("Return")
         pause(2.8)
     except Exception as exc:
         print("backup:", exc)
 
-    # Tenant keys
     mark("dash_keys")
-    cdp.goto(DASH + "/cluster/demo-acme/keys", settle=2.0)
+    cdp.goto(DASH + f"/cluster/{tid}/keys", settle=2.0)
     pause(2.4)
     try:
         click_js(cdp, find_btn("Mint key"))
@@ -425,38 +474,41 @@ def run_dashboard(cdp: CDP) -> None:
         print("mint key:", exc)
         key("Escape")
 
-    # Console
     mark("dash_console")
-    cdp.goto(DASH + "/cluster/demo-acme/terminal", settle=2.0)
+    cdp.goto(DASH + f"/cluster/{tid}/terminal", settle=2.0)
     pause(2.4)
     for cmd in [
         "PING",
         "SET session:42 onboarding",
         "GET session:42",
+        "KEYS *",
         "VADD memories doc:1 0.1 0.2 0.9",
         "VSEARCH memories 0.1 0.2 0.8 5",
     ]:
         try:
-            js_focus(cdp, '.console-term input, form input[placeholder="PING"]')
-            type_text(cmd, delay_ms=52)
-            key("Return")
-            pause(2.6)
+            console_cmd(cdp, cmd)
         except Exception as exc:
             print("console", cmd, exc)
+    pause(2.0)
 
-    # Explorer
     mark("dash_explorer")
-    cdp.goto(DASH + "/cluster/demo-acme/explorer", settle=2.2)
-    pause(3.0)
+    cdp.goto(DASH + f"/cluster/{tid}/explorer", settle=2.2)
+    pause(3.2)
     try:
+        js_focus(cdp, 'input[placeholder="Filter keys…"]')
+        type_text("session", delay_ms=40)
+        pause(1.4)
         click_js(
             cdp,
             "([...document.querySelectorAll('button,div,span')].find(e => "
             "(e.textContent||'').includes('session:42'))||null)",
         )
-        pause(1.8)
-    except Exception:
-        pass
+        pause(2.2)
+        key("ctrl+a")
+        key("BackSpace")
+        pause(0.6)
+    except Exception as exc:
+        print("explorer filter:", exc)
     try:
         click_js(cdp, find_btn("New key"))
         pause(0.7)
@@ -469,7 +521,9 @@ def run_dashboard(cdp: CDP) -> None:
         type_text("hello-from-explorer", delay_ms=24)
         pause(0.3)
         click_js(cdp, find_btn("Save key"))
-        pause(1.4)
+        pause(1.6)
+        click_js(cdp, find_btn("Refresh"))
+        pause(1.6)
     except Exception as exc:
         print("explorer new key:", exc)
         try:
@@ -477,23 +531,97 @@ def run_dashboard(cdp: CDP) -> None:
         except Exception:
             pass
 
+    try:
+        seed_bench_vectors(cdp, tid)
+    except Exception as exc:
+        print("seed vectors:", exc)
+
     mark("dash_vector")
-    cdp.goto(DASH + "/cluster/demo-acme/vector", settle=2.0)
-    pause(5.0)
+    cdp.goto(DASH + f"/cluster/{tid}/vector", settle=2.2)
+    pause(2.0)
+    try:
+        cdp.eval("""
+(() => {
+  const sel = document.querySelector('select.input-field');
+  if (!sel) return;
+  sel.value = 'bench_vectors';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+})()
+""")
+        pause(1.2)
+        js_focus(cdp, "textarea.input-field")
+        type_text("enterprise billing invoice", delay_ms=38)
+        pause(0.6)
+        js_focus(cdp, 'input[placeholder="e.g. enterprise"]')
+        type_text("enterprise", delay_ms=36)
+        pause(0.5)
+        click_js(cdp, find_btn("Run search"))
+        try:
+            cdp.wait_js(
+                "document.querySelector('.result-card') || "
+                "document.body.innerText.includes('No matches') || "
+                "document.body.innerText.includes('Failed')",
+                timeout=18,
+            )
+        except TimeoutError:
+            print("vector search still loading")
+        pause(5.5)
+    except Exception as exc:
+        print("vector playground:", exc)
+        pause(4.0)
+
+    mark("dash_palette")
+    try:
+        key("ctrl+k")
+        pause(1.0)
+        type_text("hardware", delay_ms=40)
+        pause(0.8)
+        key("Return")
+        pause(3.0)
+    except Exception as exc:
+        print("palette:", exc)
+        cdp.goto(DASH + f"/cluster/{tid}/hardware", settle=1.8)
+        pause(2.4)
 
     mark("runtime")
     for path in [
-        "/cluster/demo-acme/hardware",
-        "/cluster/demo-acme/storage",
-        "/cluster/demo-acme/network",
-        "/cluster/demo-acme/hosting",
-        "/settings",
-        "/settings/security",
-        "/settings/replication",
-        "/",
+        f"/cluster/{tid}/storage",
+        f"/cluster/{tid}/network",
+        f"/cluster/{tid}/hosting",
     ]:
         cdp.goto(DASH + path, settle=1.8)
-        pause(3.0)
+        pause(3.2)
+        if path.endswith("/hosting"):
+            try:
+                click_js(cdp, find_btn("Refresh"))
+                pause(2.0)
+            except Exception:
+                pass
+
+    mark("dash_settings")
+    cdp.goto(DASH + "/settings", settle=1.8)
+    pause(2.4)
+    try:
+        click_js(cdp, find_exact("Security"))
+        pause(2.6)
+        click_js(cdp, find_exact("API keys"))
+        pause(1.2)
+        click_js(cdp, find_btn("Generate"))
+        pause(0.7)
+        js_focus(cdp, ".modal-content input.input-field, .modal-content input")
+        type_text("ci-bot", delay_ms=32)
+        pause(0.3)
+        click_js(cdp, "document.querySelector('.modal-content .btn-primary')")
+        pause(2.4)
+        click_js(cdp, find_btn("I have copied the key"))
+        pause(1.2)
+        click_js(cdp, find_exact("Replication"))
+        pause(3.2)
+    except Exception as exc:
+        print("settings:", exc)
+        for path in ["/settings/security", "/settings/keys", "/settings/replication"]:
+            cdp.goto(DASH + path, settle=1.6)
+            pause(2.4)
 
     mark("close")
     cdp.goto(SITE + "/demo.html", settle=2.2)

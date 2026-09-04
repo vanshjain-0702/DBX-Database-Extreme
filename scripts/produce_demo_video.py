@@ -2,7 +2,7 @@
 """Produce a calm, professional DBX walkthrough from a screen capture.
 
 SDE pairing-session VO (en-US-AndrewNeural): contractions, ports, fail-closed.
-Audible pentatonic bed (laptop-speaker range), ducked under speech.
+Audible 140 BPM tech bed (pulse + A-minor arp), ducked under speech.
 Chapter cards. Cursor end-tag trimmed.
 """
 
@@ -36,14 +36,15 @@ SCRIPT: list[tuple[str | float, str]] = [
     (
         "intro",
         "Hey — I'm walking you through DBX the way I'd walk a teammate through it. "
-        "It's a per-tenant memory engine: strings and vectors, one isolated engine per customer. "
-        "Site first, then we log into the dashboard and actually provision a tenant.",
+        "Per-tenant memory: strings and vectors, one isolated engine per customer. "
+        "Site first, then we log into the dashboard and actually drive every surface — "
+        "console, explorer, semantic search, keys, runtime, settings.",
     ),
     (
         "site_home",
         "Okay, homepage. The claim is structural isolation, not a Redis-style key prefix. "
         "Each tenant is a directory, a write-ahead log, and an H N S W index, same process for KV and vectors. "
-        "If you forget a prefix in a shared cluster, you leak data. That failure mode is what we're avoiding.",
+        "If you forget a prefix in a shared cluster, you leak data. That's the failure mode we're avoiding.",
     ),
     (
         "bench",
@@ -91,11 +92,11 @@ SCRIPT: list[tuple[str | float, str]] = [
     (
         "part2",
         "Dashboard is compiled into the orchestrator. It's not on GitHub Pages. "
-        "We're going to log in and drive one tenant end to end.",
+        "We're going to log in and drive one tenant end to end — including the console C L I and semantic search.",
     ),
     (
         "dash_login",
-        "Dev login is admin. Then provision. Name Demo Acme, I D demo-acme, replicas none. "
+        "Dev login is admin. Then provision. Name Demo Walk, I D demo-walk, replicas none. "
         "That's the certified single-node path — don't turn replicas on for the happy path.",
     ),
     (
@@ -110,26 +111,36 @@ SCRIPT: list[tuple[str | float, str]] = [
     ),
     (
         "dash_console",
-        "Console is the operator token posting to slash t slash id slash query. "
-        "PING, SET session forty-two, GET. Same process you just provisioned. "
-        "If this returns onboarding, the engine is actually up.",
+        "This is the operator C L I. Same engine, JWT to slash t slash id slash query — not AUTH on six three eight zero. "
+        "PING, SET session forty-two, GET, KEYS star, VADD, VSEARCH. "
+        "If PING returns PONG, the engine is actually up.",
     ),
     (
         "dash_explorer",
-        "Explorer is KEYS and GET with a JSON preview. "
-        "You should see session forty-two from the console write. You can SET another string from here too.",
+        "Explorer is KEYS and GET with a JSON preview. I'll filter to session, then SET another string from here. "
+        "You should see session forty-two from the console write.",
     ),
     (
         "dash_vector",
-        "VADD writes a vector into that tenant's index. VSEARCH is nearest neighbour. "
-        "Playground can embed in the browser with MiniLM — I'm skipping the model download. "
-        "Use the console VADD if you just need to prove the index path.",
+        "Vector Playground is semantic search over this tenant's index. "
+        "I'm on bench_vectors, one twenty eight dim, query enterprise billing, filter enterprise. "
+        "That's VSEARCH with WITHDOCS — ranked hits, not a screenshot. "
+        "Three eighty four MiniLM is the other path if you wait on the model download.",
+    ),
+    (
+        "dash_palette",
+        "Control K is the dashboard command palette. Same idea as the site. Jumping to hardware.",
     ),
     (
         "runtime",
-        "Hardware, storage, network, hosting: process telemetry. "
-        "Settings and replication are control plane. Replication is async WAL, primary acks locally. "
-        "It is not Raft. Don't design failover as if it were.",
+        "Hardware, storage, network, hosting: process telemetry. Refresh is a live sample, not a fake sparkline. "
+        "Don't design capacity off a thirty-second window.",
+    ),
+    (
+        "dash_settings",
+        "Settings is control plane. Security is operator password and T L S lives outside this UI. "
+        "API keys are for orchestrator calls, not tenant AUTH. "
+        "Replication is async WAL — it is not Raft. Fail closed.",
     ),
     (
         "close",
@@ -209,9 +220,11 @@ def card(path: Path, kicker: str, title: str, sub: str, seconds: float = 7.0) ->
 
 
 def make_music(path: Path, seconds: float) -> None:
-    """Warm pad + C-major pentatonic ostinato in the 400–1200 Hz laptop band."""
+    """Modern tech fast-track: 140 BPM pulse + A-minor sixteenth arp."""
     work = path.parent
-    pad = work / "pad.wav"
+    pulse = work / "pulse.wav"
+    beat = 60.0 / 140.0
+    hat = beat / 2.0
     run(
         [
             "ffmpeg",
@@ -219,87 +232,76 @@ def make_music(path: Path, seconds: float) -> None:
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency=130.81:duration={seconds+2}",
+            (
+                f"aevalsrc=sin(2*PI*70*t)*max(0\\,1-16*mod(t\\,{beat:.5f}))"
+                f":s=44100:d={seconds+2}"
+            ),
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency=196.00:duration={seconds+2}",
+            (
+                f"aevalsrc=0.22*sin(2*PI*3800*t)*max(0\\,1-70*mod(t\\,{hat:.5f}))"
+                f":s=44100:d={seconds+2}"
+            ),
             "-f",
             "lavfi",
             "-i",
-            f"sine=frequency=261.63:duration={seconds+2}",
-            "-f",
-            "lavfi",
-            "-i",
-            f"sine=frequency=329.63:duration={seconds+2}",
+            f"sine=frequency=110:duration={seconds+2}",
             "-filter_complex",
-            "[0]volume=0.16[a];[1]volume=0.14[b];[2]volume=0.11[c];[3]volume=0.08[d];"
-            "[a][b][c][d]amix=inputs=4:duration=longest:normalize=0,"
-            "lowpass=f=900,tremolo=f=0.12:d=0.22,volume=0.85",
-            str(pad),
+            "[0]volume=0.70[k];[1]highpass=f=2000,volume=0.28[h];"
+            "[2]tremolo=f=4.67:d=0.55,volume=0.22,lowpass=f=280[b];"
+            "[k][h][b]amix=inputs=3:duration=longest:normalize=0",
+            str(pulse),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    # One phrase (~8.2s), then loop. Melody sits on C5 so laptop speakers hear a tune.
+    # Sixteenth-note A-minor riff (A4 E5 A5 C6 / G4 D5 G5 B5).
+    step = 60.0 / 140.0 / 4.0
     notes = [
-        (523.25, 0.70),
-        (659.25, 0.70),
-        (783.99, 1.05),
-        (659.25, 0.70),
-        (587.33, 0.70),
-        (523.25, 1.20),
-        (0.0, 0.40),
-        (440.00, 0.70),
-        (523.25, 0.70),
-        (659.25, 1.05),
-        (523.25, 0.70),
-        (493.88, 0.70),
-        (440.00, 1.20),
-        (0.0, 0.40),
+        440.00,
+        659.25,
+        880.00,
+        1046.50,
+        659.25,
+        880.00,
+        1046.50,
+        1318.51,
+        392.00,
+        587.33,
+        783.99,
+        987.77,
+        587.33,
+        783.99,
+        987.77,
+        1174.66,
     ]
     segs = []
-    for i, (freq, dur) in enumerate(notes):
+    for i, freq in enumerate(notes):
         seg = work / f"n{i}.wav"
-        if freq <= 0:
-            run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-f",
-                    "lavfi",
-                    "-i",
-                    f"anullsrc=r=44100:cl=stereo:d={dur}",
-                    str(seg),
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-f",
-                    "lavfi",
-                    "-i",
-                    f"sine=frequency={freq}:duration={dur}:sample_rate=44100",
-                    "-f",
-                    "lavfi",
-                    "-i",
-                    f"sine=frequency={freq*2}:duration={dur}:sample_rate=44100",
-                    "-filter_complex",
-                    "[0]volume=0.70[a];[1]volume=0.16[b];"
-                    "[a][b]amix=inputs=2:duration=longest:normalize=0,"
-                    f"afade=t=in:d=0.04,afade=t=out:st={max(0.08, dur-0.28)}:d=0.28,"
-                    "volume=1.0",
-                    "-ac",
-                    "2",
-                    str(seg),
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                f"sine=frequency={freq}:duration={step}:sample_rate=44100",
+                "-f",
+                "lavfi",
+                "-i",
+                f"sine=frequency={freq*2}:duration={step}:sample_rate=44100",
+                "-filter_complex",
+                "[0]volume=0.62[a];[1]volume=0.18[b];"
+                "[a][b]amix=inputs=2:duration=longest:normalize=0,"
+                f"afade=t=in:d=0.008,afade=t=out:st={max(0.02, step-0.04)}:d=0.04",
+                "-ac",
+                "2",
+                str(seg),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         segs.append(seg)
     lst = work / "melody.txt"
     lst.write_text("".join(f"file '{p}'\n" for p in segs))
@@ -342,13 +344,13 @@ def make_music(path: Path, seconds: float) -> None:
             "ffmpeg",
             "-y",
             "-i",
-            str(pad),
+            str(pulse),
             "-i",
             str(melody),
             "-filter_complex",
-            "[0]volume=0.50[p];[1]volume=0.95,highpass=f=280,lowpass=f=2400[m];"
+            "[0]volume=0.85[p];[1]volume=0.90,highpass=f=320,lowpass=f=3200[m];"
             "[p][m]amix=inputs=2:duration=first:normalize=0,"
-            f"alimiter=limit=0.55,afade=t=in:d=1.6,afade=t=out:st={max(1.0, seconds-3.5)}:d=3.5",
+            f"alimiter=limit=0.52,afade=t=in:d=0.6,afade=t=out:st={max(0.8, seconds-2.2)}:d=2.2",
             "-t",
             str(seconds),
             str(path),
@@ -433,7 +435,7 @@ async def main() -> None:
             part2,
             "PART TWO",
             "Operator dashboard",
-            "Provision, keys, console, vectors",
+            "Console CLI, explorer, semantic search",
             6.5,
         )
         card(outro, "BSL 1.1", "Self-host it.", "Free inside your own SaaS", 7.0)
@@ -453,7 +455,7 @@ async def main() -> None:
                 "-preset",
                 "fast",
                 "-crf",
-                "19",
+                "22",
                 "-pix_fmt",
                 "yuv420p",
                 "-r",
