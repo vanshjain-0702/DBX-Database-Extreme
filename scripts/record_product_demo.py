@@ -398,15 +398,54 @@ def run_dashboard(cdp: CDP) -> None:
     cdp.goto(DASH + "/login", settle=2.6)
     pause(2.5)
     key("Escape")
-    pause(0.3)
-    js_focus(cdp, "#login-password")
-    type_text("adminadminadmin", delay_ms=55)
+    pause(0.4)
+    # React controlled inputs: set via the native value setter, then click Sign In.
+    # xdotool-only typing loses to Chrome autofill and often hits the username field.
+    cdp.eval("""
+(() => {
+  const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  const user = document.querySelector('#login-username');
+  const pass = document.querySelector('#login-password');
+  if (user) {
+    set.call(user, 'admin');
+    user.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  if (pass) {
+    pass.focus();
+    set.call(pass, 'adminadminadmin');
+    pass.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+})()
+""")
     pause(0.8)
     js_click_sel(cdp, "#login-submit-btn")
-    cdp.wait_js(
-        "document.body.innerText.includes('Tenants') || document.body.innerText.includes('Provision')",
-        timeout=20,
-    )
+    try:
+        cdp.wait_js(
+            "document.body.innerText.includes('Tenants') || document.body.innerText.includes('Provision')",
+            timeout=18,
+        )
+    except TimeoutError:
+        print("login wait failed; retry via /api/login")
+        cdp.eval(
+            """
+(async () => {
+  const res = await fetch('/api/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'adminadminadmin' })
+  });
+  const data = await res.json();
+  if (!data.token) throw new Error('no token');
+  localStorage.setItem('dbx_token', data.token);
+  location.href = '/';
+})()
+""",
+            await_promise=True,
+        )
+        cdp.wait_js(
+            "document.body.innerText.includes('Tenants') || document.body.innerText.includes('Provision')",
+            timeout=18,
+        )
     pause(2.0)
 
     already = False
