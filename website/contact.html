@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Contact — DBX</title>
-  <meta name="description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta name="description" content="Contact DBX. hello@dbxdb.io is the intended inbox; until that domain has MX, GitHub issues is the channel that delivers. No third-party form host.">
   <meta property="og:title" content="Contact — DBX">
-  <meta property="og:description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta property="og:description" content="hello@dbxdb.io is the intended inbox. Until that domain has MX, GitHub issues is the channel that delivers.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/contact.html">
   <meta property="og:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Contact — DBX">
-  <meta name="twitter:description" content="Write hello@dbxdb.io for commercial licenses, support, or security reports. The form opens your mail client — nothing is posted to a third party.">
+  <meta name="twitter:description" content="hello@dbxdb.io is the intended inbox. Until that domain has MX, GitHub issues is the channel that delivers.">
   <meta name="twitter:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
   <meta name="theme-color" content="#051c33">
   <link rel="canonical" href="https://vanshjain-0702.github.io/DBX-Database-Extreme/contact.html">
@@ -29,9 +29,9 @@
   <main id="content">
     <header class="page-band">
       <div class="wrap">
-        <p class="kicker">hello@dbxdb.io</p>
+        <p class="kicker">Contact</p>
         <h1>Write us. We read it.</h1>
-        <p>Commercial license, support, security, or a question the docs do not cover. No ticket widget. No fake Formspree id.</p>
+        <p><code>hello@dbxdb.io</code> is the intended inbox in the license. That domain has no DNS or MX yet, so mail sent there does not arrive. Until it does, <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/issues/new">GitHub issues</a> is the channel that actually delivers. The form still composes a <code>mailto</code> for when the mailbox exists.</p>
       </div>
     </header>
     <section class="section">
@@ -56,15 +56,19 @@
             <textarea name="message" required maxlength="4000" placeholder="What you are running, and what you need."></textarea>
             <span class="form-count" data-chars>0 / 4000</span>
           </label>
-          <button class="btn" type="submit">Open email to hello@dbxdb.io</button>
+          <div class="btn-row">
+            <button class="btn" type="submit" data-contact-mail>Open mail app</button>
+            <button class="btn btn-ghost" type="button" data-contact-copy>Copy message</button>
+            <button class="btn btn-ghost" type="button" data-contact-issue>File a GitHub issue</button>
+          </div>
           <p class="form-status" data-contact-status hidden></p>
-          <p class="muted">Submit composes a mailto. If your browser blocks it, send the same text to <a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a>.</p>
+          <p class="muted">No third-party form host. Opening the mail app does not send the message by itself — your client does. Security reports should not be filed as public issues; copy the report and keep it private until <code>security@dbxdb.io</code> has MX.</p>
         </form>
         <aside>
-          <h2>Direct</h2>
-          <p><a href="mailto:hello@dbxdb.io">hello@dbxdb.io</a></p>
-          <p><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/issues">GitHub issues</a> for engineering bugs in the public tracker.</p>
-          <p class="muted">We do not list a phone number or a street address on this page because we do not staff a public switchboard.</p>
+          <h2>What works today</h2>
+          <p><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/issues/new">GitHub issues</a> — product questions and engineering bugs.</p>
+          <p><button type="button" class="chip" data-copy-email="hello@dbxdb.io">Copy hello@dbxdb.io</button></p>
+          <p class="muted"><code>hello@dbxdb.io</code> is the LICENSE contact. It will start receiving mail only after the domain is registered and MX is pointed at a mailbox. We do not list a phone number or a street address because we do not staff a public switchboard.</p>
         </aside>
       </div>
     </section>

@@ -703,27 +703,108 @@
     }
   }
 
-  /* ——— Contact: compose mailto, no third-party form host ——— */
+  /* ——— Contact: compose mailto / copy / GitHub issue ——— */
+
+  function contactPayload(form) {
+    var name = (form.querySelector('[name="name"]') || {}).value || "";
+    var email = (form.querySelector('[name="email"]') || {}).value || "";
+    var topic = (form.querySelector('[name="topic"]') || {}).value || "Contact";
+    var message = (form.querySelector('[name="message"]') || {}).value || "";
+    var text =
+      "Name: " + name + "\nEmail: " + email + "\nTopic: " + topic + "\n\n" + message;
+    return {
+      name: name,
+      email: email,
+      topic: topic,
+      message: message,
+      text: text,
+      subject: "DBX — " + topic,
+      mailto:
+        "mailto:hello@dbxdb.io?subject=" +
+        encodeURIComponent("DBX — " + topic) +
+        "&body=" +
+        encodeURIComponent(text),
+    };
+  }
+
+  function setContactStatus(form, text) {
+    var note = form.querySelector("[data-contact-status]");
+    if (!note) return;
+    note.hidden = false;
+    note.textContent = text;
+  }
+
+  function copyText(text, done, fail) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {
+        fallbackCopy(text, done);
+      });
+    } else {
+      fallbackCopy(text, done);
+    }
+  }
 
   document.querySelectorAll("[data-contact]").forEach(function (form) {
     form.addEventListener("submit", function (e) {
       e.preventDefault();
-      var name = (form.querySelector('[name="name"]') || {}).value || "";
-      var email = (form.querySelector('[name="email"]') || {}).value || "";
-      var topic = (form.querySelector('[name="topic"]') || {}).value || "Contact";
-      var message = (form.querySelector('[name="message"]') || {}).value || "";
-      var subject = encodeURIComponent("DBX — " + topic);
-      var body = encodeURIComponent(
-        "Name: " + name + "\nEmail: " + email + "\nTopic: " + topic + "\n\n" + message
+      if (!form.reportValidity()) return;
+      var payload = contactPayload(form);
+      var link = document.createElement("a");
+      link.href = payload.mailto;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setContactStatus(
+        form,
+        "Tried to open your mail app to hello@dbxdb.io. That domain has no MX yet, so a send will bounce. Copy the message or file a GitHub issue if you need it to arrive."
       );
-      var href = "mailto:hello@dbxdb.io?subject=" + subject + "&body=" + body;
-      var note = form.querySelector("[data-contact-status]");
-      if (note) {
-        note.hidden = false;
-        note.textContent =
-          "Opening your mail client to hello@dbxdb.io. If nothing opens, write us directly.";
-      }
-      window.location.href = href;
+    });
+
+    var copyBtn = form.querySelector("[data-contact-copy]");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", function () {
+        if (!form.reportValidity()) return;
+        var payload = contactPayload(form);
+        copyText(payload.subject + "\n\n" + payload.text, function () {
+          setContactStatus(form, "Copied. Paste into your mail client, or into a GitHub issue.");
+        });
+      });
+    }
+
+    var issueBtn = form.querySelector("[data-contact-issue]");
+    if (issueBtn) {
+      issueBtn.addEventListener("click", function () {
+        if (!form.reportValidity()) return;
+        var payload = contactPayload(form);
+        if (/security/i.test(payload.topic)) {
+          setContactStatus(
+            form,
+            "Do not file a security report as a public issue. Copy the message and keep it private until security@dbxdb.io has MX."
+          );
+          return;
+        }
+        var url =
+          "https://github.com/vanshjain-0702/DBX-Database-Extreme/issues/new?title=" +
+          encodeURIComponent(payload.subject) +
+          "&body=" +
+          encodeURIComponent(payload.text);
+        window.open(url, "_blank", "noopener");
+        setContactStatus(form, "Opened a GitHub issue draft. That is the inbox that delivers today.");
+      });
+    }
+  });
+
+  document.querySelectorAll("[data-copy-email]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var addr = btn.getAttribute("data-copy-email") || "";
+      copyText(addr, function () {
+        var prev = btn.textContent;
+        btn.textContent = "Copied";
+        window.setTimeout(function () {
+          btn.textContent = prev;
+        }, 1400);
+      });
     });
   });
 

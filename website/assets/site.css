@@ -2083,6 +2083,14 @@ html.js [data-in].is-in {
   justify-self: start;
 }
 
+.form-stack .btn-row {
+  margin-top: 0.2rem;
+}
+
+.form-stack .chip {
+  justify-self: start;
+}
+
 .form-status {
   margin: 0.4rem 0 0;
   color: var(--sage);
