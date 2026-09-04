@@ -183,10 +183,33 @@ def parse_marks() -> dict[str, float]:
     return found
 
 
+def x264_cfr() -> list[str]:
+    """Constant 30 fps, no B-frames — concat-copy of mixed GOPs stalls browsers."""
+    return [
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "20",
+        "-pix_fmt",
+        "yuv420p",
+        "-r",
+        "30",
+        "-g",
+        "30",
+        "-bf",
+        "0",
+        "-video_track_timescale",
+        "15360",
+    ]
+
+
 def card(path: Path, kicker: str, title: str, sub: str, seconds: float = 7.0) -> None:
     def esc(s: str) -> str:
         return s.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'")
 
+    fade_out = max(0.25, seconds - 0.7)
     run(
         [
             "ffmpeg",
@@ -202,16 +225,12 @@ def card(path: Path, kicker: str, title: str, sub: str, seconds: float = 7.0) ->
                 f"drawtext=fontfile={FONT}:text='{esc(title)}':fontcolor=0xf1f6fb:"
                 f"fontsize=64:x=(w-text_w)/2:y=h/2-40,"
                 f"drawtext=fontfile={FONT2}:text='{esc(sub)}':fontcolor=0x8ea8bd:"
-                f"fontsize=28:x=(w-text_w)/2:y=h/2+48"
+                f"fontsize=28:x=(w-text_w)/2:y=h/2+48,"
+                f"fade=t=in:st=0:d=0.4,fade=t=out:st={fade_out:.2f}:d=0.55,"
+                "format=yuv420p"
             ),
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
+            *x264_cfr(),
+            "-an",
             str(path),
         ]
     )
@@ -358,8 +377,39 @@ def make_music(path: Path, seconds: float) -> None:
     )
 
 
+def concat_videos(parts: list[Path], dest: Path) -> None:
+    """Filter-concat so every segment is 30 fps CFR with monotonic PTS."""
+    if len(parts) == 1:
+        shutil.copyfile(parts[0], dest)
+        return
+    inputs: list[str] = []
+    labels: list[str] = []
+    for i, part in enumerate(parts):
+        inputs += ["-i", str(part)]
+        labels.append(f"[{i}:v]fps=30,setpts=PTS-STARTPTS[v{i}]")
+    joined = "".join(f"[v{i}]" for i in range(len(parts)))
+    graph = ";".join(labels) + f";{joined}concat=n={len(parts)}:v=1:a=0[v]"
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            *inputs,
+            "-filter_complex",
+            graph,
+            "-map",
+            "[v]",
+            *x264_cfr(),
+            "-an",
+            "-movflags",
+            "+faststart",
+            str(dest),
+        ]
+    )
+
+
 def pad_picture(src: Path, dest: Path, extra: float) -> None:
-    """Hold the last frame so leftover VO can finish without overlapping."""
+    """Hold the last frame as a newly encoded CFR clip so the playhead keeps moving."""
+    extra = max(extra, 0.25)
     freeze = dest.parent / "lastframe.png"
     hold = dest.parent / "hold.mp4"
     run(
@@ -377,6 +427,7 @@ def pad_picture(src: Path, dest: Path, extra: float) -> None:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+    fade_out = max(0.2, extra - 0.8)
     run(
         [
             "ffmpeg",
@@ -387,65 +438,22 @@ def pad_picture(src: Path, dest: Path, extra: float) -> None:
             str(freeze),
             "-t",
             f"{extra:.3f}",
-            "-r",
-            "30",
-            "-s",
-            "1920x1200",
-            "-c:v",
-            "libx264",
-            "-pix_fmt",
-            "yuv420p",
-            "-preset",
-            "fast",
-            "-crf",
-            "18",
+            "-vf",
+            (
+                "fps=30,"
+                "eq=brightness='0.012*sin(2*PI*t/6)',"
+                "fade=t=in:st=0:d=0.3,"
+                f"fade=t=out:st={fade_out:.2f}:d=0.7,"
+                "format=yuv420p"
+            ),
+            *x264_cfr(),
+            "-an",
             str(hold),
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    lst = dest.parent / "pad.txt"
-    lst.write_text(f"file '{src}'\nfile '{hold}'\n")
-    try:
-        run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(lst),
-                "-c",
-                "copy",
-                str(dest),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except subprocess.CalledProcessError:
-        run(
-            [
-                "ffmpeg",
-                "-y",
-                "-i",
-                str(src),
-                "-i",
-                str(hold),
-                "-filter_complex",
-                "[0][1]concat=n=2:v=1:a=0",
-                "-c:v",
-                "libx264",
-                "-pix_fmt",
-                "yuv420p",
-                "-preset",
-                "fast",
-                "-crf",
-                "22",
-                str(dest),
-            ]
-        )
+    concat_videos([src, hold], dest)
 
 
 async def synth(text: str, dest: Path) -> None:
@@ -538,16 +546,7 @@ async def main() -> None:
                 "-t",
                 f"{keep:.3f}",
                 "-an",
-                "-c:v",
-                "libx264",
-                "-preset",
-                "fast",
-                "-crf",
-                "22",
-                "-pix_fmt",
-                "yuv420p",
-                "-r",
-                "30",
+                *x264_cfr(),
                 str(body),
             ]
         )
@@ -562,8 +561,7 @@ async def main() -> None:
                 str(body),
                 "-t",
                 f"{site_len:.3f}",
-                "-c",
-                "copy",
+                *x264_cfr(),
                 str(site),
             ]
         )
@@ -575,30 +573,12 @@ async def main() -> None:
                 f"{site_len:.3f}",
                 "-i",
                 str(body),
-                "-c",
-                "copy",
+                *x264_cfr(),
                 str(dash),
             ]
         )
 
-        lst = work / "concat.txt"
-        pieces = [intro, site, part2, dash, outro]
-        lst.write_text("".join(f"file '{p}'\n" for p in pieces))
-        run(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(lst),
-                "-c",
-                "copy",
-                str(picture),
-            ]
-        )
+        concat_videos([intro, site, part2, dash, outro], picture)
         intro_d = duration(intro)
         part2_d = duration(part2)
         pic_dur = duration(picture)
