@@ -4,6 +4,7 @@
 Uses Microsoft Edge neural voice en-IN-NeerjaNeural (clear Indian English).
 Trims the Cursor brand tag at the end of the capture.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -201,7 +202,7 @@ def make_music(path: Path, duration: float) -> None:
 async def main() -> None:
     src = SRC_VIDEO if SRC_VIDEO.exists() else FALLBACK_SRC
     if not src.exists():
-        raise SystemExit(f"missing source video")
+        raise SystemExit("missing source video")
 
     work = Path(tempfile.mkdtemp(prefix="dbx-mix-"))
     try:
@@ -211,7 +212,11 @@ async def main() -> None:
             print(f"tts {i+1}/{len(CUES)} @ {start:.1f}s")
             await synth_cue(text, wav)
             dur = ffprobe_duration(wav)
-            window = (CUES[i + 1][0] - start - 0.45) if i + 1 < len(CUES) else (CONTENT_END - start - 0.5)
+            window = (
+                (CUES[i + 1][0] - start - 0.45)
+                if i + 1 < len(CUES)
+                else (CONTENT_END - start - 0.5)
+            )
             if window > 0.4 and dur > window:
                 sped = work / f"cue_{i:02d}_spd.wav"
                 tempo = min(1.36, max(1.01, dur / window))
@@ -275,7 +280,9 @@ async def main() -> None:
                 "[0]volume=1.05,apad=whole_dur=" + str(CONTENT_END) + "[v];"
                 "[1]volume=0.16[m];"
                 "[v][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0,"
-                "alimiter=limit=0.95,atrim=0:" + str(CONTENT_END) + ",asetpts=PTS-STARTPTS",
+                "alimiter=limit=0.95,atrim=0:"
+                + str(CONTENT_END)
+                + ",asetpts=PTS-STARTPTS",
                 "-c:a",
                 "pcm_s16le",
                 str(mixed),

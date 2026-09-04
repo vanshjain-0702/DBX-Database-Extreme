@@ -11,6 +11,7 @@ marketing site on :8765, orchestrator on :8000, python3-websocket.
     --start-maximized http://127.0.0.1:8765/
   python3 scripts/record_product_demo.py
 """
+
 from __future__ import annotations
 
 import json
@@ -135,8 +136,7 @@ def key(*keys: str) -> None:
 def js_click_expr(cdp: CDP, expr: str, timeout: float = 10.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        ok = cdp.eval(
-            f"""
+        ok = cdp.eval(f"""
 (() => {{
   const el = {expr};
   if (!el) return false;
@@ -147,8 +147,7 @@ def js_click_expr(cdp: CDP, expr: str, timeout: float = 10.0) -> None:
   el.click();
   return true;
 }})()
-"""
-        )
+""")
         if ok:
             time.sleep(0.25)
             return
@@ -161,8 +160,7 @@ def js_click_sel(cdp: CDP, selector: str, timeout: float = 10.0) -> None:
 
 
 def js_focus(cdp: CDP, selector: str) -> None:
-    ok = cdp.eval(
-        f"""
+    ok = cdp.eval(f"""
 (() => {{
   const el = document.querySelector({json.dumps(selector)});
   if (!el) return false;
@@ -171,8 +169,7 @@ def js_focus(cdp: CDP, selector: str) -> None:
   el.click();
   return true;
 }})()
-"""
-    )
+""")
     if not ok:
         raise TimeoutError(f"focus {selector}")
     time.sleep(0.2)
@@ -350,7 +347,9 @@ def run_dashboard(cdp: CDP) -> None:
         js_focus(cdp, ".modal-content input.input-field")
         type_text("Demo Acme", delay_ms=30)
         pause(0.3)
-        cdp.eval("document.querySelectorAll('.modal-content input.input-field')[1].focus()")
+        cdp.eval(
+            "document.querySelectorAll('.modal-content input.input-field')[1].focus()"
+        )
         pause(0.15)
         type_text("demo-acme", delay_ms=30)
         pause(0.4)
@@ -428,7 +427,10 @@ def run_dashboard(cdp: CDP) -> None:
     try:
         click_js(cdp, find_btn("New key"))
         pause(0.7)
-        click_js(cdp, "document.querySelector('.modal-content input, .modal-content .input-field')")
+        click_js(
+            cdp,
+            "document.querySelector('.modal-content input, .modal-content .input-field')",
+        )
         type_text("scratch:1", delay_ms=28)
         key("Tab")
         type_text("hello-from-explorer", delay_ms=24)
