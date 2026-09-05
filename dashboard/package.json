@@ -1,7 +1,7 @@
 {
   "name": "dbx-dashboard",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.1.0",
   "description": "DBX control plane UI: provision, inspect, and off-board per-customer tenants.",
   "type": "module",
   "scripts": {

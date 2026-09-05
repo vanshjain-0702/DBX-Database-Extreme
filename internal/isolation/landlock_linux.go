@@ -5,6 +5,7 @@ package isolation
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -84,7 +85,14 @@ func addPathRule(ruleset int, path string, access uint64) error {
 // tenant directory for general filesystem access. /proc, /dev, and /etc remain
 // readable because the Go runtime and TLS roots need them. Sibling tenant
 // directories are not reachable.
+//
+// PR_SET_NO_NEW_PRIVS is per-thread. Go may migrate this goroutine between
+// syscalls, and landlock_restrict_self then returns EPERM on the thread that
+// never got the bit. Pin the rest of the function to one OS thread.
 func RestrictFilesystem(tenantDir string) error {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	abi, err := landlockABI()
 	if err != nil {
 		return fmt.Errorf("landlock is unavailable: %w", err)
