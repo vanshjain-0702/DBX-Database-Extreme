@@ -566,7 +566,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		w.WriteBulkStringStr("server")
 		w.WriteBulkStringStr("dbx")
 		w.WriteBulkStringStr("version")
-		w.WriteBulkStringStr("1.0.0")
+		w.WriteBulkStringStr("1.1.0")
 		w.WriteBulkStringStr("proto")
 		w.WriteInteger(2)
 		w.WriteBulkStringStr("id")
@@ -1905,7 +1905,7 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 func (e *Executor) buildInfo() string {
 	m := e.metrics.Snapshot()
 	return fmt.Sprintf(
-		"# Server\r\ndbx_version:1.0.0\r\n\r\n# Stats\r\ntotal_commands:%d\r\ntotal_reads:%d\r\ntotal_writes:%d\r\nactive_connections:%d\r\navg_latency_ns:%d\r\n",
+		"# Server\r\ndbx_version:1.1.0\r\n\r\n# Stats\r\ntotal_commands:%d\r\ntotal_reads:%d\r\ntotal_writes:%d\r\nactive_connections:%d\r\navg_latency_ns:%d\r\n",
 		m["total_commands"], m["total_reads"], m["total_writes"], m["active_conns"], m["avg_latency_ns"],
 	)
 }

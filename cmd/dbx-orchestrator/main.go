@@ -21,7 +21,10 @@ import (
 	"github.com/dbx/dbx/internal/orchestrator"
 )
 
+var version = "1.1.0"
+
 func main() {
+	printVersion := flag.Bool("version", false, "print version and exit")
 	httpPort := flag.Int("port", 8000, "HTTP API port")
 	respAddr := flag.String("resp-addr", ":6380", "public authenticated RESP ingress address")
 	tlsCert := flag.String("tls-cert", "certs/server.crt", "TLS certificate for the control-plane API")
@@ -30,6 +33,10 @@ func main() {
 	stateFile := flag.String("state-file", "data/tenants.json", "tenant state file")
 	adminFile := flag.String("admin-file", "data/admin.json", "admin credential file")
 	flag.Parse()
+	if *printVersion {
+		fmt.Printf("DBX version %s\n", version)
+		os.Exit(0)
+	}
 
 	type Secrets struct {
 		JWTSecret     string `json:"jwt_secret"`
