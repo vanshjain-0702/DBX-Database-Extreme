@@ -96,7 +96,30 @@ func waitRunning(t *testing.T, m *Manager, id string) {
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+	if tenant, ok := m.GetTenant(id); ok {
+		skipIfLandlockUnavailable(t, tenant.DataDir)
+	}
 	t.Fatalf("tenant %s never started", id)
+}
+
+// skipIfLandlockUnavailable skips when this kernel/container cannot apply
+// Landlock. Production still fail-closes; the test must not treat that as a
+// product regression. Probe before waitRunning used to fatal on tenant two.
+func skipIfLandlockUnavailable(t *testing.T, tenantDir string) {
+	t.Helper()
+	probe := exec.Command("/proc/self/exe", "-test.run=TestStrictSiblingProbeHelper")
+	probe.Env = append(os.Environ(),
+		"DBX_STRICT_PROBE=1",
+		"DBX_STRICT_PROBE_DIR="+tenantDir,
+		"DBX_STRICT_PROBE_TARGET="+filepath.Join(tenantDir, "missing-sibling-dek"),
+	)
+	out, err := probe.CombinedOutput()
+	if err == nil {
+		return
+	}
+	if exit, ok := err.(*exec.ExitError); ok && exit.ExitCode() == 3 {
+		t.Skipf("landlock unavailable on this kernel: %s", out)
+	}
 }
 
 // tenantSocketCommand talks to a worker's RESP socket. The test process is the
@@ -232,6 +255,7 @@ func TestStrictWorkerCannotReadSiblingTenantKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.StopAll()
+	skipIfLandlockUnavailable(t, filepath.Join(root, "tenants", "one"))
 	waitRunning(t, m, "one")
 	waitRunning(t, m, "two")
 

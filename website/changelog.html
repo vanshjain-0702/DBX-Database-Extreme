@@ -41,7 +41,7 @@
             <time datetime="2026-09-05">05 Sep 2026</time>
             <div>
               <h2>v1.1.0 — Isolation Kernel, Unix data plane, walkthrough</h2>
-              <p>Product version stamps now match this cut: <code>dbx-server -version</code>, HELLO/INFO, <code>GET /info</code>, the Python SDK, and the dashboard package. GitHub’s previous published tag remains <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.0.0">v1.0.0</a> (29 Aug) until a <code>v1.1.0</code> Release is published (that also tags GHCR). Since v1.0.0: Linux <code>strict</code> Isolation Kernel, Unix-socket engines, faster vector ingest, tenant checkpoints, the public site on GitHub Pages, and the recorded product walkthrough.</p>
+              <p>Product version stamps now match this cut: <code>dbx-server -version</code>, HELLO/INFO, <code>GET /info</code>, the Python SDK, and the dashboard package. GitHub’s previous published tag remains <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.0.0">v1.0.0</a> (29 Aug) until a <code>v1.1.0</code> Release is published (that also tags GHCR). Since v1.0.0: Linux <code>strict</code> Isolation Kernel, Unix-socket engines, faster vector ingest, tenant checkpoints, the public site on GitHub Pages, and the recorded product walkthrough. Landlock <code>restrict_self</code> is pinned to one OS thread so a busy Go runtime cannot get EPERM and fail-closed a tenant worker.</p>
             </div>
           </article>
           <article class="change">

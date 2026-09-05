@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -13,6 +14,24 @@ func TestRestrictFilesystemBlocksSibling(t *testing.T) {
 	if os.Getenv("DBX_ISOLATION_HELPER") == "landlock" {
 		dir := os.Getenv("DBX_ISOLATION_DIR")
 		outside := os.Getenv("DBX_ISOLATION_OUTSIDE")
+		// Spin extra OS threads so a missing LockOSThread would flake the
+		// same way GitHub's Ubuntu runner did: prctl on one thread,
+		// restrict_self on another, EPERM.
+		runtime.GOMAXPROCS(8)
+		stop := make(chan struct{})
+		for i := 0; i < 32; i++ {
+			go func() {
+				for {
+					select {
+					case <-stop:
+						return
+					default:
+						runtime.Gosched()
+					}
+				}
+			}()
+		}
+		defer close(stop)
 		if err := RestrictFilesystem(dir); err != nil {
 			os.Stderr.WriteString(err.Error())
 			os.Exit(2)
