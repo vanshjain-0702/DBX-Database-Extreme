@@ -1,11 +1,11 @@
 <p align="center">
-  <img src="dashboard/src/assets/logo.jpg" alt="DBX Logo" width="80" />
+  <img src="website/assets/readme-banner.png" alt="DBX — Database Extreme, the isolated per-tenant memory engine for AI products" />
 </p>
 
 <h1 align="center">DBX</h1>
 
 <p align="center">
-  <strong> The isolated, per-tenant memory engine for AI products.</strong>
+  <strong>The isolated, per-tenant memory engine for AI products.</strong>
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
