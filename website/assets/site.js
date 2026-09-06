@@ -91,6 +91,7 @@
         "</ul></div>" +
         "<div><h2>Company</h2><ul>" +
         "<li><a href=\"" + href("contact.html") + '">Contact</a></li>' +
+        "<li><a href=\"" + href("pitch.html") + '"' + current("pitch") + ">Incubation pitch</a></li>" +
         '<li><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme">GitHub</a></li>' +
         '<li><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases">Releases</a></li>' +
         "</ul></div>" +
@@ -958,6 +959,7 @@
     { t: "Pricing", s: "BSL 1.1, then talk", href: "pricing.html" },
     { t: "Security", s: "Isolation Kernel", href: "security.html" },
     { t: "Contact", s: "hello@dbxdb.io", href: "contact.html" },
+    { t: "Incubation pitch", s: "20-slide 16:9 briefing", href: "pitch.html" },
     { t: "Changelog", s: "What shipped", href: "changelog.html" },
     { t: "License", s: "BSL 1.1", href: "license.html" },
     { t: "Isolation demo", s: "On this page", href: "index.html#demo", home: 1 },
