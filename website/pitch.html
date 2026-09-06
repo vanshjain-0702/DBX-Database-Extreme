@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DBX — Incubation pitch deck</title>
+  <meta name="description" content="Confidential incubation briefing for DBX, the per-tenant memory engine for AI products. v1.1.0. Isolation Kernel, BSL 1.1 business model, 18-month plan.">
+  <meta name="robots" content="noindex">
+  <meta property="og:title" content="DBX — Incubation pitch">
+  <meta property="og:description" content="The tenant is the database. Per-tenant memory engine for AI products.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html">
+  <meta property="og:image" content="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/pitch.css">
+</head>
+<body>
+  <div class="stage">
+    <div class="deck" role="region" aria-label="DBX incubation pitch">
+
+      <section class="slide is-on" data-notes="Open with the category, not a Redis comparison. Pause after the thesis. Mention this is v1.1.0, shipped, not a mockup.">
+        <div class="cover-brand">
+          <div class="mark">DBX</div>
+          <span class="brand-name">DATABASE EXTREME</span>
+        </div>
+        <p class="kicker">Incubation briefing · Confidential · September 2026</p>
+        <h1>The tenant is<br>the <em>database.</em></h1>
+        <p class="lede">DBX is the per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory. Not a shared cluster with a prefix.</p>
+        <div class="cover-meta">
+          <span>Product <b>v1.1.0</b></span>
+          <span>Profile <b>100 tenants / node</b></span>
+          <span>License <b>BSL 1.1</b></span>
+          <span>Founder <b>Vansh Jain · DTU</b></span>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>1</span></div>
+      </section>
+
+      <section class="slide" data-notes="One sentence. If they remember nothing else, this is it. Contrast with shared Redis/Qdrant/Pinecone namespaces.">
+        <p class="kicker">Thesis</p>
+        <h2>One isolated engine per customer.</h2>
+        <p class="lede">Every customer of an AI product needs private session state and private semantic recall. Today that is two systems plus a naming convention. DBX makes the tenant the unit of the database — directory, WAL, HNSW index, process, and key.</p>
+        <div class="grid-3">
+          <article class="card ice">
+            <div class="num">01</div>
+            <h3>Working state</h3>
+            <p>KV with TTL: session, scratchpad, rate counters. Same connection as recall.</p>
+          </article>
+          <article class="card sage">
+            <div class="num">02</div>
+            <h3>Vector memory</h3>
+            <p>SQ8 HNSW, mmap’d, sized for per-tenant working sets — not a billion-vector corpus.</p>
+          </article>
+          <article class="card violet">
+            <div class="num">03</div>
+            <h3>Sealed domain</h3>
+            <p>Linux <code>strict</code>: process, Landlock, envelope encryption, Unix <code>SO_PEERCRED</code>.</p>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>2</span></div>
+      </section>
+
+      <section class="slide" data-notes="Why now is agents in production, not 'AI is hot'. Multi-tenant bleed is the diligence item legal/healthcare buyers will ask.">
+        <p class="kicker">Why now</p>
+        <h2>Agents shipped. Isolation did not.</h2>
+        <div class="grid-2">
+          <div>
+            <ul class="clean">
+              <li>AI agent platforms and vertical SaaS now give every end-customer a memory, not a chat transcript.</li>
+              <li>Indirect prompt injection can force a similarity search that leaks neighbor context into the reasoning chain.</li>
+              <li>Regulated buyers need “delete my data” as an API, not a sprint — GDPR/DPDP-shaped off-boarding.</li>
+              <li>Running Redis <em>and</em> a vector DB doubles on-call, dual-writes, and bills.</li>
+            </ul>
+            <p class="tiny">Industry context (order of magnitude, definitions vary): vector databases ~$3.2B in 2025 → ~$8.95B by 2030 (MarketsandMarkets, 27.5% CAGR). Agentic applications of vector DBs ~$0.57B in 2026 → ~$1.73B by 2031 (Mordor Intelligence, 24.86% CAGR).</p>
+          </div>
+          <article class="card ice">
+            <h3>The architectural fork</h3>
+            <p>Firecracker per user is a fleet of computers. Prefix filters are a hope. DBX is the missing third path: kernel-enforced tenant memory at ~14–17 MiB RSS per idle worker.</p>
+            <p style="margin-top:0.7rem">We do not claim the strongest sandbox. We claim the sealed unit is one customer’s KV plus vectors, with a key you can destroy.</p>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>3</span></div>
+      </section>
+
+      <section class="slide" data-notes="Walk the six pains slowly. These are structural, not 'we are faster'.">
+        <p class="kicker">Problem</p>
+        <h2>Shared clusters make tenancy your job.</h2>
+        <table>
+          <thead>
+            <tr><th>What teams ship today</th><th>What it costs them</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Tenancy is a key prefix</td><td>One forgotten <code>tenant_id</code> is a cross-customer leak</td></tr>
+            <tr><td>Cache + vector DB</td><td>Dual writes, drift after crashes, two on-call surfaces</td></tr>
+            <tr><td>Backup is cluster-wide</td><td>Cannot restore or export a single customer</td></tr>
+            <tr><td>Deletion is a scan</td><td>“Delete my data” becomes an engineering project</td></tr>
+            <tr><td>Shared memory pool</td><td>A noisy tenant evicts a quiet tenant’s working set</td></tr>
+            <tr><td>Cost is guessed</td><td>No meter for what one customer actually consumes</td></tr>
+          </tbody>
+        </table>
+        <p class="tiny">None of this is fixed by making the shared cluster faster. It is a consequence of the unit of the database being the cluster.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>4</span></div>
+      </section>
+
+      <section class="slide" data-notes="Solution is structural isolation. Mention POST /api/provision. Do not say drop-in Redis replacement.">
+        <p class="kicker">Solution</p>
+        <h2>Isolation is a directory, a WAL, and a process.</h2>
+        <div class="arch">
+          <div class="arch-top">
+            <strong>HTTP :8000</strong>
+            <span>Tenant lifecycle · JWT · dashboard</span>
+            <strong>RESP :6380</strong>
+            <span>AUTH tenant:key · redis-py / ioredis / go-redis</span>
+          </div>
+          <div class="tenants">
+            <article class="tenant acme">
+              <h3>acme</h3>
+              <p>Own KV · SQ8 HNSW · WAL · snapshots · Landlock dir · DEK</p>
+            </article>
+            <article class="tenant harbor">
+              <h3>harbor</h3>
+              <p>GET on harbor cannot open acme’s files or sockets.</p>
+            </article>
+            <article class="tenant lumen">
+              <h3>lumen</h3>
+              <p>Purge shreds the wrap file. Leftover ciphertext is unreadable.</p>
+            </article>
+          </div>
+        </div>
+        <p class="tiny">On-ramp, not a USP: existing RESP clients work. That lowers trial cost. It is not a claim that DBX replaces a tuned Redis cluster.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>5</span></div>
+      </section>
+
+      <section class="slide" data-notes="Five USPs must stay literally true. If a judge asks for proof, point to docs/positioning.md and the code paths on the slide.">
+        <p class="kicker">USPs 01–03</p>
+        <h2>Five claims. Each is true in the binary.</h2>
+        <div class="grid-3">
+          <article class="card ice">
+            <div class="num">USP 01</div>
+            <h3>Tenant is a first-class object</h3>
+            <p><code>POST /api/provision</code> returns a live engine: directory, WAL, HNSW, snapshots, process. Backup, restore, hibernate, and purge operate on exactly one customer.</p>
+          </article>
+          <article class="card sage">
+            <div class="num">USP 02</div>
+            <h3>State and memory in one engine</h3>
+            <p>Session KV and semantic recall share a connection, a directory, and a backup zip. There is no second system to drift from.</p>
+            <p class="tiny">Limit: periodic <code>.rdb</code> serializes KV; vectors live in mmap + WAL + seals.</p>
+          </article>
+          <article class="card warn">
+            <div class="num">USP 03</div>
+            <h3>Cost scales with active tenants</h3>
+            <p>SQ8 rows are ~4× smaller than float32. Idle tenants live in page cache. The metric we want to own is cost per active tenant, not signed-tenant count.</p>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>6</span></div>
+      </section>
+
+      <section class="slide" data-notes="Isolation Kernel is the security USP. Name the honest limits before they do. Firecracker is stronger; we are denser for memory.">
+        <p class="kicker">USPs 04–05</p>
+        <h2>Self-hosted. Kernel-sealed on Linux.</h2>
+        <div class="grid-2">
+          <article class="card">
+            <div class="num">USP 04</div>
+            <h3>One binary, operator UI included</h3>
+            <p>Embeddings never leave the customer’s network. Dashboard, console, explorer, and vector playground compile into the orchestrator. No sidecar. No vendor to send data to.</p>
+          </article>
+          <article class="card ice">
+            <div class="num">USP 05</div>
+            <h3>Isolation Kernel</h3>
+            <p>Linux <code>DBX_ISOLATION_MODE=strict</code>: dedicated <code>dbx-server</code>, Landlock LSM, cgroup v2 (best-effort in containers), AES-256-GCM over WAL / checkpoints / ids / HNSW, Unix sockets that only the orchestrator PID can open.</p>
+          </article>
+        </div>
+        <div class="grid-4" style="flex:0">
+          <div class="stat"><b>~15 MiB</b><span>Idle worker RSS (strict)</span></div>
+          <div class="stat"><b>O(1)</b><span>Cryptographic shred of the DEK</span></div>
+          <div class="stat"><b>0600</b><span>Unix sockets, peer-PID gated</span></div>
+          <div class="stat"><b>LUKS</b><span>For SQ8 rows (mmap stays plaintext)</span></div>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>7</span></div>
+      </section>
+
+      <section class="slide" data-notes="Lifecycle is the product API. Off-boarding as one call is the diligence closer for enterprise.">
+        <p class="kicker">Product</p>
+        <h2>The lifecycle is the product.</h2>
+        <div class="grid-5">
+          <article class="card"><div class="num">01</div><h3>Provision</h3><p>Isolated engine in milliseconds. Optional 0–2 async WAL replicas; primary still acks locally.</p></article>
+          <article class="card"><div class="num">02</div><h3>Keys</h3><p>Reader / writer / tenant-admin. Reader cannot SET or VADD. Secret shown once. Revoke is immediate.</p></article>
+          <article class="card"><div class="num">03</div><h3>Query</h3><p>Public data plane is RESP :6380. AUTH tenant:key. Python SDK: remember / recall / forget.</p></article>
+          <article class="card"><div class="num">04</div><h3>Backup</h3><p>One-customer zip, SHA-256 manifest, restore with rollback. Hibernate stops the process, keeps the dir.</p></article>
+          <article class="card ice"><div class="num">05</div><h3>Shred</h3><p><code>purge=true</code> zeros the wrapped DEK, then deletes the directory. Blast radius: one tenant.</p></article>
+        </div>
+        <p class="tiny">Certified v1 surface: durable strings + vectors. Raft, cluster/sharding, and non-string RESP mutation families fail closed.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>8</span></div>
+      </section>
+
+      <section class="slide" data-notes="ICP first. Disqualify quickly — that is a strength for incubation judges, not a weakness.">
+        <p class="kicker">Who buys</p>
+        <h2>Teams whose customers each need memory.</h2>
+        <div class="grid-2">
+          <div>
+            <h3 style="margin:0 0 0.5rem;font-size:1rem;">Ideal customer</h3>
+            <ul class="clean">
+              <li>AI agent platforms — private recall per end-customer</li>
+              <li>Vertical AI SaaS — legal, medical, support, finance corpora</li>
+              <li>On-prem / regulated — one binary inside the customer network</li>
+              <li>Teams hand-rolling tenancy over a cache and a vector store</li>
+            </ul>
+          </div>
+          <article class="card warn">
+            <h3>We say no quickly</h3>
+            <p>One tenant, one workload. Billion-vector ANN. SQL, joins, or a system of record. A fully managed zero-ops Pinecone-style service as the reason to buy.</p>
+            <p style="margin-top:0.7rem">DBX sits in front of the system of record and underneath the agent. That is the whole territory.</p>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>9</span></div>
+      </section>
+
+      <section class="slide" data-notes="Do not rank against Redis throughput. White space is the row they do not have: tenant as unit.">
+        <p class="kicker">White space</p>
+        <h2>Giants optimize the cluster. We sell a different unit.</h2>
+        <table>
+          <thead>
+            <tr><th>If you need</th><th>Right tool</th><th>Why not DBX</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Peak single-instance KV</td><td>Redis / Dragonfly</td><td>Their design target; our cycles go to isolation</td></tr>
+            <tr><td>Billion-vector ANN + sharding</td><td>Qdrant / Milvus</td><td>Our indexes are per-tenant working sets</td></tr>
+            <tr><td>Fully managed vectors</td><td>Pinecone</td><td>We are software you run — deliberately</td></tr>
+            <tr><td>Joins, SQL, system of record</td><td>Postgres + pgvector</td><td>DBX is memory, not the ledger</td></tr>
+          </tbody>
+        </table>
+        <p class="lede" style="margin-top:1rem">Per-tenant isolation is not a row on those comparison charts. Framed as “Redis alternative,” our best property looks like a quirk. We do not take that fight.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>10</span></div>
+      </section>
+
+      <section class="slide" data-notes="Traction is product, not ARR. Do not invent customers. Certification date 27 Aug 2026; Isolation Kernel in v1.1.0 (5 Sep 2026).">
+        <p class="kicker">Status · v1.1.0</p>
+        <h2>Shipped. Certified. Open.</h2>
+        <div class="grid-4">
+          <div class="stat"><b>GO</b><span>Single-node production profile</span></div>
+          <div class="stat"><b>100 / 100k</b><span>Tenants per node · vectors per tenant</span></div>
+          <div class="stat"><b>v1.1.0</b><span>Isolation Kernel · Unix data plane</span></div>
+          <div class="stat"><b>BSL 1.1</b><span>Free in your SaaS · paid if you sell ours</span></div>
+        </div>
+        <div class="grid-2" style="flex:1">
+          <article class="card">
+            <h3>What exists today</h3>
+            <ul class="clean">
+              <li>Single RESP ingress on :6380, scoped keys, quotas, usage API</li>
+              <li>Linux strict Isolation Kernel + GHCR orchestrator image on release</li>
+              <li>Python SDK, LangChain and Next.js examples, embedded dashboard</li>
+              <li>Async WAL replicas; data-plane Raft still fail-closed</li>
+              <li>Public site, 5m18s walkthrough, DEV.to Isolation Kernel article kit</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>What we do not claim</h3>
+            <ul class="clean">
+              <li>No ARR, no customer logos, no SOC 2 badge</li>
+              <li>Not a cluster. Not a managed cloud — yet. BSL keeps that our decision.</li>
+              <li>Windows certification host; Linux is the CI gate and production USP</li>
+              <li><code>hello@dbxdb.io</code> is the license contact; MX is not live yet</li>
+            </ul>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>11</span></div>
+      </section>
+
+      <section class="slide" data-notes="Numbers exist to show isolation is not an order of magnitude tax. Hardware: Windows 10, 18 threads, 15.6 GiB, 27 Aug 2026, one tenant.">
+        <p class="kicker">Proof · one node · one tenant · 27 Aug 2026</p>
+        <h2>Isolation is not expensive.</h2>
+        <div class="grid-4">
+          <div class="stat"><b>186k</b><span>SET ops/s · pipeline 64 · WAL everysec</span></div>
+          <div class="stat"><b>285k</b><span>GET ops/s · same run</span></div>
+          <div class="stat"><b>7.2k</b><span>Vector ingest /s · 100k × 128, 8 shards</span></div>
+          <div class="stat"><b>2.3 ms</b><span>ANN p50 · p95 3.1 · p99 3.7 ms</span></div>
+        </div>
+        <div class="grid-3" style="flex:0">
+          <article class="card"><h3>Recall@10</h3><p>Mean 0.920 · p05 0.800 · SQ8 vs float32 brute force. Quantization has a quality cost; we publish it.</p></article>
+          <article class="card"><h3>Strict density</h3><p>Idle sealed worker ~14–17 MiB RSS. 100 sealed tenants ≈ 1.5 GiB process RSS before corpus. Use inprocess when density is the goal.</p></article>
+          <article class="card"><h3>Noisy neighbor</h3><p>Quota rejection isolates OOM. Quiet GET stayed within the isolation harness. Neighbours keep serving.</p></article>
+        </div>
+        <p class="tiny">Not a competitor ranking. Measure on your hardware. Linux CI re-runs the vector harness.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>12</span></div>
+      </section>
+
+      <section class="slide" data-notes="Use market figures as context, not a promise. SAM is closer to Mordor agentic-vector slice. SOM is operational, not a fake dollar.">
+        <p class="kicker">Market</p>
+        <h2>A category the cluster vendors do not serve.</h2>
+        <div class="grid-3">
+          <article class="card ice">
+            <div class="num">TAM</div>
+            <h3>Agent memory + vector infra</h3>
+            <p>Vector DB market ~$3.2B (2025) → ~$8.95B (2030), 27.5% CAGR (MarketsandMarkets). Agent memory infrastructure ~$1.62B now → ~$15.2B by 2034, 28.3% CAGR (HTF).</p>
+          </article>
+          <article class="card sage">
+            <div class="num">SAM</div>
+            <h3>Multi-tenant agent memory</h3>
+            <p>Agentic AI applications in vector databases ~$0.57B (2026) → ~$1.73B (2031), 24.86% CAGR (Mordor). Self-hosted, per-customer isolation is the slice those reports do not name.</p>
+          </article>
+          <article class="card warn">
+            <div class="num">SOM · 24 months</div>
+            <h3>Design-partner wedge</h3>
+            <p>Operational target, not a revenue forecast: 10 vertical-AI SaaS design partners; 3 commercial-license conversations for managed-DBX use. No invented ARR.</p>
+          </article>
+        </div>
+        <p class="tiny">Research houses disagree on definitions. We cite ranges as order of magnitude. DBX wins if buyers bill per customer and cannot tolerate prefix tenancy — not if we out-benchmark Redis.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>13</span></div>
+      </section>
+
+      <section class="slide" data-notes="BSL is the go-to-market: land free inside their SaaS, expand when they want to sell DBX itself. Billable unit matches their billing unit.">
+        <p class="kicker">Business model</p>
+        <h2>Free in your product. Paid when you sell ours.</h2>
+        <div class="grid-3">
+          <article class="card ice">
+            <div class="num">Self-host</div>
+            <h3>Free · BSL 1.1</h3>
+            <p>Production, personal, or commercial. Embed inside your own SaaS — each of your customers is a tenant. Converts to Apache 2.0 after four years.</p>
+          </article>
+          <article class="card sage">
+            <div class="num">Commercial</div>
+            <h3>Talk · managed DBX</h3>
+            <p>Required if DBX itself is the service you sell to third parties. Not a gray area in the additional use grant. The billable unit is the tenant.</p>
+          </article>
+          <article class="card">
+            <div class="num">Support</div>
+            <h3>Talk · not a public SKU</h3>
+            <p>Named contacts, SLA language for procurement. No fake monthly tiers on the website. Price follows workload shape.</p>
+          </article>
+        </div>
+        <p class="lede">Why this converts: the people we most want using DBX are companies embedding it. The license permits that. Cash arrives when someone wants to offer DBX as infrastructure — or when we elect to run the managed service the BSL reserved for us.</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>14</span></div>
+      </section>
+
+      <section class="slide" data-notes="GTM is developer-led then vertical. 18-month plan maps to ROADMAP.md Later items plus company formation work.">
+        <p class="kicker">Go-to-market · 18 months</p>
+        <h2>Land in the binary. Expand on the tenant.</h2>
+        <div class="grid-2">
+          <article class="card">
+            <h3>Motion</h3>
+            <ul class="clean">
+              <li>Developer-led: GitHub, RESP clients, 15-minute Python path, Isolation Kernel article</li>
+              <li>Vertical design partners: legal, support, on-prem AI SaaS with a data-residency story</li>
+              <li>Incubator network: first 10 design partners, not a paid ads plan</li>
+              <li>Trust path: live MX, commercial contracting, SOC 2 readiness (not a badge we have)</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Product sequencing</h3>
+            <ul class="clean">
+              <li>Now: v1.1.0 single-node, Isolation Kernel, usage meter</li>
+              <li>Next: published Linux density, engine coverage, promote-without-restart</li>
+              <li>Then: larger soak beyond 100 tenants/node when measured</li>
+              <li>Company decision: managed DBX when design partners pull, not before</li>
+            </ul>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>15</span></div>
+      </section>
+
+      <section class="slide" data-notes="Ask is incubation + 18-month operating plan. Percentages so they can scale the envelope. Do not invent a valuation. Localize currency if the incubator is INR-denominated.">
+        <p class="kicker">The ask</p>
+        <h2>Incubation to first commercial licenses.</h2>
+        <p class="lede">We are raising an 18-month operating partnership — not a priced round invented for this slide. The envelope scales; the mix does not.</p>
+        <div class="bars">
+          <div class="bar-row"><span>Core engineering</span><div class="bar-track"><div class="bar-fill" style="width:45%"></div></div><span>45%</span></div>
+          <div class="bar-row"><span>Trust &amp; compliance path</span><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><span>20%</span></div>
+          <div class="bar-row"><span>Design partners / GTM</span><div class="bar-track"><div class="bar-fill" style="width:20%"></div></div><span>20%</span></div>
+          <div class="bar-row"><span>Legal · IP · contracts</span><div class="bar-track"><div class="bar-fill" style="width:10%"></div></div><span>10%</span></div>
+          <div class="bar-row"><span>CI · demo · domain</span><div class="bar-track"><div class="bar-fill" style="width:5%"></div></div><span>5%</span></div>
+        </div>
+        <div class="grid-3" style="flex:0;margin-top:1rem">
+          <article class="card ice"><h3>Engineering</h3><p>Density beyond 100/node, replica promote, engine coverage, optional float32 accuracy mode.</p></article>
+          <article class="card"><h3>Trust</h3><p>Register dbxdb.io + MX, commercial license paper, SOC 2 readiness program, LUKS operator path.</p></article>
+          <article class="card sage"><h3>Gates we accept</h3><p>10 design partners · 3 commercial conversations · Linux density published · mailbox live.</p></article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>16</span></div>
+      </section>
+
+      <section class="slide" data-notes="Solo founder. Strength: shipped kernel. Risk: single point. Incubation should add GTM/legal, not rewrite the product.">
+        <p class="kicker">Team</p>
+        <h2>Founder-built systems software.</h2>
+        <div class="grid-2">
+          <article class="card ice">
+            <div class="num">Founder</div>
+            <h3>Vansh Jain</h3>
+            <p>Engineering undergraduate, Delhi Technological University. Designed and shipped DBX: Go 1.25 engine, Isolation Kernel (Landlock, envelope encryption, <code>SO_PEERCRED</code>), SQ8 HNSW, orchestrator, dashboard, Python SDK, and the public site.</p>
+            <p class="tiny" style="margin-top:0.6rem">Public identity: github.com/vanshjain-0702 · License: DBX Authors</p>
+          </article>
+          <article class="card">
+            <h3>What incubation adds</h3>
+            <ul class="clean">
+              <li>Legal: commercial license templates, IP hygiene, contracting</li>
+              <li>GTM: first design-partner introductions in vertical AI SaaS</li>
+              <li>Trust: domain, mailbox, security-review process, compliance coaching</li>
+              <li>Not required: a rewrite of the kernel. The product is the proof of work.</li>
+            </ul>
+          </article>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>17</span></div>
+      </section>
+
+      <section class="slide" data-notes="Naming limits is diligence. Judges who know databases will respect this more than a SOC 2 logo we do not have.">
+        <p class="kicker">Risks we already name</p>
+        <h2>Diligence, not a badge wall.</h2>
+        <div class="grid-2">
+          <ul class="clean">
+            <li>SQ8 <code>.vec</code> rows stay mmap’d and unencrypted so idle tenants stay cheap — use LUKS/fscrypt.</li>
+            <li>Landlock governs file opens, not <code>connect()</code> or <code>stat()</code>. Sockets are <code>SO_PEERCRED</code> + mode 0600.</li>
+            <li>No network restriction on workers. Data in use is plaintext in the process.</li>
+            <li>cgroup limits need host delegation; most containers log and continue.</li>
+            <li>Certified cap remains 100 tenants/node until a larger soak is published.</li>
+          </ul>
+          <ul class="clean">
+            <li>Single-node profile. Cluster/Raft on the data plane fail closed.</li>
+            <li>Not SOC 2. Not a managed cloud. Not a Redis replacement.</li>
+            <li>Solo founder concentration — incubation must add GTM and legal, not deny it.</li>
+            <li>Pre-revenue: conversion depends on design partners, not a forecast spreadsheet.</li>
+            <li>Domain MX not live; GitHub is the channel that currently delivers.</li>
+          </ul>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck</span><span>18</span></div>
+      </section>
+
+      <section class="slide" data-notes="Close on the thesis. Offer the live deck, GitHub, walkthrough. Stop talking.">
+        <div class="cover-brand">
+          <div class="mark">DBX</div>
+          <span class="brand-name">DATABASE EXTREME</span>
+        </div>
+        <p class="kicker">Close</p>
+        <h1>Give every customer<br>a <em>database</em>, not a prefix.</h1>
+        <p class="quote">We are asking incubation to take a shipped Isolation Kernel to the first ten design partners and the first commercial licenses — with the same honesty we use in the code.</p>
+        <div class="cover-meta">
+          <span>Live deck <b>pitch.html</b></span>
+          <span>Code <b>github.com/vanshjain-0702/DBX-Database-Extreme</b></span>
+          <span>Docs <b>github.io/DBX-Database-Extreme</b></span>
+          <span>Walkthrough <b>demo.html</b></span>
+        </div>
+        <div class="foot"><span>DBX · Incubation deck · v1.1.0 · September 2026</span><span>19</span></div>
+      </section>
+
+      <section class="slide" data-notes="Appendix. Skip in a 10-minute slot. Use if a judge asks 'what will you never build'.">
+        <p class="kicker">Appendix · Non-goals</p>
+        <h2>Coherence is a feature.</h2>
+        <table>
+          <thead>
+            <tr><th>Off the roadmap</th><th>Why</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Beating Redis on single-instance KV</td><td>Wrong buyer, unwinnable axis</td></tr>
+            <tr><td>Sharded billion-vector ANN</td><td>Wrong index size for our thesis</td></tr>
+            <tr><td>Managed DBX cloud as a default</td><td>BSL exists so this stays a company decision</td></tr>
+            <tr><td>SQL / joins / cross-entity ACID</td><td>We are memory, not the system of record</td></tr>
+            <tr><td>OLAP over history</td><td>Wrong shape entirely</td></tr>
+          </tbody>
+        </table>
+        <p class="tiny">Source of truth: docs/positioning.md · Isolation Kernel: docs/isolation.md · License: LICENSE (BSL 1.1 → Apache 2.0 after four years).</p>
+        <div class="foot"><span>DBX · Incubation deck</span><span>20</span></div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="progress" data-progress></div>
+  <div class="notes" data-notes></div>
+  <div class="chrome">
+    <button type="button" data-prev>Prev</button>
+    <span data-counter style="align-self:center;font-family:var(--mono);font-size:0.75rem;color:var(--faint);padding:0 0.35rem">1 / 20</span>
+    <button type="button" data-next>Next</button>
+    <button type="button" data-notes-toggle>Notes</button>
+    <button type="button" data-print>Print / PDF</button>
+    <a href="index.html">Site</a>
+  </div>
+  <script src="assets/pitch.js"></script>
+</body>
+</html>

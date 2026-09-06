@@ -7,7 +7,7 @@ VERSION            := $(shell git describe --tags --always --dirty 2>/dev/null |
 LDFLAGS            := -ldflags="-X main.version=$(VERSION) -s -w"
 BUILD_DIR          := ./bin
 
-.PHONY: all build build-server build-orchestrator build-dashboard run-dev test python-check soak restore-drill clean docker-build docker-up lint site help
+.PHONY: all build build-server build-orchestrator build-dashboard run-dev test python-check soak restore-drill clean docker-build docker-up lint site pitch-pptx help
 
 all: build
 
@@ -66,6 +66,11 @@ site:
 	@echo "Live:  https://vanshjain-0702.github.io/DBX-Database-Extreme/"
 	@echo "Local: http://127.0.0.1:8765/"
 	python3 -m http.server 8765 --bind 127.0.0.1 --directory website
+
+## pitch-pptx: Build the incubation PowerPoint from scripts/pitch/generate_pptx.py
+pitch-pptx:
+	python3 -m pip install -q python-pptx
+	python3 scripts/pitch/generate_pptx.py
 
 ## soak: Engine density drill (100 idle / 25 active). Not a CI default.
 soak:

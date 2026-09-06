@@ -27,6 +27,7 @@ Python checks: `make python-check` (pytest skips live AUTH without env).
 
 Public site source: website/.
 Live: https://vanshjain-0702.github.io/DBX-Database-Extreme/
+Incubation pitch: https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html
 Local preview: `make site`. dbxdb.io is the intended custom domain once registered.
 Docker: deploy/Dockerfile. GHCR ghcr.io/<owner>/dbx-orchestrator on GitHub Release.
 

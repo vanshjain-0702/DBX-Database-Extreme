@@ -350,6 +350,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 |---|---|
 | Public site | [github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/) — source in [`website/`](website/). Local preview: `make site`. `dbxdb.io` is the intended custom domain once registered. See [`website/README.md`](website/README.md). |
 | Show demo video | [Walkthrough](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html) (5 min 18 s). File: [demo.mp4](https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/demo.mp4). |
+| Incubation pitch | [pitch.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html) — 20-slide 16:9 deck. How to present / PDF: [`website/PITCH.md`](website/PITCH.md). PPTX: `make pitch-pptx`. |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
