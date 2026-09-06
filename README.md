@@ -1,8 +1,6 @@
 <p align="center">
-  <img src="website/assets/readme-banner.png" alt="DBX — Database Extreme, the isolated per-tenant memory engine for AI products" />
+  <img src="website/assets/readme-banner.png" alt="DBX — per-tenant memory engine" />
 </p>
-
-<h1 align="center">DBX</h1>
 
 <p align="center">
   <strong>The isolated, per-tenant memory engine for AI products.</strong>
