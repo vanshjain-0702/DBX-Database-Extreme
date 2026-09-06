@@ -55,6 +55,10 @@ It deploys from GitHub Actions on push to `main`
 ([`.github/workflows/pages.yml`](.github/workflows/pages.yml)).
 Operator UI copy is [`dashboard/`](dashboard/) (Tenant keys, console, explorer).
 
+DEV.to Isolation Kernel post: paste kit and editor field values live in
+[`docs/blog/`](docs/blog/). Follow [`docs/blog/DEVTO_PUBLISH.md`](docs/blog/DEVTO_PUBLISH.md);
+do not invent extra tags or security claims.
+
 ## Code Style
 
 - Follow standard Go conventions (`gofmt`, `go vet`).
