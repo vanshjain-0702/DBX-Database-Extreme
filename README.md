@@ -350,6 +350,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | Show demo video | [Walkthrough](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html) (5 min 18 s). File: [demo.mp4](https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/demo.mp4). |
 | Incubation pitch | [pitch.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
+| DEV.to paste kits | [`docs/blog/`](docs/blog/) — product post + Isolation Kernel walkthrough |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
 | Operator UI | [`dashboard/`](dashboard/) — Tenant keys, console, explorer, vector playground. Embedded in the orchestrator binary. |
