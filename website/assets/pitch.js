@@ -24,6 +24,9 @@
   if (/(?:^|[?&])print=1(?:&|$)/.test(location.search)) {
     document.documentElement.classList.add("print-all");
   }
+  if (/(?:^|[?&])capture=1(?:&|$)/.test(location.search)) {
+    document.documentElement.classList.add("capture");
+  }
 
   document.querySelectorAll("[data-next]").forEach(function (b) {
     b.addEventListener("click", function () { go(i + 1); });

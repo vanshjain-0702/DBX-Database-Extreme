@@ -70,6 +70,7 @@ html.print-all .deck { height: auto; width: var(--slide-w); overflow: visible; }
 html.print-all .stage { display: block; height: auto; }
 html.print-all body { overflow: visible; }
 html.print-all .chrome, html.print-all .notes, html.print-all .progress { display: none !important; }
+html.capture .chrome, html.capture .notes, html.capture .progress { display: none !important; }
 
 .slide::before {
   content: "";

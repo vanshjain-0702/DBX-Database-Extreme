@@ -10,8 +10,8 @@ Local: `make site` then open http://127.0.0.1:8765/pitch.html
 | Format | How |
 |---|---|
 | Present live | Open `pitch.html`. Full screen (`F` or the button). Arrow keys, Space, click the slide, or Prev/Next. `N` toggles speaker notes. `Home` / `End` jump. Deep-link a slide with `#s12`. |
-| PDF | Open `pitch.html?print=1` then Chrome → Print → Save as PDF → **Landscape**, margins **None**, background graphics **On**. Or click **Print / PDF**. |
-| Link in the application form | `https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html` |
+| PDF for forms | [`DBX-Incubation-Pitch.pdf`](DBX-Incubation-Pitch.pdf) — 20-page 16:9 file in this folder. |
+| Rebuild PDF | Open `pitch.html?print=1` then Chrome → Print → Save as PDF → **Landscape**, margins **None**, background graphics **On**. |
 
 Do not paste a Word outline. The live HTML deck is the artifact.
 
