@@ -7,9 +7,9 @@
   <br />
   One isolated store per customer, holding their working state <em>and</em> their vector memory.
   <br />
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><strong>Open the site</strong></a>
+  <a href="https://dbxdb.co.in/"><strong>Open the site</strong></a>
   ·
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><strong>Show demo video</strong></a>
+  <a href="https://dbxdb.co.in/demo.html"><strong>Show demo video</strong></a>
   ·
   <a href="docs/architecture.md">Architecture</a>
   ·
@@ -20,8 +20,8 @@
 
 <p align="center">
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml"><img src="https://github.com/vanshjain-0702/DBX-Database-Extreme/actions/workflows/build-and-test.yml/badge.svg?branch=main&event=push" alt="Build Status" /></a>
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/"><img src="https://img.shields.io/badge/site-github.io-0a66c2" alt="Live site" /></a>
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><img src="https://img.shields.io/badge/demo-watch%20video-0a66c2" alt="Show demo video" /></a>
+  <a href="https://dbxdb.co.in/"><img src="https://img.shields.io/badge/site-dbxdb.co.in-0a66c2" alt="Live site" /></a>
+  <a href="https://dbxdb.co.in/demo.html"><img src="https://img.shields.io/badge/demo-watch%20video-0a66c2" alt="Show demo video" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
@@ -34,15 +34,15 @@
 5 min 18 s. Public site, then a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Isolation bench in the recording is a browser sketch, not a live node.
 
 <p align="center">
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html">
+  <a href="https://dbxdb.co.in/demo.html">
     <img src="website/assets/og-image.jpg" alt="Show demo video — DBX product walkthrough" width="720" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html"><strong>▶ Show demo video</strong></a>
+  <a href="https://dbxdb.co.in/demo.html"><strong>▶ Show demo video</strong></a>
   ·
-  <a href="https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/demo.mp4">Open MP4</a>
+  <a href="https://dbxdb.co.in/assets/demo.mp4">Open MP4</a>
   ·
   <a href="website/demo.html">Walkthrough page</a>
 </p>
@@ -402,9 +402,9 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 
 | What | Where |
 |---|---|
-| Public site | [github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/) — source in [`website/`](website/). Local preview: `make site`. `dbxdb.io` is the intended custom domain once registered. See [`website/README.md`](website/README.md). |
-| Show demo video | [Walkthrough](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html) (5 min 18 s). File: [demo.mp4](https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/demo.mp4). |
-| Incubation pitch | [pitch.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
+| Public site | [dbxdb.co.in](https://dbxdb.co.in/) — source in [`website/`](website/). Local preview: `make site`. DNS steps: [`website/README.md`](website/README.md). |
+| Show demo video | [Walkthrough](https://dbxdb.co.in/demo.html) (5 min 18 s). File: [demo.mp4](https://dbxdb.co.in/assets/demo.mp4). |
+| Incubation pitch | [pitch.html](https://dbxdb.co.in/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |

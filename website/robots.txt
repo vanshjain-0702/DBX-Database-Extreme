@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://vanshjain-0702.github.io/DBX-Database-Extreme/sitemap.xml
+Sitemap: https://dbxdb.co.in/sitemap.xml

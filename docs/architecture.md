@@ -64,9 +64,8 @@ the secret is shown once. Console, explorer, and vector playground talk to
 
 The public marketing site is **not** this UI. It is static HTML in `website/`.
 Open it at
-[https://vanshjain-0702.github.io/DBX-Database-Extreme/](https://vanshjain-0702.github.io/DBX-Database-Extreme/)
-or locally with `make site`. `dbxdb.io` is the intended custom domain once
-registered. See `website/README.md`.
+[https://dbxdb.co.in/](https://dbxdb.co.in/)
+or locally with `make site`. Custom domain: `dbxdb.co.in`. See `website/README.md`.
 
 ## Data Flow
 

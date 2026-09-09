@@ -63,7 +63,7 @@ python-check:
 
 ## site: Serve website/ at http://127.0.0.1:8765 (live site is GitHub Pages)
 site:
-	@echo "Live:  https://vanshjain-0702.github.io/DBX-Database-Extreme/"
+	@echo "Live:  https://dbxdb.co.in/"
 	@echo "Local: http://127.0.0.1:8765/"
 	python3 -m http.server 8765 --bind 127.0.0.1 --directory website
 

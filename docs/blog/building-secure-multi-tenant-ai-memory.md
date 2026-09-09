@@ -3,7 +3,7 @@ title: "Building Secure Multi-Tenant AI Memory in Go: Sandboxing Vector Stores w
 published: false
 description: "How DBX isolates multi-tenant agent memory in Go with Linux Landlock, envelope encryption, and SO_PEERCRED — without a microVM per user."
 tags: golang, ai, database, security
-cover_image: https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg
+cover_image: https://dbxdb.co.in/assets/og-image.jpg
 canonical_url:
 series: DBX Isolation Kernel
 ---
@@ -304,15 +304,15 @@ Or drop the orchestrator binary in with Compose (`deploy/docker-compose.yml` def
 Clone the DBX repo
 {% endcta %}
 
-{% cta https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/ %}
+{% cta https://dbxdb.co.in/docs/ %}
 Read the technical docs
 {% endcta %}
 
 - Source: [github.com/vanshjain-0702/DBX-Database-Extreme](https://github.com/vanshjain-0702/DBX-Database-Extreme)
 - v1.1.0 release: [github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.1.0](https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.1.0)
-- Docs site: [vanshjain-0702.github.io/DBX-Database-Extreme/docs](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/)
+- Docs site: [dbxdb.co.in/docs](https://dbxdb.co.in/docs/)
 - Isolation Kernel: [`docs/isolation.md`](https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/main/docs/isolation.md)
-- Quickstart: [docs/quickstart.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/quickstart.html)
-- Walkthrough video: [demo.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html)
+- Quickstart: [docs/quickstart.html](https://dbxdb.co.in/docs/quickstart.html)
+- Walkthrough video: [demo.html](https://dbxdb.co.in/demo.html)
 
 BSL 1.1: free to self-host inside your own product. Not a managed-DBX license, not SOC 2, not a cluster. Production on Linux is `strict` or it is not the security USP.

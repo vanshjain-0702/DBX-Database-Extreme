@@ -35,7 +35,7 @@ title: "Building Secure Multi-Tenant AI Memory in Go: Sandboxing Vector Stores w
 published: false
 description: "How DBX isolates multi-tenant agent memory in Go with Linux Landlock, envelope encryption, and SO_PEERCRED — without a microVM per user."
 tags: golang, ai, database, security
-cover_image: https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg
+cover_image: https://dbxdb.co.in/assets/og-image.jpg
 canonical_url:
 series: DBX Isolation Kernel
 ---
@@ -49,7 +49,7 @@ series: DBX Isolation Kernel
 | `published` | `false` until you have previewed. Flip to `true` (or click **Publish**) only after Step 6. |
 | `description` | `How DBX isolates multi-tenant agent memory in Go with Linux Landlock, envelope encryption, and SO_PEERCRED — without a microVM per user.` |
 | `tags` | `golang, ai, database, security` |
-| Cover image URL | `https://vanshjain-0702.github.io/DBX-Database-Extreme/assets/og-image.jpg` |
+| Cover image URL | `https://dbxdb.co.in/assets/og-image.jpg` |
 | Cover image alt (if the uploader asks) | `DBX Isolation Kernel — per-tenant memory engine for AI products` |
 | `canonical_url` | **Leave empty.** This post is the original. Do not point it at GitHub Pages unless you later republish the same text there first. |
 | `series` | `DBX Isolation Kernel` |
@@ -81,7 +81,7 @@ Liquid tags in the body are intentional. Leave them as-is:
 ```
 {% embed https://github.com/vanshjain-0702/DBX-Database-Extreme %}
 {% cta https://github.com/vanshjain-0702/DBX-Database-Extreme %} Clone the DBX repo {% endcta %}
-{% cta https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/ %} Read the technical docs {% endcta %}
+{% cta https://dbxdb.co.in/docs/ %} Read the technical docs {% endcta %}
 ```
 
 ---
@@ -92,12 +92,12 @@ Liquid tags in the body are intentional. Leave them as-is:
 |---|---|
 | GitHub repository | `https://github.com/vanshjain-0702/DBX-Database-Extreme` |
 | GitHub Release v1.1.0 | `https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.1.0` |
-| Technical documentation (site) | `https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/` |
+| Technical documentation (site) | `https://dbxdb.co.in/docs/` |
 | Isolation Kernel (source of truth) | `https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/main/docs/isolation.md` |
-| Architecture | `https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/architecture.html` |
-| Quickstart | `https://vanshjain-0702.github.io/DBX-Database-Extreme/docs/quickstart.html` |
-| Public site | `https://vanshjain-0702.github.io/DBX-Database-Extreme/` |
-| Product walkthrough video | `https://vanshjain-0702.github.io/DBX-Database-Extreme/demo.html` |
+| Architecture | `https://dbxdb.co.in/docs/architecture.html` |
+| Quickstart | `https://dbxdb.co.in/docs/quickstart.html` |
+| Public site | `https://dbxdb.co.in/` |
+| Product walkthrough video | `https://dbxdb.co.in/demo.html` |
 
 ---
 
@@ -136,7 +136,7 @@ Only if you later put the same article on the GitHub Pages site:
 
 | Field | Then set it to |
 |---|---|
-| DEV `canonical_url` | The Pages URL of that page (example: `https://vanshjain-0702.github.io/DBX-Database-Extreme/blog/landlock.html`) |
+| DEV `canonical_url` | The Pages URL of that page (example: `https://dbxdb.co.in/blog/landlock.html`) |
 | Pages `<link rel="canonical">` | That same Pages URL (Pages remains canonical) |
 
 Until that page exists, leave `canonical_url` blank so DEV is the original.

@@ -6,7 +6,7 @@ control-plane service.
 
 This is not the public marketing site. That lives in [`website/`](../website/)
 and is served at
-[github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/).
+[dbxdb.co.in](https://dbxdb.co.in/).
 
 ## What it covers
 

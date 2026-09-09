@@ -1,7 +1,7 @@
 # DBX incubation pitch
 
 Live deck (after Pages deploy):
-[https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html](https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html)
+[https://dbxdb.co.in/pitch.html](https://dbxdb.co.in/pitch.html)
 
 Local: `make site` then open http://127.0.0.1:8765/pitch.html
 
