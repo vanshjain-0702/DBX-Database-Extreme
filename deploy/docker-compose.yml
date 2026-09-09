@@ -1,3 +1,7 @@
+# Run from the repo root. Compose will not load ../.env on its own:
+#   cp .env.example .env   # set secrets, including 64-hex DBX_KEK
+#   docker compose --env-file .env -f deploy/docker-compose.yml up --build
+#   make docker-up         # same, requires GNU Make
 version: "3.9"
 
 services:

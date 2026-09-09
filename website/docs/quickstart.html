@@ -42,19 +42,19 @@
         <h2>Docker</h2>
         <div class="code-panel">
           <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
-          <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
-cd DBX-Database-Extreme
-docker build -t dbx:dev -f deploy/Dockerfile .
-docker run -p 8000:8000 -p 6380:6380 \
+          <pre>export DBX_KEK="$(python -c "import secrets; print(secrets.token_hex(32))")"
+
+docker run --rm -p 8000:8000 -p 6380:6380 \
   -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
   -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
   -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
+  -e DBX_KEK \
   -e DBX_NODE_MEMORY_BUDGET=8gb \
-  dbx:dev</pre>
+  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0</pre>
         </div>
-        <p>Open <a href="http://localhost:8000">http://localhost:8000</a> and log in with <code>admin</code> / your password. Mint a writer key on <strong>Tenant keys</strong>. GitHub Actions publishes <code>ghcr.io/vanshjain-0702/dbx-orchestrator</code> when a GitHub Release is published. Until then, build <code>deploy/Dockerfile</code>.</p>
+        <p>Open <a href="http://localhost:8000">http://localhost:8000</a> and log in with <code>admin</code> / your password. Mint a writer key on <strong>Tenant keys</strong>. The image defaults to <code>DBX_ISOLATION_MODE=strict</code>, so <code>DBX_KEK</code> (64 hex characters) is required or the process exits. GitHub Actions publishes <code>ghcr.io/vanshjain-0702/dbx-orchestrator</code> on a GitHub Release (<code>:v1.1.0</code> and <code>:latest</code>). To build the same Dockerfile: <code>docker build -t dbx:dev -f deploy/Dockerfile .</code> then run <code>dbx:dev</code> with the same <code>-e</code> flags. For a laptop try without envelope encryption, add <code>-e DBX_ISOLATION_MODE=inprocess</code> and omit <code>DBX_KEK</code>.</p>
         <h2>From source</h2>
-        <p class="muted">Prerequisites: Go 1.25+, Node.js 20+.</p>
+        <p class="muted">Prerequisites: Go 1.25+, Node.js 20+, GNU Make. Windows does not ship <code>make</code>. A fresh clone has no operator UI until the dashboard is built (<code>make run-dev</code> runs <code>npm ci &amp;&amp; npm run build</code> when <code>dashboard/dist/index.html</code> is missing).</p>
         <div class="code-panel">
           <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
           <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
@@ -64,13 +64,19 @@ make build
 make run-dev</pre>
         </div>
         <h2>Compose</h2>
+        <p class="muted">Copy <code>.env.example</code> to a repo-root <code>.env</code> and set the secrets, including a 64-hex <code>DBX_KEK</code>. Pass <code>--env-file .env</code>: the compose file lives in <code>deploy/</code> and will not auto-load the root file.</p>
         <div class="code-panel">
           <header><span>shell</span><button class="copy-btn" type="button">Copy</button></header>
           <pre>git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
 cd DBX-Database-Extreme
-make docker-up</pre>
+cp .env.example .env
+# set DBX_ADMIN_PASSWORD, DBX_JWT_SECRET, DBX_INTERNAL_API_TOKEN, DBX_KEK
+
+make docker-up
+# docker compose --env-file .env -f deploy/docker-compose.yml up --build</pre>
         </div>
         <h2>Python</h2>
+        <p class="muted"><code>pip install -e sdk/python</code> from the clone. Dummy <code>key_id</code> / <code>secret</code> below are placeholders; mint a writer key after you provision.</p>
         <div class="code-panel">
           <header><span>python</span><button class="copy-btn" type="button">Copy</button></header>
           <pre>from dbx import DBXClient
@@ -100,8 +106,14 @@ await client.set('session:abc', JSON.stringify({ userId: 42 }));</pre>
         <h2>Provision</h2>
         <div class="code-panel">
           <header><span>HTTP</span><button class="copy-btn" type="button">Copy</button></header>
-          <pre>curl -X POST http://localhost:8000/api/provision \
+          <pre>curl -s -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"YOUR_ADMIN_PASSWORD"}'
+# Response: {"token":"..."}  — export it as DBX_TOKEN
+
+curl -X POST http://localhost:8000/api/provision \
   -H "Authorization: Bearer $DBX_TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"id": "acme-corp", "name": "Acme Corp"}'</pre>
         </div>
         <p>Bearer token from <code>POST /api/login</code>. Backup, restore, export/import, hibernate/wake, and delete take the same token and a tenant id. Meter a customer with <code>GET /api/v1/tenants/{id}/usage</code>. The 15-minute Python path is <code>examples/quickstart.py</code>. LangChain: <code>examples/langchain-rag</code>. Next.js <code>SETEX</code>: <code>examples/nextjs-cache</code>. SDK tests: <code>make python-check</code> from the repo root. Full command list on the <a href="api.html">API</a> page.</p>

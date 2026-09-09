@@ -18,7 +18,7 @@ spec:
       serviceAccountName: dbx-orchestrator-sa
       containers:
       - name: orchestrator
-        image: ghcr.io/dbx/dbx:latest
+        image: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0
         imagePullPolicy: IfNotPresent
         args:
         - -insecure-http=true
@@ -50,6 +50,15 @@ spec:
               name: dbx-control-plane
               key: engine-password
               optional: true
+        - name: DBX_ISOLATION_MODE
+          value: "strict"
+        - name: DBX_PRODUCTION
+          value: "1"
+        - name: DBX_KEK
+          valueFrom:
+            secretKeyRef:
+              name: dbx-control-plane
+              key: kek
         ports:
         - containerPort: 8000
           name: http

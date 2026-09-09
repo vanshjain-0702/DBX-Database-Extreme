@@ -1,6 +1,11 @@
 """15-minute path: provision, AUTH, SET+VADD, usage, backup, purge.
 
-Requires a local orchestrator (`make run-dev`) and: pip install redis
+Requires a local orchestrator (`make run-dev` or the Docker quickstart) and:
+
+    pip install redis
+
+This file adds sdk/python to sys.path. From the repo root, application code
+should instead: pip install -e sdk/python
 """
 
 from __future__ import annotations

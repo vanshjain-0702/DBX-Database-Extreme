@@ -4,8 +4,9 @@ RESP client (`DBXClient`) and control-plane helper (`ControlPlane`) for one
 DBX tenant. LangChain adapter: `langchain_dbx.DBXVectorStore`.
 
 ```bash
-pip install -e .
-pip install -e ".[langchain]"   # optional
+pip install -e .                 # from sdk/python
+pip install -e sdk/python        # from the repo root
+pip install -e "sdk/python[langchain]"   # optional extras from the repo root
 ```
 
 The first command on `:6380` must be `AUTH tenantID:keyID secret`. Pass

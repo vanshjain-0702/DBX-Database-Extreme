@@ -102,13 +102,17 @@ clean:
 docker-build:
 	docker build -t dbx/dbx:$(VERSION) -f deploy/Dockerfile .
 
-## docker-up: Start full stack with docker-compose
+## docker-up: Start the orchestrator via deploy/docker-compose.yml
 docker-up:
-	docker compose -f deploy/docker-compose.yml up --build
+	@if [ ! -f .env ]; then \
+		echo "Copy .env.example to .env in the repo root and set DBX_ADMIN_PASSWORD, DBX_JWT_SECRET, DBX_INTERNAL_API_TOKEN, and DBX_KEK (64 hex chars)."; \
+		exit 1; \
+	fi
+	docker compose --env-file .env -f deploy/docker-compose.yml up --build
 
 ## docker-down: Stop docker-compose stack
 docker-down:
-	docker compose -f deploy/docker-compose.yml down
+	docker compose --env-file .env -f deploy/docker-compose.yml down
 
 ## help: Show this help
 help:

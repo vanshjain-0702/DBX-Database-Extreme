@@ -24,6 +24,10 @@ We do not describe DBX as a replacement for anything.
 
 ## Development Setup
 
+**Prerequisites:** Go 1.25+, Node.js 20+, GNU Make. Windows does not ship
+`make`; use Git Bash, WSL, or install Make. `make run-dev` builds
+`dashboard/dist` when `index.html` is missing (`npm ci && npm run build`).
+
 ```bash
 # Clone
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
@@ -36,18 +40,29 @@ go mod download
 make test
 
 # Python SDK, examples, flake8, and black (same job as GitHub "Python Lint")
+# Install the SDK first if you want `from dbx import DBXClient` outside examples/:
+#   pip install -e sdk/python
 make python-check
 
 # Operator drills (not a CI default)
 make soak            # 100 idle / 25 active KV engines
 make restore-drill   # backup/restore + hibernate + usage tests
 
-# Run in dev mode
+# Run in dev mode (admin / adminadminadmin on :8000)
 make run-dev
 
 # Run dashboard
 make run-dashboard
 ```
+
+Without Make, after `cd dashboard && npm ci && npm run build`, set the env
+vars from the Makefile `run-dev` target and run
+`go run ./cmd/dbx-orchestrator -insecure-http=true`.
+
+Compose: `cp .env.example .env`, fill secrets including 64-hex `DBX_KEK`, then
+`make docker-up` (loads the repo-root `.env`). The published image is
+`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0` and defaults to isolation
+`strict`, so `docker run` without `DBX_KEK` exits.
 
 Public site copy is [`website/`](website/), live at
 [github.io/DBX-Database-Extreme](https://vanshjain-0702.github.io/DBX-Database-Extreme/).

@@ -34,7 +34,7 @@
         <h1>API reference</h1>
         <p>The public application data plane is authenticated RESP on port <code>6380</code>. The first command must be <code>AUTH &lt;tenantID&gt;:&lt;keyID&gt; &lt;secret&gt;</code>. HTTP <code>/t/{tenantID}/query</code> requires an operator JWT and is for the dashboard, not a public tenant API.</p>
         <h2>POST /api/login</h2>
-        <p>Issue a JWT. Body: <code>{"username":"admin","password":"…"}</code>.</p>
+        <p>Issue a JWT. Body: <code>{"username":"admin","password":"…"}</code>. Send <code>Content-Type: application/json</code>. Response field is <code>token</code>.</p>
         <h2>Tenants</h2>
         <ul>
           <li><code>GET /api/tenants</code> — list</li>

@@ -1,3 +1,6 @@
+# Prefer deploy/docker-compose.yml (`make docker-up`). This file is the same
+# image with the same required secrets. Isolation Kernel defaults match the
+# Dockerfile (strict); DBX_KEK is required or the container exits on boot.
 services:
   dbx:
     build:
@@ -15,6 +18,9 @@ services:
       DBX_INTERNAL_API_TOKEN: ${DBX_INTERNAL_API_TOKEN:?set DBX_INTERNAL_API_TOKEN in .env}
       DBX_NODE_MEMORY_BUDGET: ${DBX_NODE_MEMORY_BUDGET:-8gb}
       DBX_DATA_DIR: /data
+      DBX_ISOLATION_MODE: ${DBX_ISOLATION_MODE:-strict}
+      DBX_KEK: ${DBX_KEK:?set DBX_KEK in .env (64 hex chars)}
+      DBX_PRODUCTION: "1"
     volumes:
       - dbx-data:/data
 

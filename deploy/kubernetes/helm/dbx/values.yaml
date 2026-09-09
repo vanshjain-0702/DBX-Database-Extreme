@@ -2,9 +2,9 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/dbx/dbx
+  repository: ghcr.io/vanshjain-0702/dbx-orchestrator
   pullPolicy: IfNotPresent
-  tag: "latest"
+  tag: "v1.1.0"
 
 nameOverride: ""
 fullnameOverride: ""

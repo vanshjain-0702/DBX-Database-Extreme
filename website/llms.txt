@@ -29,7 +29,7 @@ Public site source: website/.
 Live: https://vanshjain-0702.github.io/DBX-Database-Extreme/
 Incubation pitch: https://vanshjain-0702.github.io/DBX-Database-Extreme/pitch.html
 Local preview: `make site`. dbxdb.io is the intended custom domain once registered.
-Docker: deploy/Dockerfile. GHCR ghcr.io/<owner>/dbx-orchestrator on GitHub Release.
+Docker: deploy/Dockerfile. GHCR ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0 (and :latest on GitHub Release). Image defaults to DBX_ISOLATION_MODE=strict; docker run requires DBX_KEK (64 hex) or -e DBX_ISOLATION_MODE=inprocess. Compose: cp .env.example .env (repo root, include KEK), then docker compose --env-file .env -f deploy/docker-compose.yml up --build (or make docker-up). Python: pip install -e sdk/python before `from dbx import DBXClient`.
 
 Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default
 superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.

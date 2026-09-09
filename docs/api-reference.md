@@ -15,7 +15,7 @@ dashboard and operational tooling, not as a public tenant API.
 ### POST `/api/login`
 Get a JWT token.
 
-**Request:**
+**Request:** `Content-Type: application/json`
 ```json
 { "username": "admin", "password": "yourpassword" }
 ```

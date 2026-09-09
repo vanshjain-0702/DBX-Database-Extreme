@@ -178,50 +178,99 @@ customers who each need memory, DBX is built for exactly that shape.
 
 ## Quickstart
 
-### Option 1: Docker (build the orchestrator locally)
+The Docker image (`deploy/Dockerfile`) embeds the dashboard, puts `dbx-orchestrator`
+and `dbx-server` on `PATH`, and **defaults to `DBX_ISOLATION_MODE=strict`**.
+Missing `DBX_KEK` (64 hex characters) is a boot failure, not plaintext fallback.
+`v1.1.0` is published as `ghcr.io/vanshjain-0702/dbx-orchestrator` (`:v1.1.0` and
+`:latest` track GitHub Releases, not every push). Isolation details:
+[docs/isolation.md](docs/isolation.md).
 
-The supported image is [`deploy/Dockerfile`](deploy/Dockerfile) (`cmd/dbx-orchestrator`,
-dashboard embedded, `:8000` + `:6380`). GitHub Actions publishes
-`ghcr.io/vanshjain-0702/dbx-orchestrator` when a **GitHub Release** is published,
-not on every push. Until then, build locally:
+### Option 1: Docker (published image)
+
+```bash
+# 64-hex wrapping key. openssl rand -hex 32 also works.
+export DBX_KEK="$(python -c "import secrets; print(secrets.token_hex(32))")"
+
+docker run --rm -p 8000:8000 -p 6380:6380 \
+  -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
+  -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
+  -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
+  -e DBX_KEK \
+  -e DBX_NODE_MEMORY_BUDGET=8gb \
+  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0
+```
+
+Open **http://localhost:8000** and log in with `admin` / the password you set.
+Mint a **writer** key on **Tenant keys**.
+
+For a laptop try that skips envelope encryption (directory isolation only, not
+the security USP), add `-e DBX_ISOLATION_MODE=inprocess` and omit `DBX_KEK`.
+The image still starts with `-insecure-http`; do not ship that.
+
+To build the same Dockerfile locally:
 
 ```bash
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
 cd DBX-Database-Extreme
 docker build -t dbx:dev -f deploy/Dockerfile .
-docker run -p 8000:8000 -p 6380:6380 \
+docker run --rm -p 8000:8000 -p 6380:6380 \
   -e DBX_ADMIN_PASSWORD='replace-with-12-plus-characters' \
   -e DBX_JWT_SECRET='replace-with-at-least-32-random-characters' \
   -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
+  -e DBX_KEK \
   -e DBX_NODE_MEMORY_BUDGET=8gb \
   dbx:dev
 ```
 
-Open the dashboard at **http://localhost:8000** and log in with `admin` / `yourpassword`.
-
 ### Option 2: Build from source
 
-**Prerequisites:** Go 1.25+, Node.js 20+
+**Prerequisites:** Go 1.25+, Node.js 20+, and **GNU Make** (`make` is not
+installed on Windows by default — use Git Bash, WSL, or Chocolatey/Scoop
+`make`). A fresh clone has no dashboard UI until you build it (`dashboard/dist`
+is only a `.gitkeep`; `make run-dev` / `make build` run `npm ci && npm run build`
+when `dashboard/dist/index.html` is missing).
 
 ```bash
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
 cd DBX-Database-Extreme
 
-make build      # build all binaries
-make run-dev    # start the local development stack
+make build      # dbx-server + dashboard embed + dbx-orchestrator
+make run-dev    # http://127.0.0.1:8000  (admin / adminadminadmin)
+```
+
+Without Make (PowerShell), after `cd dashboard; npm ci; npm run build`:
+
+```powershell
+$env:DBX_ADMIN_PASSWORD="adminadminadmin"
+$env:DBX_JWT_SECRET="supersecretjwtsecret1234567890123456"
+$env:DBX_INTERNAL_API_TOKEN="internalapitoken1234567890123456"
+$env:DBX_DEFAULT_PASSWORD="adminadminadmin"
+$env:DBX_DATA_DIR="./data"
+$env:DBX_NODE_MEMORY_BUDGET="8gb"
+go run ./cmd/dbx-orchestrator -insecure-http=true
 ```
 
 ### Option 3: Docker Compose
 
+[`deploy/docker-compose.yml`](deploy/docker-compose.yml) lives in `deploy/`, so
+Compose will **not** auto-load a repo-root `.env`. Pass `--env-file .env` (or
+use `make docker-up`). It also requires `DBX_KEK` and defaults to
+`DBX_ISOLATION_MODE=strict` plus `DBX_PRODUCTION=1`.
+
 ```bash
 git clone https://github.com/vanshjain-0702/DBX-Database-Extreme.git
 cd DBX-Database-Extreme
-# needs DBX_ADMIN_PASSWORD, DBX_JWT_SECRET, DBX_INTERNAL_API_TOKEN in the environment
+cp .env.example .env
+# set DBX_ADMIN_PASSWORD, DBX_JWT_SECRET, DBX_INTERNAL_API_TOKEN
+# set DBX_KEK to 64 hex chars (see comments in .env.example)
+
 make docker-up
+# same without Make:
+# docker compose --env-file .env -f deploy/docker-compose.yml up --build
 ```
 
-`make docker-up` uses [`deploy/docker-compose.yml`](deploy/docker-compose.yml). The
-root [`docker-compose.yml`](docker-compose.yml) builds the same Dockerfile.
+The root [`docker-compose.yml`](docker-compose.yml) builds the same image and
+needs the same secrets.
 
 ---
 
@@ -230,9 +279,16 @@ root [`docker-compose.yml`](docker-compose.yml) builds the same Dockerfile.
 This is the API that defines the product. Everything else is a data-plane detail.
 
 ```bash
+# JWT for the following calls
+curl -s -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"YOUR_ADMIN_PASSWORD"}'
+# Response: {"token":"..."}  — export it as DBX_TOKEN
+
 # Provision an isolated engine for a customer
 curl -X POST http://localhost:8000/api/provision \
   -H "Authorization: Bearer $DBX_TOKEN" \
+  -H "Content-Type: application/json" \
   -d '{"id": "acme-corp", "name": "Acme Corp"}'
 
 # Talk to that tenant, and only that tenant
@@ -280,7 +336,7 @@ db = DBXClient(
     host="localhost",
     port=6380,
     tenant="acme-corp",
-    key_id="key-id",
+    key_id="key-id",          # from dashboard Tenant keys, not a dummy
     secret="one-time-key-secret",
 )
 
