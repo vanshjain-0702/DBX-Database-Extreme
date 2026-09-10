@@ -15,7 +15,7 @@ func TestReaderCannotMutateStringsOrVectors(t *testing.T) {
 			t.Fatalf("reader must not run %s", cmd)
 		}
 	}
-	for _, cmd := range []string{"GET", "VSEARCH", "TTL", "PING", "MGET"} {
+	for _, cmd := range []string{"GET", "VSEARCH", "VSIM", "VFUSE", "TTL", "PING", "MGET"} {
 		if !store.CanExecute(reader, cmd) {
 			t.Fatalf("reader must run %s", cmd)
 		}

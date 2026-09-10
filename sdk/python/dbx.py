@@ -10,6 +10,38 @@ class DBXError(Exception):
     """RESP or control-plane failure with the engine's message, not a stack dump."""
 
 
+def _vector_flags(
+    *,
+    min_score: Optional[float] = None,
+    ef: Optional[int] = None,
+    space: Optional[str] = None,
+    with_docs: Optional[str] = None,
+    filter_contains: Optional[str] = None,
+) -> List[Union[str, int, float]]:
+    flags: List[Union[str, int, float]] = []
+    if with_docs:
+        flags.extend(["WITHDOCS", with_docs])
+    if filter_contains:
+        flags.extend(["FILTER_CONTAINS", filter_contains])
+    if min_score is not None:
+        flags.extend(["MIN_SCORE", min_score])
+    if ef is not None:
+        flags.extend(["EF", ef])
+    if space:
+        flags.extend(["SPACE", space])
+    return flags
+
+
+def _parse_vector_hits(res: Any) -> List[Tuple[str, float]]:
+    results: List[Tuple[str, float]] = []
+    if not res:
+        return results
+    for item in res:
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            results.append((str(item[0]), float(item[1])))
+    return results
+
+
 class DBXClient:
     """RESP client for the public DBX ingress.
 
@@ -73,9 +105,20 @@ class DBXClient:
     def delete(self, *keys: str) -> int:
         return int(self.r.delete(*keys) or 0)
 
-    def vadd(self, index_name: str, doc_id: str, vector: List[float]) -> bool:
+    def vadd(
+        self,
+        index_name: str,
+        doc_id: str,
+        vector: List[float],
+        *,
+        space: Optional[str] = None,
+    ) -> bool:
+        args: List[Union[str, float]] = [index_name, doc_id]
+        if space:
+            args.extend(["SPACE", space])
+        args.extend(vector)
         try:
-            res = self.r.execute_command("VADD", index_name, doc_id, *vector)
+            res = self.r.execute_command("VADD", *args)
         except redis.RedisError as exc:
             raise DBXError(str(exc)) from exc
         return res == 1
@@ -96,23 +139,104 @@ class DBXClient:
         return int(cast(Union[int, str], res or 0))
 
     def vsearch(
-        self, index_name: str, query_vector: List[float], top_k: int = 4
+        self,
+        index_name: str,
+        query_vector: List[float],
+        top_k: int = 4,
+        *,
+        min_score: Optional[float] = None,
+        ef: Optional[int] = None,
+        space: Optional[str] = None,
+        with_docs: Optional[str] = None,
+        filter_contains: Optional[str] = None,
     ) -> List[Tuple[str, float]]:
+        args: List[Union[str, int, float]] = [index_name, *query_vector, top_k]
+        args.extend(
+            _vector_flags(
+                min_score=min_score,
+                ef=ef,
+                space=space,
+                with_docs=with_docs,
+                filter_contains=filter_contains,
+            )
+        )
         try:
-            res = self.r.execute_command("VSEARCH", index_name, *query_vector, top_k)
+            res = self.r.execute_command("VSEARCH", *args)
         except redis.RedisError as exc:
             raise DBXError(str(exc)) from exc
-        results: List[Tuple[str, float]] = []
-        if not res:
-            return results
-        for item in res:
-            if isinstance(item, (list, tuple)) and len(item) >= 2:
-                results.append((str(item[0]), float(item[1])))
-        return results
+        return _parse_vector_hits(res)
 
-    def vdel(self, index_name: str, doc_id: str) -> bool:
+    def vsim(
+        self,
+        index_name: str,
+        doc_id: str,
+        top_k: int = 4,
+        *,
+        min_score: Optional[float] = None,
+        ef: Optional[int] = None,
+        space: Optional[str] = None,
+        with_docs: Optional[str] = None,
+        filter_contains: Optional[str] = None,
+    ) -> List[Tuple[str, float]]:
+        args: List[Union[str, int, float]] = [index_name, doc_id, top_k]
+        args.extend(
+            _vector_flags(
+                min_score=min_score,
+                ef=ef,
+                space=space,
+                with_docs=with_docs,
+                filter_contains=filter_contains,
+            )
+        )
         try:
-            res = self.r.execute_command("VDEL", index_name, doc_id)
+            res = self.r.execute_command("VSIM", *args)
+        except redis.RedisError as exc:
+            raise DBXError(str(exc)) from exc
+        return _parse_vector_hits(res)
+
+    def vfuse(
+        self,
+        index_name: str,
+        queries: Dict[str, List[float]],
+        top_k: int = 4,
+        *,
+        weights: Optional[List[float]] = None,
+        min_score: Optional[float] = None,
+        ef: Optional[int] = None,
+        with_docs: Optional[str] = None,
+        filter_contains: Optional[str] = None,
+    ) -> List[Tuple[str, float]]:
+        if len(queries) < 2:
+            raise ValueError("vfuse requires at least two named spaces")
+        args: List[Union[str, int, float]] = [index_name]
+        ordered_spaces = list(queries.items())
+        for space, vector in ordered_spaces:
+            args.extend(["SPACE", space, *vector])
+        args.append(top_k)
+        if weights is not None:
+            args.extend(["WEIGHTS", ",".join(str(w) for w in weights)])
+        args.extend(
+            _vector_flags(
+                min_score=min_score,
+                ef=ef,
+                with_docs=with_docs,
+                filter_contains=filter_contains,
+            )
+        )
+        try:
+            res = self.r.execute_command("VFUSE", *args)
+        except redis.RedisError as exc:
+            raise DBXError(str(exc)) from exc
+        return _parse_vector_hits(res)
+
+    def vdel(
+        self, index_name: str, doc_id: str, *, space: Optional[str] = None
+    ) -> bool:
+        args: List[str] = [index_name, doc_id]
+        if space:
+            args.extend(["SPACE", space])
+        try:
+            res = self.r.execute_command("VDEL", *args)
         except redis.RedisError as exc:
             raise DBXError(str(exc)) from exc
         return bool(res)
@@ -158,18 +282,64 @@ class TenantMemory:
         return cls(client, index=index)
 
     def remember(
-        self, key: str, value: str, vector: Optional[List[float]] = None
+        self,
+        key: str,
+        value: str,
+        vector: Optional[List[float]] = None,
+        *,
+        space: Optional[str] = None,
     ) -> None:
         if not self.client.set(key, value):
             raise DBXError("SET failed")
         if vector is not None:
-            if not self.client.vadd(self.index, key, vector):
+            if not self.client.vadd(self.index, key, vector, space=space):
                 raise DBXError("VADD failed")
 
     def recall(
-        self, vector: List[float], top_k: int = 4
+        self,
+        vector: List[float],
+        top_k: int = 4,
+        *,
+        min_score: Optional[float] = None,
+        space: Optional[str] = None,
     ) -> List[Tuple[str, str, float]]:
-        hits = self.client.vsearch(self.index, vector, top_k)
+        hits = self.client.vsearch(
+            self.index, vector, top_k, min_score=min_score, space=space
+        )
+        out: List[Tuple[str, str, float]] = []
+        for doc_id, score in hits:
+            stored = self.client.get(doc_id)
+            out.append((doc_id, stored or "", score))
+        return out
+
+    def similar(
+        self,
+        item_id: str,
+        top_k: int = 4,
+        *,
+        min_score: Optional[float] = None,
+        space: Optional[str] = None,
+    ) -> List[Tuple[str, str, float]]:
+        hits = self.client.vsim(
+            self.index, item_id, top_k, min_score=min_score, space=space
+        )
+        out: List[Tuple[str, str, float]] = []
+        for doc_id, score in hits:
+            stored = self.client.get(doc_id)
+            out.append((doc_id, stored or "", score))
+        return out
+
+    def fuse(
+        self,
+        queries: Dict[str, List[float]],
+        top_k: int = 4,
+        *,
+        weights: Optional[List[float]] = None,
+        min_score: Optional[float] = None,
+    ) -> List[Tuple[str, str, float]]:
+        hits = self.client.vfuse(
+            self.index, queries, top_k, weights=weights, min_score=min_score
+        )
         out: List[Tuple[str, str, float]] = []
         for doc_id, score in hits:
             stored = self.client.get(doc_id)

@@ -39,6 +39,12 @@ func TestEnforceReaderDeniedOnVADDAndSET(t *testing.T) {
 	if err := enforcer.Enforce(reader, cmd("VSEARCH", "memories", "0.1", "0.2", "5")); err != nil {
 		t.Fatalf("reader VSEARCH: %v", err)
 	}
+	if err := enforcer.Enforce(reader, cmd("VSIM", "memories", "doc:1", "5")); err != nil {
+		t.Fatalf("reader VSIM: %v", err)
+	}
+	if err := enforcer.Enforce(reader, cmd("VFUSE", "memories", "SPACE", "text", "0.1", "SPACE", "image", "0.2", "3")); err != nil {
+		t.Fatalf("reader VFUSE: %v", err)
+	}
 	if err := enforcer.Enforce(reader, cmd("GET", "session:1")); err != nil {
 		t.Fatalf("reader GET: %v", err)
 	}

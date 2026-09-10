@@ -241,6 +241,8 @@ func TestDispatchCoversCompoundTypesAndVectors(t *testing.T) {
 	_ = dispatchForTest(t, executor, "VADD_BATCH", "idx", "2", "v2", "0", "1")
 	_ = dispatchForTest(t, executor, "VSEARCH", "idx", "1", "0", "2")
 	_ = dispatchForTest(t, executor, "VSEARCH", "idx", "1", "0", "2", "WITHDOCS", "doc:idx")
+	_ = dispatchForTest(t, executor, "VSIM", "idx", "v1", "2")
+	_ = dispatchForTest(t, executor, "VFUSE", "idx", "SPACE", "text", "1", "0", "SPACE", "image", "0", "1", "1")
 	_ = dispatchForTest(t, executor, "VDEL", "idx", "v1")
 	_ = dispatchForTest(t, executor, "VCOMPACT", "idx")
 

@@ -25,16 +25,34 @@ class FakeClient:
                 n += 1
         return n
 
-    def vadd(self, index_name: str, doc_id: str, vector: List[float]) -> bool:
+    def vadd(self, index_name: str, doc_id: str, vector: List[float], **kwargs) -> bool:
+        self.vecs[(index_name, kwargs.get("space"), doc_id)] = vector
         self.vecs[doc_id] = vector
         return True
 
     def vsearch(
-        self, index_name: str, query_vector: List[float], top_k: int = 4
+        self, index_name: str, query_vector: List[float], top_k: int = 4, **kwargs
     ) -> List[Tuple[str, float]]:
-        return [(doc_id, 1.0) for doc_id in list(self.vecs)[:top_k]]
+        ids = [doc_id for doc_id in self.vecs if isinstance(doc_id, str)]
+        return [(doc_id, 1.0) for doc_id in ids[:top_k]]
 
-    def vdel(self, index_name: str, doc_id: str) -> bool:
+    def vsim(
+        self, index_name: str, doc_id: str, top_k: int = 4, **kwargs
+    ) -> List[Tuple[str, float]]:
+        ids = [
+            other for other in self.vecs if isinstance(other, str) and other != doc_id
+        ]
+        return [(other, 0.9) for other in ids[:top_k]]
+
+    def vfuse(
+        self, index_name: str, queries, top_k: int = 4, **kwargs
+    ) -> List[Tuple[str, float]]:
+        ids = [doc_id for doc_id in self.vecs if isinstance(doc_id, str)]
+        return [(doc_id, 0.8) for doc_id in ids[:top_k]]
+
+    def vdel(self, index_name: str, doc_id: str, **kwargs) -> bool:
+        space = kwargs.get("space")
+        self.vecs.pop((index_name, space, doc_id), None)
         return self.vecs.pop(doc_id, None) is not None
 
 
@@ -54,6 +72,16 @@ def test_remember_without_vector_is_just_state() -> None:
     mem.remember("session", '{"step": 2}')
     assert mem.get("session") == '{"step": 2}'
     assert mem.recall([0.0]) == []
+
+
+def test_similar_and_fuse() -> None:
+    mem = TenantMemory(FakeClient())
+    mem.remember("a", "alpha", vector=[1.0, 0.0])
+    mem.remember("b", "beta", vector=[0.9, 0.1])
+    hits = mem.similar("a", top_k=1)
+    assert hits[0][0] == "b"
+    fused = mem.fuse({"text": [1.0, 0.0], "image": [1.0, 0.0]}, top_k=1)
+    assert fused[0][0] in {"a", "b"}
 
 
 def test_set_failure_surfaces() -> None:

@@ -266,7 +266,7 @@ func min(a, b int) int {
 	return b
 }
 
-func (g *HNSWGraph) Search(q8 []int8, qInv float32, mmapSlice []byte, dim int, k int, filter func(id int) bool, rowInv []float32, qf32 []float32, qNorm float32, encoding string) []intNode {
+func (g *HNSWGraph) Search(q8 []int8, qInv float32, mmapSlice []byte, dim int, k int, filter func(id int) bool, rowInv []float32, qf32 []float32, qNorm float32, encoding string, efSearch int) []intNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	if g.Size == 0 || k <= 0 {
@@ -289,7 +289,10 @@ func (g *HNSWGraph) Search(q8 []int8, qInv float32, mmapSlice []byte, dim int, k
 		}
 	}
 
-	ef := g.EfSearch
+	ef := efSearch
+	if ef <= 0 {
+		ef = g.EfSearch
+	}
 	if ef <= 0 {
 		ef = DefaultEfSearch
 	}
