@@ -45,6 +45,7 @@ Redis replacement. All-in-one AI database. Cheaper than Pinecone. Scales to bill
 - [Home](https://dbxdb.co.in/)
 - [Features](https://dbxdb.co.in/features.html)
 - [Walkthrough](https://dbxdb.co.in/demo.html)
+- [Updates](https://dbxdb.co.in/posts.html)
 - [Docs](https://dbxdb.co.in/docs/)
 - [Quickstart](https://dbxdb.co.in/docs/quickstart.html)
 - [Architecture](https://dbxdb.co.in/docs/architecture.html)

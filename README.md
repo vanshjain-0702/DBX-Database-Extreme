@@ -405,7 +405,8 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | What | Where |
 |---|---|
 | Public site | [dbxdb.co.in](https://dbxdb.co.in/) — source in [`website/`](website/). Local preview: `make site`. DNS steps: [`website/README.md`](website/README.md). |
-| Show demo video | [Walkthrough](https://dbxdb.co.in/demo.html) — recall clip (`VSEARCH` / `VSIM` / `VFUSE`) plus the 5 min 18 s product tour. Files: [vector-search.mp4](https://dbxdb.co.in/assets/vector-search.mp4), [demo.mp4](https://dbxdb.co.in/assets/demo.mp4). |
+| Show demo video | [Walkthrough](https://dbxdb.co.in/demo.html) — narrated recall clip (`VSEARCH` / `VSIM` / `VFUSE`) plus the 5 min 18 s product tour. Files: [vector-search.mp4](https://dbxdb.co.in/assets/vector-search.mp4), [demo.mp4](https://dbxdb.co.in/assets/demo.mp4). |
+| Updates | [posts.html](https://dbxdb.co.in/posts.html) — latest engine notes; header badge until you open the page. RSS: [posts.xml](https://dbxdb.co.in/posts.xml). |
 | Incubation pitch | [pitch.html](https://dbxdb.co.in/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
