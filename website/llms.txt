@@ -6,6 +6,7 @@
 - Contact: hello@dbxdb.io
 - License: Business Source License 1.1 (Apache 2.0 after four years)
 - Source: https://github.com/vanshjain-0702/DBX-Database-Extreme
+- Version: 1.2.0 (Isolation Kernel + VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE). Last published GHCR tag: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0 until GitHub Release v1.2.0 is cut.
 
 ## What it is
 
@@ -31,7 +32,7 @@ Public site source: website/.
 Live: https://dbxdb.co.in/
 Incubation pitch: https://dbxdb.co.in/pitch.html
 Local preview: `make site`. Public host: dbxdb.co.in.
-Docker: deploy/Dockerfile. GHCR ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0 (and :latest on GitHub Release). Image defaults to DBX_ISOLATION_MODE=strict; docker run requires DBX_KEK (64 hex) or -e DBX_ISOLATION_MODE=inprocess. Compose: cp .env.example .env (repo root, include KEK), then docker compose --env-file .env -f deploy/docker-compose.yml up --build (or make docker-up). Python: pip install -e sdk/python before `from dbx import DBXClient`.
+Docker: deploy/Dockerfile. Product is 1.2.0. Last published GHCR tag is ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0 until GitHub Release v1.2.0 (:v1.2.0 and :latest track Releases, not every push). Image defaults to DBX_ISOLATION_MODE=strict; docker run requires DBX_KEK (64 hex) or -e DBX_ISOLATION_MODE=inprocess. Compose: cp .env.example .env (repo root, include KEK), then docker compose --env-file .env -f deploy/docker-compose.yml up --build (or make docker-up). Python: pip install -e sdk/python before `from dbx import DBXClient`. SDK version 1.2.0.
 
 Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default
 superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.

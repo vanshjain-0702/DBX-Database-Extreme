@@ -3,14 +3,22 @@
   <channel>
     <title>DBX updates</title>
     <link>https://dbxdb.co.in/posts.html</link>
-    <description>What shipped in DBX — tenant recall, Isolation Kernel, walkthrough. Not a mail list.</description>
+    <description>What shipped in DBX — v1.2.0 recall, Isolation Kernel, walkthrough. Not a mail list.</description>
     <language>en-us</language>
+    <lastBuildDate>Wed, 10 Sep 2026 18:00:00 GMT</lastBuildDate>
+    <item>
+      <title>v1.2.0 — recall an agent can actually call</title>
+      <link>https://dbxdb.co.in/posts.html#v1-2-0-2026-09-10</link>
+      <guid isPermaLink="true">https://dbxdb.co.in/posts.html#v1-2-0-2026-09-10</guid>
+      <pubDate>Wed, 10 Sep 2026 18:00:00 GMT</pubDate>
+      <description>v1.2.0 keeps Isolation Kernel and finishes the recall surface: VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE, playground tabs, public site. Better as a product; same 2.304 ms ANN p50 and 14–17 MiB strict idle RSS. GHCR :v1.2.0 publishes when the Release is tagged.</description>
+    </item>
     <item>
       <title>Tenant recall: VSEARCH, VSIM, VFUSE</title>
       <link>https://dbxdb.co.in/posts.html#recall-2026-09-10</link>
       <guid>https://dbxdb.co.in/posts.html#recall-2026-09-10</guid>
       <pubDate>Thu, 10 Sep 2026 00:00:00 GMT</pubDate>
-      <description>Per-tenant recall now covers semantic VSEARCH (MIN_SCORE, EF, SPACE), similar-to-id VSIM, and late-fusion VFUSE. Embeddings stay with the caller. Certified ANN p50 is 2.304 ms.</description>
+      <description>Engine detail for the v1.2.0 cut. Per-tenant recall covers semantic VSEARCH (MIN_SCORE, EF, SPACE), similar-to-id VSIM, and late-fusion VFUSE. Embeddings stay with the caller. Certified ANN p50 is 2.304 ms.</description>
     </item>
     <item>
       <title>v1.1.0 — Isolation Kernel</title>

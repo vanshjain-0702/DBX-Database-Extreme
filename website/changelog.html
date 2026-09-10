@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Changelog — DBX</title>
-  <meta name="description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness, and the 15-minute Python path shipped 28 August 2026. Releases on GitHub.">
+  <meta name="description" content="DBX v1.2.0 is the recall cut: Isolation Kernel plus VSEARCH MIN_SCORE/EF/SPACE, VSIM, and VFUSE. Certified ANN p50 is still 2.304 ms. Releases on GitHub.">
   <meta property="og:title" content="Changelog — DBX">
-  <meta property="og:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
+  <meta property="og:description" content="v1.2.0: recall surface, playground, public site. Same Isolation Kernel. Same 2.304 ms ANN p50.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.co.in/changelog.html">
   <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Changelog — DBX">
-  <meta name="twitter:description" content="DBX v1 is GO for the single-node profile. Usage, hibernate, soak harness shipped. Remaining follow-up: engine-package coverage.">
+  <meta name="twitter:description" content="v1.2.0: recall surface, playground, public site. Same Isolation Kernel. Same 2.304 ms ANN p50.">
   <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
   <meta name="theme-color" content="#051c33">
   <link rel="canonical" href="https://dbxdb.co.in/changelog.html">
@@ -31,17 +31,24 @@
       <div class="wrap">
         <p class="kicker">What shipped</p>
         <h1>Changelog</h1>
-        <p>Signed notes live on <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases">GitHub Releases</a>. This page is the public summary, not a substitute for git tags.</p>
+        <p>DBX is a per-tenant memory engine. Version 1.2.0 is the recall cut: Isolation Kernel plus <code>VSEARCH</code> <code>MIN_SCORE</code> / <code>EF</code> / <code>SPACE</code>, <code>VSIM</code>, and <code>VFUSE</code>. Certified ANN p50 is still 2.304 ms. Isolation Kernel <code>strict</code> idle RSS is still ~14–17 MiB per worker. The last published GHCR tag is <code>:v1.1.0</code> until this tree is cut as GitHub Release v1.2.0. Signed notes live on <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases">GitHub Releases</a>. This page is the public summary, not a substitute for git tags.</p>
       </div>
     </header>
     <section class="section">
       <div class="wrap">
         <div class="change-list">
-          <article class="change">
+          <article class="change" id="v1-2-0">
             <time datetime="2026-09-10">10 Sep 2026</time>
             <div>
-              <h2>Tenant recall — VSEARCH, VSIM, VFUSE</h2>
-              <p>Per-tenant vector search now covers the three commands an agent actually issues: semantic <code>VSEARCH</code> (plus <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>), similar-to-id <code>VSIM</code> (self excluded), and late-fusion <code>VFUSE</code> across named spaces. Embeddings stay with the caller; DBX does not run CLIP or MiniLM. Named spaces are extra mmap/HNSW files in the same tenant directory, so backup/quota/shred still hit one customer. The vector playground exposes Semantic / Similar-to-id / Multimodal. Walkthrough: <a href="demo.html">demo.html</a> (narrated recall clip + original product tour). The public site adds in-browser leak / cosine / density / shred sketches, a fit quiz, clickable video chapters, and an <a href="posts.html">Updates</a> page with a header unread badge. Merged as <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/39">PR #39</a>.</p>
+              <h2>v1.2.0 — recall surface, playground, and the public site</h2>
+              <p>v1.1.0 shipped Isolation Kernel and a <code>VSEARCH</code>-shaped recall path. v1.2.0 is the same kernel with the recall verbs an agent actually uses, plus the site that demonstrates them. Isolation numbers, certified ANN p50, and the 100-tenant / 100k-vector-per-tenant envelope are unchanged. This is a better product cut, not a faster kernel.</p>
+              <ul>
+                <li><strong>Recall verbs.</strong> <code>VSEARCH</code> takes <code>MIN_SCORE</code>, <code>EF</code>, and optional <code>SPACE</code>. <code>VSIM</code> ranks neighbors of a stored id (self excluded). <code>VFUSE</code> late-fuses query vectors with per-vector weights (weighted cosine sum, not a multimodal model). Optional <code>SPACE</code> on <code>VADD</code> / <code>VDEL</code> / <code>VCOMPACT</code>.</li>
+                <li><strong>Python / dashboard.</strong> <code>vsearch</code> / <code>vsim</code> / <code>vfuse</code> on the SDK. <code>TenantMemory.similar</code> and <code>TenantMemory.fuse</code>. Playground tabs: Semantic, Similar-to-id, Multimodal. Dashboard package 1.2.0. HELLO / INFO / <code>GET /info</code> stamp <code>1.2.0</code>.</li>
+                <li><strong>Site.</strong> Toy cosine bench, density slider, fit quiz, playground hotspots, DEK-shred sketch, clickable video chapters, Updates page with a header badge, narrated two-minute recall clip, labeled shared-cluster vs DBX isolation sketch. ⌘K indexes <code>row.k</code> keywords.</li>
+                <li><strong>Container.</strong> <code>ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0</code> publishes when GitHub Release v1.2.0 is tagged. Until then pull <code>:v1.1.0</code> for Isolation Kernel and run this tree from source for recall verbs.</li>
+              </ul>
+              <p>Merged as <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/39">PR #39</a>, <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/40">PR #40</a>, and <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/41">PR #41</a>. Walkthrough: <a href="demo.html">demo.html</a>. Updates: <a href="posts.html#v1-2-0-2026-09-10">v1.2.0 post</a>.</p>
             </div>
           </article>
           <article class="change">

@@ -24,6 +24,7 @@
   <a href="https://dbxdb.co.in/demo.html"><img src="https://img.shields.io/badge/demo-watch%20video-0a66c2" alt="Show demo video" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
+  <img src="https://img.shields.io/badge/version-1.2.0-0a66c2" alt="Version 1.2.0" />
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
 </p>
 
@@ -53,8 +54,15 @@ Tenant recall (Semantic / Similar-to-id / Multimodal) on a live engine, then the
 
 ## Release status
 
-**DBX v1 is cleared for single-node production** under the supported preview
-profile: 100 tenants/node, 100k vectors/tenant, durable strings + vectors.
+**DBX v1.2.0 is the recall cut** on the same single-node production profile as
+v1.1.0: 100 tenants/node, 100k vectors/tenant, durable strings + vectors.
+Isolation Kernel (`strict` idle RSS ~14–17 MiB/worker) is unchanged. Certified
+ANN p50 is still 2.304 ms. What is new: `VSEARCH` `MIN_SCORE` / `EF` / `SPACE`,
+`VSIM` (neighbors of a stored id), `VFUSE` (weighted cosine sum, not a
+multimodal model), Python helpers, playground tabs, and the public site that
+demonstrates them. This is a better product an agent can call, not a faster
+kernel.
+
 Linux CI enforces race detection, coverage floors, noisy-neighbor isolation, and
 the 100k-vector harness. Optional async WAL replicas can be provisioned without
 putting writes through Raft; cluster/sharding, tiering, and non-string RESP
@@ -183,8 +191,10 @@ customers who each need memory, DBX is built for exactly that shape.
 The Docker image (`deploy/Dockerfile`) embeds the dashboard, puts `dbx-orchestrator`
 and `dbx-server` on `PATH`, and **defaults to `DBX_ISOLATION_MODE=strict`**.
 Missing `DBX_KEK` (64 hex characters) is a boot failure, not plaintext fallback.
-`v1.1.0` is published as `ghcr.io/vanshjain-0702/dbx-orchestrator` (`:v1.1.0` and
-`:latest` track GitHub Releases, not every push). Isolation details:
+Product version is **1.2.0**. The last published GHCR tag is still
+`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0` until GitHub Release v1.2.0 is
+cut (`:v1.2.0` and `:latest` track Releases, not every push). Run this tree from
+source for the recall verbs before that tag exists. Isolation details:
 [docs/isolation.md](docs/isolation.md).
 
 ### Option 1: Docker (published image)

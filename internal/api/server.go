@@ -550,7 +550,7 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 	})))
 	mux.HandleFunc("/info", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprintf(w, `{"version":"1.1.0","engine":"DBX"}`)
+		fmt.Fprintf(w, `{"version":"1.2.0","engine":"DBX"}`)
 	}))
 	mux.HandleFunc("/vaddbin", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

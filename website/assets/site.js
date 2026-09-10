@@ -100,7 +100,7 @@
         "</ul></div>" +
         "</div>" +
         '<div class="legal">' +
-        "<span>BSL 1.1 · Apache 2.0 after four years.</span>" +
+        "<span>BSL 1.1 · Apache 2.0 after four years. Product v1.2.0.</span>" +
         "<span>© 2026 DBX</span>" +
         "</div></footer>";
     }
@@ -964,7 +964,8 @@
     { t: "Get started", s: "Docker, source, Compose", href: "start.html", k: "AUTH :6380 :8000 make run-dev" },
     { t: "Walkthrough", s: "Site + dashboard + recall demo", href: "demo.html", k: "video chapters playground console" },
     { t: "Performance", s: "Certified single-node profile", href: "performance.html", k: "2.304 ms ANN p50 100 tenants" },
-    { t: "Updates", s: "Latest posts on what shipped", href: "posts.html", k: "VSIM VFUSE Isolation Kernel notify" },
+    { t: "Updates", s: "Latest posts on what shipped", href: "posts.html", k: "v1.2.0 VSIM VFUSE Isolation Kernel notify" },
+    { t: "v1.2.0", s: "Recall an agent can actually call", href: "posts.html#v1-2-0-2026-09-10", k: "v1.2.0 VSEARCH VSIM VFUSE SPACE MIN_SCORE" },
     { t: "Recall upgrade", s: "VSEARCH VSIM VFUSE on one tenant", href: "posts.html#recall-2026-09-10", k: "SPACE MIN_SCORE late fusion" },
     { t: "Docs", s: "Thesis, then the ports", href: "docs/index.html", k: "RESP HTTP JWT" },
     { t: "Quickstart", s: "AUTH and first write", href: "docs/quickstart.html", k: "AUTH tenant key_id secret" },
@@ -975,7 +976,7 @@
     { t: "Security", s: "Isolation Kernel", href: "security.html", k: "LUKS Landlock DEK shred WAL" },
     { t: "Contact", s: "hello@dbxdb.io", href: "contact.html", k: "GitHub issues MX" },
     { t: "Incubation pitch", s: "20-slide 16:9 briefing", href: "pitch.html", k: "incubation BSL" },
-    { t: "Changelog", s: "What shipped", href: "changelog.html", k: "v1.1.0 v1.0.0" },
+    { t: "Changelog", s: "What shipped", href: "changelog.html", k: "v1.2.0 v1.1.0 v1.0.0" },
     { t: "License", s: "BSL 1.1", href: "license.html", k: "Apache four years" },
     { t: "Isolation demo", s: "On this page", href: "index.html#demo", home: 1, k: "acme harbor lumen" },
     { t: "Prefix leak", s: "Shared KEYS vs one worker — labeled sketch", href: "index.html#leak", home: 1, k: "KEYS prefix leak tenant" },
