@@ -18,7 +18,7 @@ spec:
       serviceAccountName: dbx-orchestrator-sa
       containers:
       - name: orchestrator
-        image: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0
+        image: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0
         imagePullPolicy: IfNotPresent
         args:
         - -insecure-http=true

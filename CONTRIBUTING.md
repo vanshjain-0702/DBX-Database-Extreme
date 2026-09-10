@@ -60,10 +60,9 @@ vars from the Makefile `run-dev` target and run
 `go run ./cmd/dbx-orchestrator -insecure-http=true`.
 
 Compose: `cp .env.example .env`, fill secrets including 64-hex `DBX_KEK`, then
-`make docker-up` (loads the repo-root `.env`). Product version is 1.2.0. The last
-published image is `ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0` until GitHub
-Release v1.2.0 is tagged; it defaults to isolation `strict`, so `docker run`
-without `DBX_KEK` exits.
+`make docker-up` (loads the repo-root `.env`). The published image is
+`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0` and defaults to isolation
+`strict`, so `docker run` without `DBX_KEK` exits.
 
 Public site copy is [`website/`](website/), live at
 [dbxdb.co.in](https://dbxdb.co.in/).
