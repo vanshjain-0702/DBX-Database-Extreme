@@ -23,14 +23,30 @@ func NewRecovery(wal *WAL, snapshotter *Snapshotter) *Recovery {
 func (r *Recovery) Recover(kv *engine.KVStore, vecStore *engine.VectorStore) error {
 	// Step 1: Load latest snapshot
 	var checkpointSequence uint64
+	var seals []engine.IndexSeal
 	if snap := r.snapshotter.Latest(); snap != "" {
 		hdr, err := r.snapshotter.LoadWithHeader(kv, snap)
 		if err != nil {
 			return fmt.Errorf("recovery: load checkpoint %s: %w", snap, err)
 		}
 		checkpointSequence = hdr.Sequence
+		for _, seal := range hdr.VectorSeals {
+			seals = append(seals, engine.IndexSeal{
+				Key: seal.Key, Dim: seal.Dim, Count: seal.Count, MetaHash: seal.MetaHash,
+			})
+		}
 	}
-	// Step 2: Replay WAL
+	// Step 2: Reopen mmap indexes and verify they match the checkpoint seals
+	// before WAL replay mutates them. Empty seals are legacy checkpoints.
+	if vecStore != nil {
+		if err := vecStore.ReopenPersisted(); err != nil {
+			return fmt.Errorf("recovery: reopen vector indexes: %w", err)
+		}
+		if err := vecStore.VerifySeals(seals); err != nil {
+			return fmt.Errorf("recovery: vector seal mismatch: %w", err)
+		}
+	}
+	// Step 3: Replay WAL
 	records, err := r.wal.ReadAll()
 	if err != nil {
 		return fmt.Errorf("recovery: read wal: %w", err)
@@ -47,11 +63,6 @@ func (r *Recovery) Recover(kv *engine.KVStore, vecStore *engine.VectorStore) err
 			if err := applyRecoveredEffect(kv, vecStore, rec.Sequence, effect); err != nil {
 				return err
 			}
-		}
-	}
-	if vecStore != nil {
-		if err := vecStore.ReopenPersisted(); err != nil {
-			return fmt.Errorf("recovery: reopen vector indexes: %w", err)
 		}
 	}
 	return nil

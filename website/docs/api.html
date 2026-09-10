@@ -38,11 +38,11 @@
         <h2>Tenants</h2>
         <ul>
           <li><code>GET /api/tenants</code> — list</li>
-          <li><code>POST /api/provision</code> — <code>{"id","name","replicas"?}</code>. <code>replicas</code> 0–2. Zero is the certified path. 1 or 2 starts async WAL replicas; the primary still acks locally.</li>
-          <li><code>POST /api/tenants/promote</code> — fail over to a replica; AUTH identity unchanged</li>
-          <li><code>POST /api/tenants/backup</code> — mutation-consistent archive, SHA-256 manifest</li>
-          <li><code>POST /api/tenants/restore</code> — validate and swap, rollback on failure</li>
-          <li><code>POST /api/tenants/delete</code> — stop; <code>purge: true</code> erases that directory only</li>
+          <li><code>POST /api/provision</code> — <code>{"id","name","replicas"?,"vector_encoding"?}</code>. <code>replicas</code> 0–2. Zero is the certified path. 1 or 2 starts async WAL replicas; the primary still acks locally. <code>vector_encoding</code> is <code>sq8</code> (default) or <code>float32</code>.</li>
+          <li><code>POST /api/tenants/promote</code> — fail over to a replica without restarting that replica engine; AUTH identity unchanged</li>
+          <li><code>POST /api/tenants/backup</code> — mutation-consistent archive, SHA-256 manifest and <code>checkpoint_id</code></li>
+          <li><code>POST /api/tenants/restore</code> — validate and swap, rollback on failure; recovery verifies vector seals</li>
+          <li><code>POST /api/tenants/delete</code> — stop; <code>purge: true</code> erases that directory only and returns a forget receipt</li>
           <li><code>GET /api/v1/tenants/{id}/usage</code> — keys, vectors, memory, disk, commands</li>
           <li><code>GET /api/usage</code> — the same meter for every tenant</li>
           <li><code>POST /api/tenants/export</code> / <code>import</code> — portable tenant archive</li>

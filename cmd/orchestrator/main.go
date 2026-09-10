@@ -191,12 +191,13 @@ func main() {
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Replicas int    `json:"replicas"`
+			VectorEncoding string `json:"vector_encoding"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		t, err := manager.Provision(req.ID, req.Name, req.Replicas)
+		t, err := manager.ProvisionWith(req.ID, req.Name, req.Replicas, req.VectorEncoding)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

@@ -31,6 +31,9 @@ func TestBackupArchiveRoundTrip(t *testing.T) {
 	if manifest.CheckpointSequence != 7 {
 		t.Fatalf("checkpoint = %d", manifest.CheckpointSequence)
 	}
+	if manifest.CheckpointID == "" {
+		t.Fatal("checkpoint_id missing")
+	}
 	restoreDir := filepath.Join(t.TempDir(), "restored")
 	if _, err := ExtractAndValidateBackup(archive, restoreDir, "tenant-a", 1<<20); err != nil {
 		t.Fatal(err)

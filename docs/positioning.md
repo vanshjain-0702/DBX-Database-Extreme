@@ -87,10 +87,16 @@ drift apart, because there is no second system to drift from.
 *Proof in code:* `internal/query/executor.go` dispatches KV and vector commands through the
 same executor; `internal/orchestrator/backup.go` archives the whole tenant directory.
 
-*Honest limit:* the periodic `.rdb` snapshot serializes KV only — see
-`internal/persistence/snapshot.go`, where vector entries are explicitly skipped because they
-live in `.vec` mmap files. A single atomic KV+vector point-in-time image does not exist yet.
-Do not claim one.
+*Honest limit:* the periodic `.rdb` snapshot still serializes KV only — vector
+payloads live in `.vec` mmap files. The tenant **backup archive** is the
+point-in-time unit: a maintenance lock writes `.rdb` plus `.vec` / `.vec.meta` /
+`.vec.hnsw` and a `checkpoint_id` over SHA-256 file hashes. Recovery reopens
+mmap indexes and verifies checkpoint `VectorSeals` before WAL replay. Do not
+claim that `.rdb` embeds vectors.
+
+*Proof in code:* `internal/persistence/backup.go` (`checkpoint_id`),
+`internal/persistence/recovery.go` (seal verification),
+`internal/query/executor.go` (`saveTenantCheckpoint`).
 
 ### USP 3 — Cost scales with active tenants, not signed tenants
 Vectors are stored as 8-bit scalar-quantized rows in an mmap'd file, with asymmetric distance

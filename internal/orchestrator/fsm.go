@@ -72,11 +72,11 @@ func (f *OrchestratorFSM) Apply(l *raft.Log) (result interface{}) {
 			if member == nil {
 				continue
 			}
-			if err := f.manager.removeTenant(member, cmd.Purge); err != nil {
+			if _, err := f.manager.removeTenant(member, cmd.Purge, ""); err != nil {
 				return err
 			}
 		}
-		if err := f.manager.removeTenant(cmd.Tenant, cmd.Purge); err != nil {
+		if _, err := f.manager.removeTenant(cmd.Tenant, cmd.Purge, ""); err != nil {
 			return err
 		}
 	case "promote":

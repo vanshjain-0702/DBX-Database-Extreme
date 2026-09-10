@@ -40,6 +40,8 @@ type EngineConfig struct {
 	DefaultTTL          int64  `yaml:"default_ttl"`
 	NumShards           int    `yaml:"num_shards"`
 	MaxVectorsPerTenant int    `yaml:"max_vectors_per_tenant"`
+	// VectorEncoding is sq8 (default, density path) or float32 (opt-in accuracy).
+	VectorEncoding string `yaml:"vector_encoding"`
 }
 
 // PersistenceConfig holds WAL/snapshot settings.

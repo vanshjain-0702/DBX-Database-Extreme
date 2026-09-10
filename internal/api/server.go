@@ -350,6 +350,7 @@ type HTTPServer struct {
 	enforcer         *security.ACLEnforcer
 	auditGuard       *security.AuditGuard
 	backupFn         func(tenantID, outputPath string) (persistence.BackupManifest, error)
+	promoteFn        func(listenAddr string) error
 	reloadACL        func() error
 	tenantID         string
 }
@@ -363,6 +364,11 @@ func NewHTTPServer(cfg *config.ServerConfig, metrics *observability.Metrics, exe
 func (h *HTTPServer) SetBackup(tenantID string, fn func(tenantID, outputPath string) (persistence.BackupManifest, error)) {
 	h.tenantID = tenantID
 	h.backupFn = fn
+}
+
+// SetPromote exposes in-process replica promotion for sandboxed workers.
+func (h *HTTPServer) SetPromote(fn func(listenAddr string) error) {
+	h.promoteFn = fn
 }
 
 // SetACLReload lets the orchestrator push credential changes synchronously.
@@ -512,6 +518,29 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(manifest)
+	})))
+	mux.HandleFunc("/internal/promote", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		if h.promoteFn == nil {
+			http.Error(w, "promote unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var req struct {
+			ListenAddr string `json:"listen_addr"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.ListenAddr == "" {
+			http.Error(w, "listen_addr required", http.StatusBadRequest)
+			return
+		}
+		if err := h.promoteFn(req.ListenAddr); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"promoted"}`))
 	})))
 	mux.HandleFunc("/metrics/prometheus", withCORS(h.internalAPIOnly(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; version=0.0.4")

@@ -101,6 +101,26 @@ func (w *isolatedWorker) CreateBackup(tenantID, outputPath string) (persistence.
 	return manifest, err
 }
 
+func (w *isolatedWorker) BecomePrimary(listenAddr string) error {
+	body, _ := json.Marshal(map[string]string{"listen_addr": listenAddr})
+	req, err := http.NewRequest(http.MethodPost, "http://localhost/internal/promote", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("X-DBX-Internal-Token", w.token)
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := w.httpCl.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		msg, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("worker promote: %s", bytes.TrimSpace(msg))
+	}
+	return nil
+}
+
 func (w *isolatedWorker) getJSON(path string, dest any) error {
 	req, err := http.NewRequest(http.MethodGet, "http://localhost"+path, nil)
 	if err != nil {

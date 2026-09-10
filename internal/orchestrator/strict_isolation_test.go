@@ -410,7 +410,7 @@ func TestStrictModeDeleteShredsKey(t *testing.T) {
 	if _, err := os.Stat(wrap); err != nil {
 		t.Fatalf("no wrapped DEK: %v", err)
 	}
-	if err := m.DeleteTenant(tenant.ID, true); err != nil {
+	if _, err := m.DeleteTenant(tenant.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(wrap); !os.IsNotExist(err) {

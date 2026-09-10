@@ -21,6 +21,11 @@ func Validate(cfg *Config) error {
 	if _, err := ParseBytes(cfg.Engine.MaxMemory); err != nil {
 		return fmt.Errorf("config: max_memory: %w", err)
 	}
+	encoding, err := NormalizeVectorEncoding(cfg.Engine.VectorEncoding)
+	if err != nil {
+		return fmt.Errorf("config: vector_encoding: %w", err)
+	}
+	cfg.Engine.VectorEncoding = encoding
 	switch cfg.Persistence.WALSync {
 	case "always", "everysec":
 		// valid
