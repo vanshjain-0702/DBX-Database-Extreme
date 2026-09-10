@@ -101,7 +101,7 @@
             <div class="term-out" data-term aria-live="polite"></div>
             <form class="term-form" data-term-form>
               <span class="term-prompt" data-term-prompt>acme&gt;</span>
-              <input name="cmd" autocomplete="off" spellcheck="false" aria-label="Type a sketch command" placeholder="AUTH harbor · SET session:1 hello · GET · VADD">
+              <input name="cmd" autocomplete="off" spellcheck="false" aria-label="Type a sketch command" placeholder="AUTH harbor · SET session:1 hello · GET · VADD · VSIM">
               <button type="submit" class="chip">Send</button>
             </form>
           </div>
@@ -127,10 +127,18 @@
       </div>
     </aside>
 
+    <div class="wrap-wide" style="padding-top:1.1rem">
+      <aside class="news-strip" aria-label="Latest update">
+        <p class="kicker">New · 10 Sep 2026</p>
+        <p>Tenant recall now covers <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code>. The header badge marks unread posts until you open Updates.</p>
+        <p><a href="posts.html#recall-2026-09-10">Read the post →</a></p>
+      </aside>
+    </div>
+
     <div class="cmd-rail" aria-hidden="true">
       <div class="cmd-rail__track">
-        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
-        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>VSIM</span><span>VFUSE</span><span>SPACE</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>VSIM</span><span>VFUSE</span><span>SPACE</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
       </div>
     </div>
 
@@ -181,6 +189,30 @@
       </div>
     </section>
 
+    <section class="section-tight" id="leak">
+      <div class="wrap" data-in>
+        <p class="kicker">The failure mode</p>
+        <h2>A missing prefix leaks. A tenant worker cannot.</h2>
+        <p class="lede">Left: one process, two logical DBs, <code>KEYS user:*</code>. Right: two DBX engines. Browser sketch, not a live node.</p>
+        <div class="interact" id="leak-demo">
+          <div class="interact-bar">
+            <button type="button" class="btn" id="leak-run">Run both traces</button>
+          </div>
+          <div class="leak-grid">
+            <div class="leak-pane">
+              <h3>Shared cluster + prefix</h3>
+              <div class="leak-log" id="leak-shared" aria-live="polite">Idle. Press run.</div>
+            </div>
+            <div class="leak-pane">
+              <h3>DBX · one worker per tenant</h3>
+              <div class="leak-log" id="leak-dbx" aria-live="polite">Idle. Press run.</div>
+            </div>
+          </div>
+          <p class="note">The left pane is the accident this product exists to make impossible. The right pane is the invariant: AUTH switches process, not a key namespace.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="section-tight" id="claims">
       <div class="wrap" data-in>
         <p class="kicker">What has to stay true in the code</p>
@@ -198,7 +230,7 @@
             <div class="usp-num">02</div>
             <div>
               <h3>State and memory in one engine</h3>
-              <p>KV with TTL and HNSW vectors, one process, one connection, one directory, one backup archive.</p>
+              <p>KV with TTL and HNSW vectors, one process, one connection, one directory, one backup archive. Recall is <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code> on that tenant — embeddings stay with the caller.</p>
             </div>
           </article>
           <article class="usp">
@@ -228,17 +260,59 @@
       </div>
     </section>
 
+    <section class="section" id="recall-bench">
+      <div class="wrap" data-in>
+        <p class="kicker">Recall · in-browser</p>
+        <h2>VSIM, SPACE, and VFUSE on toy vectors.</h2>
+        <p class="lede">Six 3-d stand-ins. Cosine in the browser. Not HNSW, not a live node, not a model. The wire on a real engine is the same shape.</p>
+        <div class="interact">
+          <div class="interact-bar">
+            <label>Mode
+              <select id="recall-mode">
+                <option value="vsearch">VSEARCH SPACE text</option>
+                <option value="space-image">VSEARCH SPACE image</option>
+                <option value="vsim" selected>VSIM alpha</option>
+                <option value="vfuse">VFUSE text+image</option>
+              </select>
+            </label>
+            <label>MIN_SCORE <span id="recall-min-val">0.00</span>
+              <input id="recall-min" type="range" min="0" max="0.95" step="0.05" value="0">
+            </label>
+            <span id="recall-weights" hidden>
+              <label>W text
+                <input id="recall-w-text" type="range" min="0.1" max="0.9" step="0.1" value="0.6">
+              </label>
+              <label>W image
+                <input id="recall-w-img" type="range" min="0.1" max="0.9" step="0.1" value="0.4">
+              </label>
+            </span>
+          </div>
+          <p class="muted" id="recall-meta"></p>
+          <ol class="recall-list" id="recall-out"></ol>
+          <p class="note">Certified ANN p50 on the published profile is 2.304 ms. This widget does not measure that. Embeddings stay with the caller; DBX does not run CLIP or MiniLM.</p>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="console">
       <div class="wrap-wide" data-in>
         <p class="kicker">Operator UI, in the binary</p>
         <h2>This is the console you actually get.</h2>
-        <p class="lede">Not a mock. Screens from the embedded dashboard: tenants, overview, and the RESP console.</p>
+        <p class="lede">Not a mock. Screens from the embedded dashboard: the vector playground, tenants, overview, and the RESP console. Click the numbered pins on the playground.</p>
         <div class="product-shots">
-          <figure>
-            <img src="assets/product/tenants.png" width="1600" height="1000" alt="DBX dashboard tenant list with isolated engines">
-            <figcaption>Tenants — each row is an engine, not a namespace</figcaption>
+          <figure class="shot-hot">
+            <img src="assets/product/playground.png" width="1600" height="1000" alt="DBX vector playground: semantic, similar-to-id, and multimodal fusion">
+            <button type="button" class="hotspot on" style="left:28%;top:38%" data-spot="tabs" aria-label="Similarity modes">1</button>
+            <button type="button" class="hotspot" style="left:28%;top:46%" data-spot="id" aria-label="Stored vector id">2</button>
+            <button type="button" class="hotspot" style="left:26%;top:54%" data-spot="floor" aria-label="MIN_SCORE and EF">3</button>
+            <button type="button" class="hotspot" style="left:72%;top:42%" data-spot="hits" aria-label="VSIM results">4</button>
+            <figcaption>Playground — VSEARCH, VSIM, VFUSE on one tenant</figcaption>
           </figure>
           <div class="shot-stack">
+            <figure>
+              <img src="assets/product/tenants.png" width="1200" height="800" alt="DBX dashboard tenant list with isolated engines">
+              <figcaption>Tenants</figcaption>
+            </figure>
             <figure>
               <img src="assets/product/overview.png" width="1200" height="800" alt="DBX dashboard overview for one tenant">
               <figcaption>Overview</figcaption>
@@ -248,6 +322,12 @@
               <figcaption>Console</figcaption>
             </figure>
           </div>
+        </div>
+        <div class="spot-notes">
+          <p class="spot-note" data-spot="tabs">Semantic is <code>VSEARCH</code> with a query vector. Similar-to-id is <code>VSIM</code> — load that stored row, exclude self. Multimodal is <code>VFUSE</code> across named <code>SPACE</code> graphs. DBX does not run CLIP or MiniLM.</p>
+          <p class="spot-note" data-spot="id" hidden>This capture is <code>VSIM test_index alpha</code>. The engine reads the stored embedding for <code>alpha</code> and ranks everyone else in that tenant index.</p>
+          <p class="spot-note" data-spot="floor" hidden><code>MIN_SCORE</code> drops weak cosine. <code>EF</code> is HNSW search breadth for this query only. <code>SPACE</code> selects a named graph in the same tenant directory.</p>
+          <p class="spot-note" data-spot="hits" hidden>Live ranks: <code>bravo</code> 36.69, <code>charlie</code> 10.88. Cosine × 100. Self (<code>alpha</code>) is excluded. Not a screenshot of random floats.</p>
         </div>
       </div>
     </section>
@@ -313,6 +393,52 @@
       </div>
     </section>
 
+    <section class="section-tight" id="density">
+      <div class="wrap" data-in>
+        <p class="kicker">Idle cost</p>
+        <h2>Density is RSS, not a price list.</h2>
+        <p class="lede">Isolation Kernel <code>strict</code> idle workers sit in the 14–17 MiB band. This slider multiplies the midpoint. No invented dollar figure.</p>
+        <div class="interact" id="density-demo">
+          <label>Idle tenants <span id="density-n-val">12</span>
+            <input id="density-n" type="range" min="1" max="100" step="1" value="12">
+          </label>
+          <div class="density-readout"><b id="density-rss">186 MiB</b> estimated idle RSS</div>
+          <p class="muted" id="density-note"></p>
+          <p class="note">CI soaks 12 idle / 4 active. Operators run <code>make soak</code> (100 idle / 25 active). That is not a 100-orchestrator-process soak.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight" id="quiz">
+      <div class="wrap" data-in>
+        <p class="kicker">Fit check</p>
+        <h2>Four questions. A verdict, not a lead form.</h2>
+        <form class="quiz interact" id="fit-quiz">
+          <fieldset>
+            <legend>1. How do you isolate customers?</legend>
+            <label><input type="radio" name="q1" value="prefix"> Key prefix on a shared Redis / cache</label>
+            <label><input type="radio" name="q1" value="tenant"> One process, directory, WAL, and HNSW per tenant</label>
+          </fieldset>
+          <fieldset>
+            <legend>2. Who produces embeddings?</legend>
+            <label><input type="radio" name="q2" value="caller"> The caller. DBX stores the floats.</label>
+            <label><input type="radio" name="q2" value="clip"> DBX runs CLIP or MiniLM in the engine</label>
+          </fieldset>
+          <fieldset>
+            <legend>3. What is Isolation Kernel?</legend>
+            <label><input type="radio" name="q3" value="kernel"> Own process + Landlock + encrypted WAL/meta/graph on Linux <code>strict</code></label>
+            <label><input type="radio" name="q3" value="soc2"> SOC 2, plus a shared-heap sandbox</label>
+          </fieldset>
+          <fieldset>
+            <legend>4. Do you need SQL joins as the system of record?</legend>
+            <label><input type="radio" name="q4" value="kv"> No. KV + vectors in front of the system of record.</label>
+            <label><input type="radio" name="q4" value="sql"> Yes. Joins, transactions, reporting live here.</label>
+          </fieldset>
+          <button type="submit" class="btn">See the verdict</button>
+          <div id="quiz-out" hidden></div>
+        </form>
+      </div>
+    </section>
 
     <section class="section" id="walkthrough">
       <div class="wrap" data-in data-film>

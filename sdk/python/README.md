@@ -22,6 +22,8 @@ mem = TenantMemory.open(plane, "acme-corp")
 mem.remember("session:42", '{"step": 1}')
 mem.remember("doc:1", "customer prefers dark mode", vector=[0.1, 0.2, 0.9])
 print(mem.recall([0.1, 0.2, 0.8]))
+print(mem.similar("doc:1"))
+print(mem.fuse({"text": [0.1, 0.2], "image": [0.3, 0.4]}, weights=[0.6, 0.4]))
 mem.forget("doc:1")
 plane.shred("acme-corp")
 ```

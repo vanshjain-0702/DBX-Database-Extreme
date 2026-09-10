@@ -81,6 +81,35 @@
             <p>SQ8 mmap rows stay plaintext so idle tenants live in page cache. DBX encrypts ids, the graph, WAL, and checkpoints. For embedding confidentiality at rest, put <code>DBX_DATA_DIR</code> on LUKS or fscrypt and set <code>DBX_REQUIRE_DISK_ENCRYPTION=1</code>. Details in <a href="docs/positioning.html">positioning</a> and the isolation doc in the repo.</p>
           </article>
         </div>
+
+        <div class="interact" id="shred-demo" style="margin-top:1.6rem">
+          <p class="kicker">Forget receipt</p>
+          <h2>Revoke the DEK. Watch what dies.</h2>
+          <p class="lede">Isolation Kernel encrypts WAL, checkpoints, vector ids, and the HNSW graph. SQ8 rows stay mmap plaintext unless the volume is LUKS/fscrypt. Browser sketch, not a live shred.</p>
+          <div class="shred-grid">
+            <article class="shred-card" data-shred="wal" data-live="WAL frames, sequenced, CRC, encrypted under the tenant DEK.">
+              <h3>WAL</h3>
+              <p class="shred-body">WAL frames, sequenced, CRC, encrypted under the tenant DEK.</p>
+            </article>
+            <article class="shred-card" data-shred="meta" data-live="Checkpoints and vector ids sealed with the same key.">
+              <h3>Meta / ids</h3>
+              <p class="shred-body">Checkpoints and vector ids sealed with the same key.</p>
+            </article>
+            <article class="shred-card" data-shred="graph" data-live="HNSW graph ciphertext. Neighbors without a key are noise.">
+              <h3>HNSW graph</h3>
+              <p class="shred-body">HNSW graph ciphertext. Neighbors without a key are noise.</p>
+            </article>
+            <article class="shred-card" data-shred="vec" data-live="SQ8 .vec rows. mmap plaintext so idle tenants sit in page cache.">
+              <h3>.vec rows</h3>
+              <p class="shred-body">SQ8 .vec rows. mmap plaintext so idle tenants sit in page cache.</p>
+            </article>
+          </div>
+          <div class="btn-row">
+            <button type="button" class="btn" id="shred-run">Revoke DEK</button>
+            <button type="button" class="btn btn-ghost" id="shred-reset">Restore keys</button>
+          </div>
+        </div>
+
         <p class="muted">v1 is a single-node profile. Raft and cluster mode fail closed. Optional async WAL replicas ack on the primary; replica lag is possible. Details in <a href="docs/architecture.html">architecture</a>.</p>
       </div>
     </section>

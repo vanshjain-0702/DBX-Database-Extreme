@@ -52,6 +52,7 @@
         "<li><a href=\"" + href("performance.html") + '"' + current("performance") + ">Performance</a></li>" +
         "</ul></li>" +
         "<li><a href=\"" + href("docs/index.html") + '"' + docsMark + ">Docs</a></li>" +
+        "<li><a href=\"" + href("posts.html") + '"' + current("posts") + ">Updates<span class=\"nav-badge\" data-posts-badge hidden>1</span></a></li>" +
         "<li><a href=\"" + href("pricing.html") + '"' + current("pricing") + ">Pricing</a></li>" +
         "<li><a href=\"" + href("security.html") + '"' + current("security") + ">Security</a></li>" +
         "<li><a href=\"" + href("contact.html") + '"' + current("contact") + ">Contact</a></li>" +
@@ -79,11 +80,13 @@
         "<li><a href=\"" + href("start.html") + '">Get started</a></li>' +
         "<li><a href=\"" + href("demo.html") + '">Walkthrough</a></li>' +
         "<li><a href=\"" + href("performance.html") + '">Performance</a></li>' +
+        "<li><a href=\"" + href("posts.html") + '">Updates</a></li>' +
         "<li><a href=\"" + href("pricing.html") + '">Pricing</a></li>' +
         "</ul></div>" +
         "<div><h2>Docs &amp; legal</h2><ul>" +
         "<li><a href=\"" + href("docs/index.html") + '">Documentation</a></li>' +
         "<li><a href=\"" + href("security.html") + '">Security</a></li>' +
+        "<li><a href=\"" + href("posts.html") + '">Updates</a></li>' +
         "<li><a href=\"" + href("changelog.html") + '">Changelog</a></li>' +
         "<li><a href=\"" + href("license.html") + '">License</a></li>' +
         "<li><a href=\"" + href("privacy.html") + '">Privacy</a></li>' +
@@ -315,6 +318,7 @@
     { cmd: "AUTH acme:writer ***", wait: 420, run: function () { authed = "acme"; } },
     { cmd: 'SET session:42 {"thread":"onboarding","step":3}', wait: 520, run: function () { write("acme", "session", "onboarding · step 3"); } },
     { cmd: "VADD memories doc:1 [0.12, 0.81, 0.44]", wait: 560, run: function () { write("acme", "vector"); } },
+    { cmd: "VSIM memories doc:1 3", wait: 640, run: function () { reply("1) doc:2  0.88   — neighbors of a stored id, this engine only"); } },
     { cmd: "GET session:42", wait: 480, run: function () { reply(get("acme")); } },
     { cmd: "AUTH harbor:writer ***", wait: 640, run: function () { authed = "harbor"; log("switched identity — this is a different engine"); } },
     { cmd: "GET session:42", wait: 520, run: function () { reply("(nil)  — harbor has no such key"); } },
@@ -457,8 +461,14 @@
       } else if (verb === "VADD") {
         write(authed, "vector");
         reply("(integer) 1");
+      } else if (verb === "VSEARCH") {
+        reply("1) doc:1  0.94   — cosine on this engine. embeddings are caller floats.");
+      } else if (verb === "VSIM") {
+        reply("1) doc:2  0.88   — neighbors of a stored id; self excluded");
+      } else if (verb === "VFUSE") {
+        reply("1) doc:1  1.12   — weighted sum of per-space cosine; DBX does not run a model");
       } else {
-        reply("(error) sketch understands AUTH, SET, GET, VADD");
+        reply("(error) sketch understands AUTH, SET, GET, VADD, VSEARCH, VSIM, VFUSE");
       }
       paintCabinets();
     });
@@ -646,6 +656,7 @@
       { src: "assets/product/overview.png", cap: "Overview — one customer’s WAL, KV, and vectors" },
       { src: "assets/product/explorer.png", cap: "Explorer — inspect keys without leaving the binary" },
       { src: "assets/product/console.png", cap: "Console — AUTH, then RESP against that tenant" },
+      { src: "assets/product/playground.png", cap: "Playground — VSEARCH, VSIM, VFUSE on this tenant" },
       { src: "assets/product/dark.png", cap: "Same operator UI, dark" },
     ];
     var img = film.querySelector("[data-film-frame]");
@@ -945,28 +956,35 @@
   });
 
   var catalog = [
-    { t: "Home", s: "Isolation demo", href: "index.html" },
-    { t: "Features", s: "Lifecycle and isolation", href: "features.html" },
-    { t: "Architecture", s: "How a request lands", href: "architecture.html" },
-    { t: "Get started", s: "Docker, source, Compose", href: "start.html" },
-    { t: "Walkthrough", s: "Site + dashboard demo", href: "demo.html" },
-    { t: "Performance", s: "Certified single-node profile", href: "performance.html" },
-    { t: "Docs", s: "Thesis, then the ports", href: "docs/index.html" },
-    { t: "Quickstart", s: "AUTH and first write", href: "docs/quickstart.html" },
-    { t: "Docs · Architecture", s: "Orchestrator and engines", href: "docs/architecture.html" },
-    { t: "API", s: "HTTP lifecycle and RESP", href: "docs/api.html" },
-    { t: "Positioning", s: "What we sell, what we refuse", href: "docs/positioning.html" },
-    { t: "Pricing", s: "BSL 1.1, then talk", href: "pricing.html" },
-    { t: "Security", s: "Isolation Kernel", href: "security.html" },
-    { t: "Contact", s: "hello@dbxdb.io", href: "contact.html" },
-    { t: "Incubation pitch", s: "20-slide 16:9 briefing", href: "pitch.html" },
-    { t: "Changelog", s: "What shipped", href: "changelog.html" },
-    { t: "License", s: "BSL 1.1", href: "license.html" },
-    { t: "Isolation demo", s: "On this page", href: "index.html#demo", home: 1 },
-    { t: "Why it exists", s: "Shared-cluster pain", href: "index.html#why", home: 1 },
-    { t: "Claims", s: "Tenant is the unit", href: "index.html#claims", home: 1 },
-    { t: "Operator console", s: "Screens from the binary", href: "index.html#console", home: 1 },
-    { t: "Fit", s: "Build this / walk away", href: "index.html#fit", home: 1 },
+    { t: "Home", s: "Isolation demo", href: "index.html", k: "AUTH SET GET tenant engine" },
+    { t: "Features", s: "Lifecycle, isolation, recall", href: "features.html", k: "provision backup hibernate VADD" },
+    { t: "Recall surface", s: "VSEARCH, VSIM, VFUSE", href: "features.html#recall", k: "MIN_SCORE EF SPACE WEIGHTS WITHDOCS" },
+    { t: "Architecture", s: "How a request lands", href: "architecture.html", k: "orchestrator Unix socket WAL" },
+    { t: "Get started", s: "Docker, source, Compose", href: "start.html", k: "AUTH :6380 :8000 make run-dev" },
+    { t: "Walkthrough", s: "Site + dashboard + recall demo", href: "demo.html", k: "video chapters playground console" },
+    { t: "Performance", s: "Certified single-node profile", href: "performance.html", k: "2.304 ms ANN p50 100 tenants" },
+    { t: "Updates", s: "Latest posts on what shipped", href: "posts.html", k: "VSIM VFUSE Isolation Kernel notify" },
+    { t: "Recall upgrade", s: "VSEARCH VSIM VFUSE on one tenant", href: "posts.html#recall-2026-09-10", k: "SPACE MIN_SCORE late fusion" },
+    { t: "Docs", s: "Thesis, then the ports", href: "docs/index.html", k: "RESP HTTP JWT" },
+    { t: "Quickstart", s: "AUTH and first write", href: "docs/quickstart.html", k: "AUTH tenant key_id secret" },
+    { t: "Docs · Architecture", s: "Orchestrator and engines", href: "docs/architecture.html", k: "Landlock cgroup checkpoint_id" },
+    { t: "API", s: "HTTP lifecycle and RESP", href: "docs/api.html", k: "provision hibernate usage shred" },
+    { t: "Positioning", s: "What we sell, what we refuse", href: "docs/positioning.html", k: "not Redis not SOC 2 not CLIP" },
+    { t: "Pricing", s: "BSL 1.1, then talk", href: "pricing.html", k: "self-host managed" },
+    { t: "Security", s: "Isolation Kernel", href: "security.html", k: "LUKS Landlock DEK shred WAL" },
+    { t: "Contact", s: "hello@dbxdb.io", href: "contact.html", k: "GitHub issues MX" },
+    { t: "Incubation pitch", s: "20-slide 16:9 briefing", href: "pitch.html", k: "incubation BSL" },
+    { t: "Changelog", s: "What shipped", href: "changelog.html", k: "v1.1.0 v1.0.0" },
+    { t: "License", s: "BSL 1.1", href: "license.html", k: "Apache four years" },
+    { t: "Isolation demo", s: "On this page", href: "index.html#demo", home: 1, k: "acme harbor lumen" },
+    { t: "Prefix leak", s: "Shared KEYS vs one worker", href: "index.html#leak", home: 1, k: "KEYS prefix leak tenant" },
+    { t: "Why it exists", s: "Shared-cluster pain", href: "index.html#why", home: 1, k: "noisy neighbor dual write" },
+    { t: "Claims", s: "Tenant is the unit", href: "index.html#claims", home: 1, k: "USP Isolation Kernel" },
+    { t: "Recall bench", s: "Toy cosine VSIM VFUSE", href: "index.html#recall-bench", home: 1, k: "VSIM VFUSE SPACE MIN_SCORE" },
+    { t: "Operator console", s: "Screens from the binary", href: "index.html#console", home: 1, k: "playground VSIM bravo" },
+    { t: "Density", s: "Idle RSS × tenants", href: "index.html#density", home: 1, k: "15.5 MiB strict idle" },
+    { t: "Fit quiz", s: "Four questions", href: "index.html#quiz", home: 1, k: "SQL CLIP prefix" },
+    { t: "Fit", s: "Build this / walk away", href: "index.html#fit", home: 1, k: "Qdrant Pinecone Postgres" },
   ];
 
   function renderCmdk(q) {
@@ -974,7 +992,7 @@
     var needle = (q || "").trim().toLowerCase();
     cmdkHits = catalog.filter(function (row) {
       if (!needle) return true;
-      return (row.t + " " + row.s).toLowerCase().indexOf(needle) !== -1;
+      return (row.t + " " + row.s + " " + (row.k || "")).toLowerCase().indexOf(needle) !== -1;
     });
     cmdkIndex = 0;
     if (!cmdkHits.length) {
@@ -1329,4 +1347,8 @@
   }
 
   document.documentElement.classList.add("is-ready");
+
+  var interact = document.createElement("script");
+  interact.src = joinRoot(root, "assets/interact.js");
+  document.body.appendChild(interact);
 })();

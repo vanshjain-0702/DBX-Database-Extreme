@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>DBX updates</title>
+    <link>https://dbxdb.co.in/posts.html</link>
+    <description>What shipped in DBX — tenant recall, Isolation Kernel, walkthrough. Not a mail list.</description>
+    <language>en-us</language>
+    <item>
+      <title>Tenant recall: VSEARCH, VSIM, VFUSE</title>
+      <link>https://dbxdb.co.in/posts.html#recall-2026-09-10</link>
+      <guid>https://dbxdb.co.in/posts.html#recall-2026-09-10</guid>
+      <pubDate>Thu, 10 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Per-tenant recall now covers semantic VSEARCH (MIN_SCORE, EF, SPACE), similar-to-id VSIM, and late-fusion VFUSE. Embeddings stay with the caller. Certified ANN p50 is 2.304 ms.</description>
+    </item>
+    <item>
+      <title>v1.1.0 — Isolation Kernel</title>
+      <link>https://dbxdb.co.in/posts.html#kernel-2026-09-05</link>
+      <guid>https://dbxdb.co.in/posts.html#kernel-2026-09-05</guid>
+      <pubDate>Sat, 05 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Linux strict: own process, Landlock, encrypted WAL/meta/graph. SQ8 .vec rows stay mmap plaintext. Not SOC 2.</description>
+    </item>
+    <item>
+      <title>Operator walkthrough</title>
+      <link>https://dbxdb.co.in/posts.html#walkthrough-2026-09-04</link>
+      <guid>https://dbxdb.co.in/posts.html#walkthrough-2026-09-04</guid>
+      <pubDate>Fri, 04 Sep 2026 00:00:00 GMT</pubDate>
+      <description>Site plus live dashboard, engineer voiceover, 140 BPM tech bed.</description>
+    </item>
+    <item>
+      <title>v1.0.0 — single-node GO</title>
+      <link>https://dbxdb.co.in/posts.html#v1-2026-08-28</link>
+      <guid>https://dbxdb.co.in/posts.html#v1-2026-08-28</guid>
+      <pubDate>Fri, 28 Aug 2026 00:00:00 GMT</pubDate>
+      <description>100 tenants/node, 100k vectors/tenant, durable strings + vectors. Raft and cluster fail closed.</description>
+    </item>
+  </channel>
+</rss>

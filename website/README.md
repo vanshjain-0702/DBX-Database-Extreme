@@ -4,7 +4,7 @@
 
 GitHub Pages origin: [https://vanshjain-0702.github.io/DBX-Database-Extreme/](https://vanshjain-0702.github.io/DBX-Database-Extreme/) (redirects here once the custom domain is saved and DNS is live).
 
-**Show demo video:** [Walkthrough](https://dbxdb.co.in/demo.html) (`demo.html` + [`assets/demo.mp4`](assets/demo.mp4)). Also linked from the root [README](../README.md).
+**Show demo video:** [Walkthrough](https://dbxdb.co.in/demo.html) (`demo.html` + [`assets/vector-search.mp4`](assets/vector-search.mp4) recall clip + [`assets/demo.mp4`](assets/demo.mp4) product tour). **Updates:** [posts.html](https://dbxdb.co.in/posts.html) (header badge until you open it; RSS [`posts.xml`](posts.xml)). Also linked from the root [README](../README.md).
 
 **Incubation pitch:** [pitch.html](https://dbxdb.co.in/pitch.html) — live 16:9 deck (arrow keys, full screen). How to present: [PITCH.md](PITCH.md).
 

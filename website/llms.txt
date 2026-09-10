@@ -17,6 +17,8 @@ Async WAL replicas optional (primary acks locally). Raft, cluster, and non-strin
 
 Operator HTTP (JWT on :8000): provision, keys, backup/restore, export/import,
 hibernate/wake, GET /api/v1/tenants/{id}/usage, GET /api/usage.
+Recall (RESP): VSEARCH, VSIM (neighbors of a stored id), VFUSE (late-fusion across named SPACE graphs).
+Embeddings stay with the caller. DBX does not run a model.
 Dashboard Tenant keys: /cluster/{id}/keys (secret shown once).
 Prometheus: GET /metrics (Bearer JWT or internal token in production). JSON: GET /t/{id}/metrics.
 
@@ -41,6 +43,9 @@ Redis replacement. All-in-one AI database. Cheaper than Pinecone. Scales to bill
 ## Pages
 
 - [Home](https://dbxdb.co.in/)
+- [Features](https://dbxdb.co.in/features.html)
+- [Walkthrough](https://dbxdb.co.in/demo.html)
+- [Updates](https://dbxdb.co.in/posts.html)
 - [Docs](https://dbxdb.co.in/docs/)
 - [Quickstart](https://dbxdb.co.in/docs/quickstart.html)
 - [Architecture](https://dbxdb.co.in/docs/architecture.html)

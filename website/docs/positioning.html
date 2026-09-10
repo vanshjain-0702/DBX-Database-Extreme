@@ -66,7 +66,7 @@
         <h2>Five claims that have to stay true</h2>
         <ol>
           <li>The tenant is a first-class object — directory, WAL, HNSW, snapshots.</li>
-          <li>State and memory in one engine — one connection, one backup archive with a <code>checkpoint_id</code>. Periodic <code>.rdb</code> is KV-only; vectors live in <code>.vec</code> files and are bound by seals at restore.</li>
+          <li>State and memory in one engine — one connection, one backup archive with a <code>checkpoint_id</code>. Recall is <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code> on that tenant; embeddings stay with the caller. Periodic <code>.rdb</code> is KV-only; vectors live in <code>.vec</code> files (named <code>SPACE</code> graphs included) and are bound by seals at restore.</li>
           <li>Cost scales with active tenants — SQ8 mmap, idle tenants in page cache.</li>
           <li>Self-hosted single binary — embeddings never leave the network.</li>
           <li>Isolation Kernel — on Linux production a tenant is a sealed process with a Landlock-restricted filesystem, an encrypted WAL/checkpoint/index, and a Unix socket only the orchestrator can open. SQ8 rows stay mmap'd and unencrypted (use fscrypt); data in use is plaintext inside the worker.</li>

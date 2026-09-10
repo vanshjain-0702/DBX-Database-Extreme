@@ -172,7 +172,7 @@
           <article class="card sage">
             <div class="num">USP 02</div>
             <h3>State and memory in one engine</h3>
-            <p>Session KV and semantic recall share a connection, a directory, and a backup zip. There is no second system to drift from.</p>
+            <p>Session KV and semantic recall share a connection, a directory, and a backup zip. There is no second system to drift from. Recall is VSEARCH, VSIM, and VFUSE — named spaces stay in that tenant’s directory.</p>
             <p class="tiny">Limit: periodic <code>.rdb</code> serializes KV; vectors live in mmap + WAL + seals.</p>
           </article>
           <article class="card warn">
@@ -218,7 +218,7 @@
         <div class="grid-5">
           <article class="card"><div class="num">01</div><h3>Provision</h3><p>Isolated engine in milliseconds. Optional 0–2 async WAL replicas; primary still acks locally.</p></article>
           <article class="card"><div class="num">02</div><h3>Keys</h3><p>Reader / writer / tenant-admin. Reader cannot SET or VADD. Secret shown once. Revoke is immediate.</p></article>
-          <article class="card"><div class="num">03</div><h3>Query</h3><p>Public data plane is RESP :6380. AUTH tenant:key. Python SDK: remember / recall / forget.</p></article>
+          <article class="card"><div class="num">03</div><h3>Query</h3><p>Public data plane is RESP :6380. AUTH tenant:key. Recall: VSEARCH, VSIM, VFUSE. Python SDK: remember / recall / similar / fuse / forget. Embeddings stay with the caller.</p></article>
           <article class="card"><div class="num">04</div><h3>Backup</h3><p>One-customer zip, SHA-256 manifest, restore with rollback. Hibernate stops the process, keeps the dir.</p></article>
           <article class="card ice"><div class="num">05</div><h3>Shred</h3><p><code>purge=true</code> zeros the wrapped DEK, then deletes the directory. Blast radius: one tenant.</p></article>
         </div>

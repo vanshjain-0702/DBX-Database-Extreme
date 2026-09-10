@@ -48,7 +48,8 @@
           <div>
             <h2>State and memory in one engine</h2>
             <p>KV with TTL (session, scratchpad, rate counters) and HNSW vectors (semantic recall) live in the same process, behind one connection, in one data directory, and inside one backup archive. An agent’s session and its recall cannot drift apart — there is no second system to drift from.</p>
-            <p class="note">Honest limit: the periodic <code>.rdb</code> snapshot still serializes KV only. The tenant backup archive is the point-in-time unit: checksummed <code>.rdb</code> plus vector files, bound by seals that recovery verifies before WAL replay. Do not read that as “vectors live inside the <code>.rdb</code>.”</p>
+            <p>Recall on that tenant is three commands: <code>VSEARCH</code> (query vector), <code>VSIM</code> (neighbors of a stored id, self excluded), and <code>VFUSE</code> (late-fusion across named <code>SPACE</code> graphs). Optional <code>MIN_SCORE</code> and per-query <code>EF</code> stay on the same wire. Embeddings stay with the caller; DBX does not run CLIP or MiniLM.</p>
+            <p class="note">Honest limits: the periodic <code>.rdb</code> snapshot still serializes KV only. The tenant backup archive is the point-in-time unit: checksummed <code>.rdb</code> plus vector files, bound by seals that recovery verifies before WAL replay. Do not read that as “vectors live inside the <code>.rdb</code>.” <code>VFUSE</code> is a weighted sum of per-space cosine, not a multimodal model. Named spaces are extra mmap/HNSW files in the same tenant directory — backup, quota, and shred still hit one customer.</p>
           </div>
         </article>
         <article class="usp">
@@ -82,6 +83,38 @@
         <p class="kicker">On-ramp, not a USP</p>
         <h2>Your existing RESP clients work</h2>
         <p class="lede">DBX speaks RESP, so redis-py, ioredis, and go-redis connect without a custom driver. That lowers the cost of trying DBX. It is not a reason to choose DBX, and it is not a claim that DBX is a substitute for a tuned Redis cluster.</p>
+      </div>
+    </section>
+
+    <section class="section-tight" id="recall">
+      <div class="wrap">
+        <p class="kicker">Completes USP 2 — not a sixth claim</p>
+        <h2>Recall an agent actually issues</h2>
+        <p class="lede">A product with per-customer memory needs more than “embed this string.” It needs neighbors of a stored memory, a score floor, and — when the caller already has two embedding spaces — a way to fuse them without standing up a second vector DB. All of that stays inside the tenant engine.</p>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">01</div>
+            <div>
+              <h3><code>VSEARCH</code> — semantic</h3>
+              <p>Caller-provided query vector, cosine over HNSW, top-k last. Trailing <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>, <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">02</div>
+            <div>
+              <h3><code>VSIM</code> — similar-to-id</h3>
+              <p>Load that row, exclude self, same ANN. “More like this memory” without re-embedding. The id already lives in this tenant.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">03</div>
+            <div>
+              <h3><code>VFUSE</code> — named spaces</h3>
+              <p>Late-fuse cosine hits across <code>SPACE</code> graphs with caller <code>WEIGHTS</code>. Missing ids score 0. Send CLIP/SigLIP/MiniLM floats; DBX stores them. It does not run those models.</p>
+            </div>
+          </article>
+        </div>
+        <p class="note">Certified ANN p50 on the published profile is 2.304 ms — not sub-millisecond. This is not hybrid sparse+dense search and not a Qdrant/Milvus competitor. It is the recall surface for one customer’s working set. Toy cosine in the browser: <a href="index.html#recall-bench">homepage recall bench</a>.</p>
       </div>
     </section>
 

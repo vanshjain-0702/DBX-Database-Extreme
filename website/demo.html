@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Product walkthrough — DBX</title>
-  <meta name="description" content="Watch DBX as it exists today: marketing site, isolation sketch, operator dashboard, provision, keys, console, explorer, and vector search.">
+  <meta name="description" content="Watch DBX as it exists today: marketing site, isolation sketch, operator dashboard, and tenant recall — VSEARCH, VSIM, and VFUSE. Recorded against the live binary, not a mock.">
   <meta property="og:title" content="Product walkthrough — DBX">
-  <meta property="og:description" content="Site plus dashboard: isolation, lifecycle, AUTH, SET/GET, VADD/VSEARCH. Recorded against the live binary, not a mock.">
+  <meta property="og:description" content="Site plus dashboard: isolation, lifecycle, AUTH, SET/GET, VSEARCH / VSIM / VFUSE. Recorded against the live binary, not a mock.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.co.in/demo.html">
   <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
@@ -29,29 +29,71 @@
       <div class="wrap">
         <p class="kicker">Site + dashboard</p>
         <h1>Product walkthrough</h1>
-        <p>What shipped so far, shown on the public site and on the operator dashboard from <code>make run-dev</code>. Pause on a chapter if you only need one surface.</p>
+        <p>What shipped so far, shown on the public site and on the operator dashboard from <code>make run-dev</code>. The first clip is tenant recall. The second is the full product tour. Pause on a chapter if you only need one surface.</p>
       </div>
     </header>
 
     <section class="section">
       <div class="wrap">
         <figure class="walk-video">
-          <video controls playsinline preload="metadata" poster="assets/og-image.jpg">
+          <video id="recall-film" controls playsinline preload="metadata" poster="assets/product/playground.png">
+            <source src="assets/vector-search.mp4" type="video/mp4">
+            Your browser cannot play this MP4. Use the chapter list below, or open the file from the repo once it is published.
+          </video>
+          <figcaption class="muted">2 min 7 s. Narrated recall clip: site widgets (leak, cosine bench, density, fit quiz), Updates badge, Isolation Kernel shred. Engineer voiceover over a 140 BPM tech bed. Embeddings stay with the caller — DBX does not run CLIP or MiniLM.</figcaption>
+        </figure>
+        <ol class="chapters" aria-label="Recall clip chapters">
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="0"><span>00:00</span> Title · what shipped</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="16"><span>00:16</span> Homepage · Updates badge</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="28"><span>00:28</span> Prefix leak vs tenant worker</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="44"><span>00:44</span> Recall bench — VSIM / VFUSE</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="65"><span>01:05</span> Density + fit quiz</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="89"><span>01:29</span> Updates page</a></li>
+          <li><a href="#recall-film" data-video="#recall-film" data-jump="102"><span>01:42</span> DEK shred</a></li>
+        </ol>
+
+        <figure class="walk-video" style="margin-top:2rem">
+          <video id="tour-film" controls playsinline preload="metadata" poster="assets/og-image.jpg">
             <source src="assets/demo.mp4" type="video/mp4">
             Your browser cannot play this MP4. Use the chapter list below, or open the file from the repo once it is published.
           </video>
-          <figcaption class="muted">5 min 18 s. Site plus a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Engineer voiceover over a 140 BPM tech bed. The isolation bench is a browser sketch, not a live node.</figcaption>
+          <figcaption class="muted">5 min 18 s. Site plus a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Engineer voiceover over a 140 BPM tech bed.</figcaption>
         </figure>
+        <ol class="chapters" aria-label="Product tour chapters">
+          <li><a href="#tour-film" data-video="#tour-film" data-jump="0"><span>00:00</span> Title card</a></li>
+          <li><a href="#tour-film" data-video="#tour-film" data-jump="12"><span>00:12</span> Homepage + isolation bench</a></li>
+          <li><a href="#site" data-video="#tour-film" data-jump="50"><span>00:50</span> Why it exists / claims</a></li>
+          <li><a href="#run" data-video="#tour-film" data-jump="78"><span>01:18</span> Get started — :8000 / :6380</a></li>
+          <li><a href="#dashboard" data-video="#tour-film" data-jump="128"><span>02:08</span> Dashboard login + provision</a></li>
+          <li><a href="#data" data-video="#tour-film" data-jump="168"><span>02:48</span> Console, explorer, VSEARCH</a></li>
+          <li><a href="#data" data-video="#tour-film" data-jump="210"><span>03:30</span> Runtime and settings</a></li>
+        </ol>
 
         <p class="kicker" style="margin-top:2.5rem">Chapters</p>
-        <h2>What the recording covers</h2>
+        <h2>What the recordings cover</h2>
         <div class="docs-toc">
+          <a href="#recall"><span>00</span> Recall — VSEARCH, VSIM, VFUSE on one tenant</a>
           <a href="#site"><span>01</span> Marketing site — thesis, isolation bench, product pages</a>
           <a href="#lifecycle"><span>02</span> Features — tenant lifecycle, Isolation Kernel, fail-closed</a>
           <a href="#run"><span>03</span> Get started — Docker / source / Compose, AUTH on :6380</a>
           <a href="#dashboard"><span>04</span> Dashboard — login, provision, mint a writer key</a>
-          <a href="#data"><span>05</span> Operations — console SET/GET, explorer, VADD/VSEARCH, backup</a>
+          <a href="#data"><span>05</span> Operations — console SET/GET, explorer, backup</a>
         </div>
+      </div>
+    </section>
+
+    <section class="section-tight" id="recall">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">00</div>
+          <div>
+            <h2>Recall on one tenant</h2>
+            <p><strong>Semantic (<code>VSEARCH</code>):</strong> send a query vector, get cosine neighbors. Trailing <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>, <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>.</p>
+            <p><strong>Similar-to-id (<code>VSIM</code>):</strong> load that stored row, exclude self, same ANN. “More like this memory” without re-embedding.</p>
+            <p><strong>Named spaces (<code>VFUSE</code>):</strong> late-fuse cosine hits across <code>SPACE</code> graphs with caller <code>WEIGHTS</code>. Missing ids score 0. Send the floats your model produced; DBX does not run CLIP or MiniLM. The playground may MiniLM-encode text in the browser for a 384-d demo only.</p>
+            <p>A named space hashes to its own <code>.vec</code> file in the same tenant directory. Backup, quota, and shred still hit one customer.</p>
+          </div>
+        </article>
       </div>
     </section>
 
@@ -62,8 +104,8 @@
           <div>
             <h2>Marketing site</h2>
             <p>Start at the homepage. The certified profile is <strong>100 tenants/node</strong>, <strong>100k vectors/tenant</strong>, durable strings + vectors. Isolation is a directory, a WAL, and an HNSW index — not a key prefix.</p>
-            <p>The isolation bench (acme / harbor / lumen) is an in-browser sketch. Type <code>AUTH harbor</code>, <code>SET session:1 intake</code>, then <code>AUTH acme</code> and <code>GET</code>: acme cannot see harbor’s session. Click a cabinet to inspect that tenant. Pause / Replay controls the scripted loop.</p>
-            <p>Then walk Product → Features, Architecture, Get started, Performance; Docs; Pricing; Security; Contact. ⌘K / Ctrl+K is the command palette.</p>
+            <p>The isolation bench (acme / harbor / lumen) is an in-browser sketch. Type <code>AUTH harbor</code>, <code>SET session:1 intake</code>, then <code>AUTH acme</code> and <code>GET</code>: acme cannot see harbor’s session. The sketch also accepts <code>VADD</code>, <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code> as read/write theatre — it is not a live node. Click a cabinet to inspect that tenant. Pause / Replay controls the scripted loop.</p>
+            <p>Then walk Product → Features (including the recall surface), Architecture, Get started, Performance; Docs; Pricing; Security; Contact. ⌘K / Ctrl+K is the command palette.</p>
           </div>
         </article>
       </div>
@@ -76,7 +118,7 @@
           <div>
             <h2>Features that have to stay true</h2>
             <p>Tenant is a first-class object: provision, backup, restore, export/import, hibernate/wake, delete. State and vectors live in one engine. Cost is meant to track <em>active</em> tenants (SQ8 mmap). Self-host is a single binary. Isolation Kernel on Linux <code>strict</code> is own process + Landlock + encrypted WAL/meta/graph.</p>
-            <p class="note">Honest limits: default <code>make run-dev</code> is <code>inprocess</code> (shared Go runtime, not the security USP). SQ8 <code>.vec</code> rows stay mmap plaintext. Raft, cluster, tiering, and non-string RESP mutations fail closed. Hibernate/wake are control-plane HTTP APIs; the dashboard today exposes backup from tenant Overview.</p>
+            <p class="note">Honest limits: default <code>make run-dev</code> is <code>inprocess</code> (shared Go runtime, not the security USP). SQ8 <code>.vec</code> rows stay mmap plaintext. Raft, cluster, tiering, and non-string RESP mutations fail closed. Hibernate/wake are control-plane HTTP APIs; the dashboard today exposes backup from tenant Overview. Certified ANN p50 on the published profile is 2.304 ms — not sub-millisecond.</p>
           </div>
         </article>
       </div>
@@ -119,9 +161,9 @@ make run-dev       # http://127.0.0.1:8000  (admin / adminadminadmin)</pre>
           <div class="usp-num">05</div>
           <div>
             <h2>Operations</h2>
-            <p><strong>Console:</strong> <code>PING</code>, <code>SET session:42 onboarding</code>, <code>GET session:42</code>, <code>VADD memories doc:1 0.1 0.2 0.9</code>, <code>VSEARCH memories 0.1 0.2 0.8 5</code>.</p>
+            <p><strong>Console:</strong> <code>PING</code>, <code>SET session:42 onboarding</code>, <code>GET session:42</code>, <code>VADD memories doc:1 0.1 0.2 0.9</code>, <code>VSEARCH memories 0.1 0.2 0.8 5</code>, <code>VSIM memories doc:1 5</code>, <code>VFUSE memories SPACE text 0.1 0.2 SPACE image 0.3 0.4 5 WEIGHTS 0.6,0.4</code>.</p>
             <p><strong>Data Explorer:</strong> list keys, inspect a string, add another key.</p>
-            <p><strong>Vector Playground:</strong> search an index (384-d MiniLM in the browser, or a smaller dim without the model). Prefer Console VADD if the model download is slow.</p>
+            <p><strong>Vector Playground:</strong> Semantic / Similar-to-id / Multimodal tabs. Browser MiniLM is 384-d only and is a demo encoder — prefer Console <code>VADD</code> with your own floats in production. Failures surface; the UI does not substitute random vectors.</p>
             <p><strong>Overview:</strong> live ops/memory, point-in-time backup.</p>
             <p><strong>Runtime:</strong> Hardware, Storage, Network, Hosting. <strong>Control plane:</strong> Settings, Security, Replication (async WAL replicas; not Raft).</p>
           </div>

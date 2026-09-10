@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Updates — DBX</title>
+  <meta name="description" content="What shipped in DBX: tenant recall (VSEARCH, VSIM, VFUSE), Isolation Kernel, the operator walkthrough, and v1. Honest notes, not a changelog dump.">
+  <meta property="og:title" content="Updates — DBX">
+  <meta property="og:description" content="Latest posts on tenant recall, Isolation Kernel, and the walkthrough. Header badge marks unread posts.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://dbxdb.co.in/posts.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/posts.html">
+  <link rel="alternate" type="application/rss+xml" title="DBX updates" href="posts.xml">
+  <link rel="apple-touch-icon" href="assets/logo.jpg">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body data-root="." data-page="posts">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">What changed, in order</p>
+        <h1>Updates</h1>
+        <p>Short posts when the engine or the site moves. Opening this page clears the header badge. There is no mail or push list — <code>hello@dbxdb.io</code> still has no MX. RSS: <a href="posts.xml">posts.xml</a>. Machine-readable history stays on the <a href="changelog.html">changelog</a>.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap post-feed">
+        <article class="post-card" id="recall-2026-09-10">
+          <time datetime="2026-09-10">10 Sep 2026</time>
+          <div>
+            <h2>Tenant recall: VSEARCH, VSIM, VFUSE <span class="new-tag">New</span></h2>
+            <p>The recall surface an agent actually issues is now on the wire, in the playground, and on this site.</p>
+            <ul>
+              <li><code>VSEARCH</code> — caller vector, cosine over that tenant’s HNSW. Trailing <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>.</li>
+              <li><code>VSIM</code> — neighbors of a stored id, self excluded. “More like this memory” without re-embedding.</li>
+              <li><code>VFUSE</code> — late fusion across named <code>SPACE</code> graphs with caller <code>WEIGHTS</code>. Missing ids score 0.</li>
+            </ul>
+            <p>Embeddings stay with the caller. DBX does not run CLIP or MiniLM. A named space is another mmap/HNSW file in the same tenant directory — backup, quota, and shred still hit one customer. Certified ANN p50 on the published profile is 2.304 ms, not sub-millisecond. This is not a Qdrant competitor.</p>
+            <p>Merged as <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/39">PR #39</a>. Walkthrough clip: <a href="demo.html">demo.html</a>. In-browser toy cosine: <a href="index.html#recall-bench">homepage recall bench</a>.</p>
+          </div>
+        </article>
+
+        <article class="post-card" id="kernel-2026-09-05">
+          <time datetime="2026-09-05">05 Sep 2026</time>
+          <div>
+            <h2>v1.1.0 — Isolation Kernel</h2>
+            <p>Linux <code>strict</code> seals each tenant as its own process: Landlock-restricted filesystem, encrypted WAL / checkpoints / vector ids / HNSW graph, Unix sockets only the orchestrator can open. Idle RSS in the 14–17 MiB band.</p>
+            <p class="note">Honest limits: SQ8 <code>.vec</code> rows stay mmap plaintext so idle tenants live in page cache. Put the data dir on LUKS or fscrypt. <code>make run-dev</code> is still <code>inprocess</code> — do not ship that as Isolation Kernel. We are not SOC 2 certified.</p>
+            <p><a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.1.0">GitHub Release v1.1.0</a> · <a href="security.html">Security</a></p>
+          </div>
+        </article>
+
+        <article class="post-card" id="walkthrough-2026-09-04">
+          <time datetime="2026-09-04">04 Sep 2026</time>
+          <div>
+            <h2>Operator walkthrough</h2>
+            <p>A recorded demo of the public site and the dashboard compiled into <code>dbx-orchestrator</code>: login, provision, mint a writer, console SET/GET/VADD, explorer, backup. Engineer voiceover over a 140 BPM tech bed. The dashboard itself is not on GitHub Pages.</p>
+            <p><a href="demo.html">Watch the walkthrough</a></p>
+          </div>
+        </article>
+
+        <article class="post-card" id="v1-2026-08-28">
+          <time datetime="2026-08-28">28 Aug 2026</time>
+          <div>
+            <h2>v1.0.0 — single-node GO</h2>
+            <p>Supported profile: 100 tenants/node, 100k vectors/tenant, durable strings + vectors. Tenant lifecycle (provision, backup, restore, hibernate/wake, delete). Raft, cluster, and non-string RESP mutations fail closed.</p>
+            <p><a href="changelog.html">Full changelog</a> · <a href="start.html">Get started</a></p>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+  <div id="colophon"></div>
+  <script src="assets/site.js"></script>
+</body>
+</html>
