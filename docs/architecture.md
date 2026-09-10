@@ -59,8 +59,10 @@ The data plane. One instance runs per tenant member (primary or replica).
 A React + Vite + Tailwind CSS SPA compiled and embedded into the orchestrator
 binary at build time via Go's `embed.FS`. **Tenant keys**
 (`/cluster/{id}/keys`) mints `reader` / `writer` / `tenant-admin` credentials;
-the secret is shown once. Console, explorer, and vector playground talk to
+the secret is shown once. Console, explorer, and vector playground (Semantic /
+Similar-to-id / Multimodal) talk to
 `:8000` with an operator JWT. They are operator tools, not the public tenant API.
+Named `SPACE` graphs are extra mmap files in the same tenant directory.
 
 The public marketing site is **not** this UI. It is static HTML in `website/`.
 Open it at

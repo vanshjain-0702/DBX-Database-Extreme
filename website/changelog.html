@@ -38,6 +38,13 @@
       <div class="wrap">
         <div class="change-list">
           <article class="change">
+            <time datetime="2026-09-10">10 Sep 2026</time>
+            <div>
+              <h2>Tenant recall — VSEARCH, VSIM, VFUSE</h2>
+              <p>Per-tenant vector search now covers the three commands an agent actually issues: semantic <code>VSEARCH</code> (plus <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>), similar-to-id <code>VSIM</code> (self excluded), and late-fusion <code>VFUSE</code> across named spaces. Embeddings stay with the caller; DBX does not run CLIP or MiniLM. Named spaces are extra mmap/HNSW files in the same tenant directory, so backup/quota/shred still hit one customer. The vector playground exposes Semantic / Similar-to-id / Multimodal. Walkthrough: <a href="demo.html">demo.html</a> (new recall clip + original product tour). Merged as <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/pull/39">PR #39</a>.</p>
+            </div>
+          </article>
+          <article class="change">
             <time datetime="2026-09-09">09 Sep 2026</time>
             <div>
               <h2>Public site on dbxdb.co.in</h2>

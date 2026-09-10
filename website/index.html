@@ -101,7 +101,7 @@
             <div class="term-out" data-term aria-live="polite"></div>
             <form class="term-form" data-term-form>
               <span class="term-prompt" data-term-prompt>acme&gt;</span>
-              <input name="cmd" autocomplete="off" spellcheck="false" aria-label="Type a sketch command" placeholder="AUTH harbor · SET session:1 hello · GET · VADD">
+              <input name="cmd" autocomplete="off" spellcheck="false" aria-label="Type a sketch command" placeholder="AUTH harbor · SET session:1 hello · GET · VADD · VSIM">
               <button type="submit" class="chip">Send</button>
             </form>
           </div>
@@ -129,8 +129,8 @@
 
     <div class="cmd-rail" aria-hidden="true">
       <div class="cmd-rail__track">
-        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
-        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>VSIM</span><span>VFUSE</span><span>SPACE</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
+        <span>AUTH</span><span>SET</span><span>GET</span><span>VADD</span><span>VSEARCH</span><span>VSIM</span><span>VFUSE</span><span>SPACE</span><span>SNAPSHOT</span><span>HIBERNATE</span><span>PROVISION</span>
       </div>
     </div>
 
@@ -198,7 +198,7 @@
             <div class="usp-num">02</div>
             <div>
               <h3>State and memory in one engine</h3>
-              <p>KV with TTL and HNSW vectors, one process, one connection, one directory, one backup archive.</p>
+              <p>KV with TTL and HNSW vectors, one process, one connection, one directory, one backup archive. Recall is <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code> on that tenant — embeddings stay with the caller.</p>
             </div>
           </article>
           <article class="usp">
@@ -232,13 +232,17 @@
       <div class="wrap-wide" data-in>
         <p class="kicker">Operator UI, in the binary</p>
         <h2>This is the console you actually get.</h2>
-        <p class="lede">Not a mock. Screens from the embedded dashboard: tenants, overview, and the RESP console.</p>
+        <p class="lede">Not a mock. Screens from the embedded dashboard: the vector playground, tenants, overview, and the RESP console.</p>
         <div class="product-shots">
           <figure>
-            <img src="assets/product/tenants.png" width="1600" height="1000" alt="DBX dashboard tenant list with isolated engines">
-            <figcaption>Tenants — each row is an engine, not a namespace</figcaption>
+            <img src="assets/product/playground.png" width="1600" height="1000" alt="DBX vector playground: semantic, similar-to-id, and multimodal fusion">
+            <figcaption>Playground — VSEARCH, VSIM, VFUSE on one tenant</figcaption>
           </figure>
           <div class="shot-stack">
+            <figure>
+              <img src="assets/product/tenants.png" width="1200" height="800" alt="DBX dashboard tenant list with isolated engines">
+              <figcaption>Tenants</figcaption>
+            </figure>
             <figure>
               <img src="assets/product/overview.png" width="1200" height="800" alt="DBX dashboard overview for one tenant">
               <figcaption>Overview</figcaption>

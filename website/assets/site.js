@@ -315,6 +315,7 @@
     { cmd: "AUTH acme:writer ***", wait: 420, run: function () { authed = "acme"; } },
     { cmd: 'SET session:42 {"thread":"onboarding","step":3}', wait: 520, run: function () { write("acme", "session", "onboarding · step 3"); } },
     { cmd: "VADD memories doc:1 [0.12, 0.81, 0.44]", wait: 560, run: function () { write("acme", "vector"); } },
+    { cmd: "VSIM memories doc:1 3", wait: 640, run: function () { reply("1) doc:2  0.88   — neighbors of a stored id, this engine only"); } },
     { cmd: "GET session:42", wait: 480, run: function () { reply(get("acme")); } },
     { cmd: "AUTH harbor:writer ***", wait: 640, run: function () { authed = "harbor"; log("switched identity — this is a different engine"); } },
     { cmd: "GET session:42", wait: 520, run: function () { reply("(nil)  — harbor has no such key"); } },
@@ -457,8 +458,14 @@
       } else if (verb === "VADD") {
         write(authed, "vector");
         reply("(integer) 1");
+      } else if (verb === "VSEARCH") {
+        reply("1) doc:1  0.94   — cosine on this engine. embeddings are caller floats.");
+      } else if (verb === "VSIM") {
+        reply("1) doc:2  0.88   — neighbors of a stored id; self excluded");
+      } else if (verb === "VFUSE") {
+        reply("1) doc:1  1.12   — weighted sum of per-space cosine; DBX does not run a model");
       } else {
-        reply("(error) sketch understands AUTH, SET, GET, VADD");
+        reply("(error) sketch understands AUTH, SET, GET, VADD, VSEARCH, VSIM, VFUSE");
       }
       paintCabinets();
     });
@@ -646,6 +653,7 @@
       { src: "assets/product/overview.png", cap: "Overview — one customer’s WAL, KV, and vectors" },
       { src: "assets/product/explorer.png", cap: "Explorer — inspect keys without leaving the binary" },
       { src: "assets/product/console.png", cap: "Console — AUTH, then RESP against that tenant" },
+      { src: "assets/product/playground.png", cap: "Playground — VSEARCH, VSIM, VFUSE on this tenant" },
       { src: "assets/product/dark.png", cap: "Same operator UI, dark" },
     ];
     var img = film.querySelector("[data-film-frame]");
@@ -946,10 +954,11 @@
 
   var catalog = [
     { t: "Home", s: "Isolation demo", href: "index.html" },
-    { t: "Features", s: "Lifecycle and isolation", href: "features.html" },
+    { t: "Features", s: "Lifecycle, isolation, recall", href: "features.html" },
+    { t: "Recall surface", s: "VSEARCH, VSIM, VFUSE", href: "features.html#recall" },
     { t: "Architecture", s: "How a request lands", href: "architecture.html" },
     { t: "Get started", s: "Docker, source, Compose", href: "start.html" },
-    { t: "Walkthrough", s: "Site + dashboard demo", href: "demo.html" },
+    { t: "Walkthrough", s: "Site + dashboard + recall demo", href: "demo.html" },
     { t: "Performance", s: "Certified single-node profile", href: "performance.html" },
     { t: "Docs", s: "Thesis, then the ports", href: "docs/index.html" },
     { t: "Quickstart", s: "AUTH and first write", href: "docs/quickstart.html" },

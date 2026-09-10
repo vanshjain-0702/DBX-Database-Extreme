@@ -131,7 +131,14 @@ db.set("session:42", '{"thread": "onboarding", "step": 3}')
 
 # Semantic memory for the same customer, same engine, same backup
 db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
-results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)</pre>
+hits = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
+neighbors = db.vsim("memories", "doc:1", top_k=5)
+fused = db.vfuse(
+    "memories",
+    {"text": [0.1, 0.2], "image": [0.3, 0.4]},
+    top_k=5,
+    weights=[0.6, 0.4],
+)</pre>
             </div>
           </div>
           <div data-panel="node" hidden>

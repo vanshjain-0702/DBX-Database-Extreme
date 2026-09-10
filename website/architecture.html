@@ -138,11 +138,11 @@
           </div>
           <div class="layer">
             <span class="layer-tag">SQ8 mmap</span>
-            <p><strong>Vector payload.</strong> 8-bit scalar-quantized rows, generation tombstones, metadata, and a rebuildable checksummed HNSW cache live as files in the tenant directory.</p>
+            <p><strong>Vector payload.</strong> 8-bit scalar-quantized rows, generation tombstones, metadata, and a rebuildable checksummed HNSW cache live as files in the tenant directory. Optional named <code>SPACE</code> graphs are extra mmap/HNSW files in that same directory — not a second database.</p>
           </div>
           <div class="layer">
             <span class="layer-tag">HNSW</span>
-            <p><strong>ANN for a working set.</strong> Sized for per-tenant corpora (certified at 100k vectors/tenant), not a billion-vector shared index. Asymmetric distance at query time.</p>
+            <p><strong>ANN for a working set.</strong> Sized for per-tenant corpora (certified at 100k vectors/tenant), not a billion-vector shared index. Asymmetric distance at query time. Recall commands: <code>VSEARCH</code>, <code>VSIM</code> (neighbors of a stored id), <code>VFUSE</code> (late-fusion of caller embeddings). DBX does not run a model. Certified ANN p50 on the published profile is 2.304 ms.</p>
           </div>
           <div class="layer">
             <span class="layer-tag">Backup</span>

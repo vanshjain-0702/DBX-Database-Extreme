@@ -84,11 +84,21 @@ KV with TTL and HNSW vectors live in the same process, behind one connection, in
 directory, and inside one backup archive. An agent's session and its semantic recall cannot
 drift apart, because there is no second system to drift from.
 
+Recall on that tenant is three commands, not a second database: `VSEARCH`
+(query vector), `VSIM` (neighbors of a stored id, self excluded), and `VFUSE`
+(late-fusion across named `SPACE` graphs). Optional `MIN_SCORE` and per-query
+`EF` stay on the same wire. Embeddings stay with the caller — DBX does not run
+a model. A named space hashes to its own `.vec` file in the same tenant
+directory, so backup, quota, and shred still see one customer.
+
 *Proof in code:* `internal/query/executor.go` dispatches KV and vector commands through the
-same executor; `internal/orchestrator/backup.go` archives the whole tenant directory.
+same executor; `internal/orchestrator/backup.go` archives the whole tenant directory;
+`internal/engine/vector_space.go` (`VectorSpaceKey`).
 
 *Honest limit:* the periodic `.rdb` snapshot still serializes KV only — vector
-payloads live in `.vec` mmap files. The tenant **backup archive** is the
+payloads live in `.vec` mmap files. `VFUSE` is a weighted sum of per-space cosine,
+not a multimodal model. The playground may MiniLM-encode text in the browser for
+a 384-d demo; production callers send their own floats. The tenant **backup archive** is the
 point-in-time unit: a maintenance lock writes `.rdb` plus `.vec` / `.vec.meta` /
 `.vec.hnsw` and a `checkpoint_id` over SHA-256 file hashes. Recovery reopens
 mmap indexes and verifies checkpoint `VectorSeals` before WAL replay. Do not

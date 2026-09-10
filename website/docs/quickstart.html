@@ -91,7 +91,8 @@ db = DBXClient(
 
 db.set("session:42", '{"thread": "onboarding", "step": 3}')
 db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
-results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)</pre>
+hits = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
+neighbors = db.vsim("memories", "doc:1", top_k=5)</pre>
         </div>
         <h2>Node.js</h2>
         <div class="code-panel">

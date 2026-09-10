@@ -31,7 +31,7 @@
 
 ## Show demo video
 
-5 min 18 s. Public site, then a live operator dashboard: console CLI, explorer, semantic search, keys, runtime, settings. Isolation bench in the recording is a browser sketch, not a live node.
+Tenant recall (Semantic / Similar-to-id / Multimodal) on a live engine, then the full 5 min 18 s product tour: public site, operator dashboard, console, explorer, keys, runtime. Isolation bench in the recording is a browser sketch, not a live node. Embeddings stay with the caller — DBX does not run CLIP or MiniLM.
 
 <p align="center">
   <a href="https://dbxdb.co.in/demo.html">
@@ -42,7 +42,9 @@
 <p align="center">
   <a href="https://dbxdb.co.in/demo.html"><strong>▶ Show demo video</strong></a>
   ·
-  <a href="https://dbxdb.co.in/assets/demo.mp4">Open MP4</a>
+  <a href="https://dbxdb.co.in/assets/vector-search.mp4">Recall MP4</a>
+  ·
+  <a href="https://dbxdb.co.in/assets/demo.mp4">Product tour MP4</a>
   ·
   <a href="website/demo.html">Walkthrough page</a>
 </p>
@@ -403,7 +405,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | What | Where |
 |---|---|
 | Public site | [dbxdb.co.in](https://dbxdb.co.in/) — source in [`website/`](website/). Local preview: `make site`. DNS steps: [`website/README.md`](website/README.md). |
-| Show demo video | [Walkthrough](https://dbxdb.co.in/demo.html) (5 min 18 s). File: [demo.mp4](https://dbxdb.co.in/assets/demo.mp4). |
+| Show demo video | [Walkthrough](https://dbxdb.co.in/demo.html) — recall clip (`VSEARCH` / `VSIM` / `VFUSE`) plus the 5 min 18 s product tour. Files: [vector-search.mp4](https://dbxdb.co.in/assets/vector-search.mp4), [demo.mp4](https://dbxdb.co.in/assets/demo.mp4). |
 | Incubation pitch | [pitch.html](https://dbxdb.co.in/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
