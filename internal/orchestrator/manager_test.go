@@ -236,6 +236,7 @@ func TestPromoteKeepsReplicaEngineAlive(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("DBX_DATA_DIR", root)
 	t.Setenv("DBX_ISOLATION_MODE", "inprocess")
+	httpPort, respPort, replPort := spacedTenantPorts(t)
 	m := &Manager{
 		tenants:      make(map[string]*Tenant),
 		stateFile:    filepath.Join(root, "state.json"),
@@ -244,9 +245,9 @@ func TestPromoteKeepsReplicaEngineAlive(t *testing.T) {
 		starting:     make(map[string]bool),
 		restarts:     make(map[string]int),
 		tenantQuotas: make(map[string]int64),
-		nextHTTPPort: freeTCPPort(t),
-		nextRESPPort: freeTCPPort(t),
-		nextReplPort: freeTCPPort(t),
+		nextHTTPPort: httpPort,
+		nextRESPPort: respPort,
+		nextReplPort: replPort,
 	}
 	primary, err := m.Provision("acme", "Acme", 1)
 	if err != nil {
@@ -265,13 +266,13 @@ func TestPromoteKeepsReplicaEngineAlive(t *testing.T) {
 	if replicaInst == nil {
 		t.Fatal("replica engine was not running")
 	}
-	if got := tenantRESP(t, primary.DataDir, auth, secret, "SET", "k", "v1"); got != "+OK\r\n" {
+	if got := tenantRESP(t, primary, auth, secret, "SET", "k", "v1"); got != "+OK\r\n" {
 		t.Fatalf("primary SET = %q", got)
 	}
 	deadline := time.Now().Add(15 * time.Second)
 	replica, _ := m.GetTenant("acme-r1")
 	for {
-		got := tenantRESP(t, replica.DataDir, auth, secret, "GET", "k")
+		got := tenantRESP(t, replica, auth, secret, "GET", "k")
 		if got == "$2\r\nv1\r\n" {
 			break
 		}
@@ -290,10 +291,10 @@ func TestPromoteKeepsReplicaEngineAlive(t *testing.T) {
 	if !ok {
 		t.Fatal("public tenant missing after promote")
 	}
-	if got := tenantRESP(t, primary.DataDir, auth, secret, "SET", "k", "v2"); got != "+OK\r\n" {
+	if got := tenantRESP(t, primary, auth, secret, "SET", "k", "v2"); got != "+OK\r\n" {
 		t.Fatalf("promoted SET = %q", got)
 	}
-	if got := tenantRESP(t, primary.DataDir, auth, secret, "GET", "k"); got != "$2\r\nv2\r\n" {
+	if got := tenantRESP(t, primary, auth, secret, "GET", "k"); got != "$2\r\nv2\r\n" {
 		t.Fatalf("promoted GET = %q", got)
 	}
 }
@@ -317,12 +318,28 @@ func waitTenantReady(t *testing.T, m *Manager, id string) {
 	t.Fatalf("tenant %s did not start", id)
 }
 
-func tenantRESP(t *testing.T, dataDir, auth, secret string, args ...string) string {
+// spacedTenantPorts returns HTTP/RESP/replication bases far enough apart
+// that allocating a primary plus replicas cannot bind the same TCP port.
+// On Windows those loopback ports are actually listened on; Unix sockets
+// hide the collision on Linux/macOS.
+func spacedTenantPorts(t *testing.T) (httpPort, respPort, replPort int) {
 	t.Helper()
-	if !isolation.UnixAvailable() {
-		t.Skip("unix sockets required")
+	base := freeTCPPort(t)
+	offset := base % 1000
+	return 21000 + offset, 23000 + offset, 25000 + offset
+}
+
+func tenantRESP(t *testing.T, tenant *Tenant, auth, secret string, args ...string) string {
+	t.Helper()
+	var (
+		conn net.Conn
+		err  error
+	)
+	if isolation.UnixAvailable() {
+		conn, err = net.DialTimeout("unix", isolation.RESPSocket(tenant.DataDir), 2*time.Second)
+	} else {
+		conn, err = net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", tenant.RESPPort), 2*time.Second)
 	}
-	conn, err := net.DialTimeout("unix", isolation.RESPSocket(dataDir), 2*time.Second)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
