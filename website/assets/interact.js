@@ -119,40 +119,57 @@
     var dbx = $("#leak-dbx");
     var btn = $("#leak-run");
     var sharedLog = [
-      { cls: "ok", t: "AUTH default" },
-      { cls: "ok", t: "SET user:alice:session tok-a" },
-      { cls: "ok", t: "SELECT 1" },
-      { cls: "ok", t: "SET user:bob:session tok-b" },
-      { cls: "warn", t: "KEYS user:*" },
-      { cls: "bad", t: "1) user:alice:session" },
-      { cls: "bad", t: "2) user:bob:session   ← bob's key leaked across logical DB" }
+      { cls: "in", t: "AUTH default" },
+      { cls: "in", t: "SET user:alice:session tok-a" },
+      { cls: "in", t: "SELECT 1" },
+      { cls: "in", t: "SET user:bob:session tok-b" },
+      { cls: "in", t: "KEYS user:*" },
+      { cls: "leak", tag: "leaked", t: "1) user:alice:session" },
+      { cls: "leak", tag: "leaked", t: "2) user:bob:session" }
     ];
     var dbxLog = [
-      { cls: "ok", t: "AUTH tenant-alice" },
-      { cls: "ok", t: "SET session tok-a" },
-      { cls: "ok", t: "KEYS *" },
-      { cls: "ok", t: "1) session" },
-      { cls: "ok", t: "AUTH tenant-bob" },
-      { cls: "ok", t: "SET session tok-b" },
-      { cls: "ok", t: "KEYS *" },
-      { cls: "ok", t: "1) session" },
-      { cls: "ok", t: "GET user:alice:session" },
-      { cls: "ok", t: "(nil)  ← alice's worker never held bob's heap" }
+      { cls: "in", t: "AUTH tenant-alice" },
+      { cls: "in", t: "SET session tok-a" },
+      { cls: "in", t: "KEYS *" },
+      { cls: "hold", tag: "this worker", t: "1) session" },
+      { cls: "in", t: "AUTH tenant-bob" },
+      { cls: "in", t: "GET user:alice:session" },
+      { cls: "hold", tag: "isolated", t: "(nil) — alice’s heap is not here" }
     ];
-    function typeLog(el, lines, i) {
-      if (i >= lines.length) return;
+    function paintLine(el, line) {
       var row = document.createElement("div");
-      row.className = "term-line " + lines[i].cls;
-      row.textContent = lines[i].t;
+      row.className = "term-line term-line--" + line.cls;
+      if (line.cls === "in") {
+        var prompt = document.createElement("span");
+        prompt.className = "leak-prompt";
+        prompt.textContent = ">";
+        row.appendChild(prompt);
+        row.appendChild(document.createTextNode(" " + line.t));
+      } else {
+        if (line.tag) {
+          var tag = document.createElement("span");
+          tag.className = "leak-tag" + (line.cls === "hold" ? " leak-tag--ok" : "");
+          tag.textContent = line.tag;
+          row.appendChild(tag);
+        }
+        row.appendChild(document.createTextNode(" " + line.t));
+      }
       el.appendChild(row);
       el.scrollTop = el.scrollHeight;
-      setTimeout(function () { typeLog(el, lines, i + 1); }, 220);
+    }
+    function typeLog(el, lines, i, done) {
+      if (i >= lines.length) {
+        if (done) done();
+        return;
+      }
+      paintLine(el, lines[i]);
+      setTimeout(function () { typeLog(el, lines, i + 1, done); }, 180);
     }
     on(btn, "click", function () {
       shared.innerHTML = "";
       dbx.innerHTML = "";
       typeLog(shared, sharedLog, 0);
-      setTimeout(function () { typeLog(dbx, dbxLog, 0); }, 80);
+      setTimeout(function () { typeLog(dbx, dbxLog, 0); }, 60);
     });
   }
 

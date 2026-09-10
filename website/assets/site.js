@@ -180,8 +180,9 @@
     toast.className = "toast";
     toast.setAttribute("data-toast", "");
     toast.innerHTML =
+      "<p class=\"toast-kicker\">Isolation sketch</p>" +
       "<p>Each cabinet is a different engine. GET on harbor cannot see acme’s session.</p>" +
-      '<div class="btn-row"><button type="button" class="btn" data-toast-dismiss>Got it</button></div>';
+      '<div class="btn-row"><button type="button" class="btn btn-ghost" data-toast-dismiss>Dismiss</button></div>';
     document.body.appendChild(toast);
 
     var topBtn = document.createElement("button");
@@ -977,7 +978,7 @@
     { t: "Changelog", s: "What shipped", href: "changelog.html", k: "v1.1.0 v1.0.0" },
     { t: "License", s: "BSL 1.1", href: "license.html", k: "Apache four years" },
     { t: "Isolation demo", s: "On this page", href: "index.html#demo", home: 1, k: "acme harbor lumen" },
-    { t: "Prefix leak", s: "Shared KEYS vs one worker", href: "index.html#leak", home: 1, k: "KEYS prefix leak tenant" },
+    { t: "Prefix leak", s: "Shared KEYS vs one worker — labeled sketch", href: "index.html#leak", home: 1, k: "KEYS prefix leak tenant" },
     { t: "Why it exists", s: "Shared-cluster pain", href: "index.html#why", home: 1, k: "noisy neighbor dual write" },
     { t: "Claims", s: "Tenant is the unit", href: "index.html#claims", home: 1, k: "USP Isolation Kernel" },
     { t: "Recall bench", s: "Toy cosine VSIM VFUSE", href: "index.html#recall-bench", home: 1, k: "VSIM VFUSE SPACE MIN_SCORE" },
