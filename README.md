@@ -191,10 +191,9 @@ customers who each need memory, DBX is built for exactly that shape.
 The Docker image (`deploy/Dockerfile`) embeds the dashboard, puts `dbx-orchestrator`
 and `dbx-server` on `PATH`, and **defaults to `DBX_ISOLATION_MODE=strict`**.
 Missing `DBX_KEK` (64 hex characters) is a boot failure, not plaintext fallback.
-Product version is **1.2.0**. The last published GHCR tag is still
-`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0` until GitHub Release v1.2.0 is
-cut (`:v1.2.0` and `:latest` track Releases, not every push). Run this tree from
-source for the recall verbs before that tag exists. Isolation details:
+Product version is **1.2.0**, published as
+`ghcr.io/vanshjain-0702/dbx-orchestrator` (`:v1.2.0` and `:latest` track GitHub
+Releases, not every push). Isolation details:
 [docs/isolation.md](docs/isolation.md).
 
 ### Option 1: Docker (published image)
@@ -209,7 +208,7 @@ docker run --rm -p 8000:8000 -p 6380:6380 \
   -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
   -e DBX_KEK \
   -e DBX_NODE_MEMORY_BUDGET=8gb \
-  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.1.0
+  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0
 ```
 
 Open **http://localhost:8000** and log in with `admin` / the password you set.

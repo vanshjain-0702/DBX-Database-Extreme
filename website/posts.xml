@@ -11,7 +11,7 @@
       <link>https://dbxdb.co.in/posts.html#v1-2-0-2026-09-10</link>
       <guid isPermaLink="true">https://dbxdb.co.in/posts.html#v1-2-0-2026-09-10</guid>
       <pubDate>Wed, 10 Sep 2026 18:00:00 GMT</pubDate>
-      <description>v1.2.0 keeps Isolation Kernel and finishes the recall surface: VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE, playground tabs, public site. Better as a product; same 2.304 ms ANN p50 and 14–17 MiB strict idle RSS. GHCR :v1.2.0 publishes when the Release is tagged.</description>
+      <description>v1.2.0 keeps Isolation Kernel and finishes the recall surface: VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE, playground tabs, public site. Better as a product; same 2.304 ms ANN p50 and 14–17 MiB strict idle RSS. GitHub Release v1.2.0. GHCR :v1.2.0.</description>
     </item>
     <item>
       <title>Tenant recall: VSEARCH, VSIM, VFUSE</title>
