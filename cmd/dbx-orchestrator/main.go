@@ -196,12 +196,13 @@ func main() {
 			ID       string `json:"id"`
 			Name     string `json:"name"`
 			Replicas int    `json:"replicas"`
+			VectorEncoding string `json:"vector_encoding"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		t, err := manager.Provision(req.ID, req.Name, req.Replicas)
+		t, err := manager.ProvisionWith(req.ID, req.Name, req.Replicas, req.VectorEncoding)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -299,15 +300,20 @@ func main() {
 			http.Error(w, "tenant not found", http.StatusNotFound)
 			return
 		}
-		if err := manager.DeleteTenant(req.ID, req.Purge); err != nil {
+		receipt, err := manager.DeleteTenant(req.ID, req.Purge)
+		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		resp := map[string]interface{}{
 			"status": "deleted",
 			"id":     req.ID,
 			"purged": req.Purge,
-		})
+		}
+		if receipt != nil {
+			resp["receipt"] = receipt
+		}
+		json.NewEncoder(w).Encode(resp)
 	})
 
 	// Password Change API

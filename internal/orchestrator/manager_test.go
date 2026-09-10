@@ -1,9 +1,13 @@
 package orchestrator
 
 import (
+	"bufio"
+	"bytes"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,6 +25,7 @@ func newTestManager(t *testing.T) (*Manager, *Tenant, *Tenant) {
 		tenants:      make(map[string]*Tenant),
 		stateFile:    filepath.Join(root, "state.json"),
 		instances:    make(map[string]*server.Instance),
+		workers:      make(map[string]*isolatedWorker),
 		starting:     make(map[string]bool),
 		restarts:     make(map[string]int),
 		tenantQuotas: make(map[string]int64),
@@ -48,7 +53,7 @@ func newTestManager(t *testing.T) (*Manager, *Tenant, *Tenant) {
 func TestDeleteTenantPurgesOnlyThatTenant(t *testing.T) {
 	m, acme, globex := newTestManager(t)
 
-	if err := m.DeleteTenant(acme.ID, true); err != nil {
+	if _, err := m.DeleteTenant(acme.ID, true); err != nil {
 		t.Fatalf("DeleteTenant: %v", err)
 	}
 
@@ -67,10 +72,27 @@ func TestDeleteTenantPurgesOnlyThatTenant(t *testing.T) {
 	}
 }
 
+func TestDeleteTenantPurgeWritesReceipt(t *testing.T) {
+	m, acme, _ := newTestManager(t)
+	receipt, err := m.DeleteTenant(acme.ID, true)
+	if err != nil {
+		t.Fatalf("DeleteTenant: %v", err)
+	}
+	if receipt == nil || receipt.ReceiptID == "" || !receipt.Purged || receipt.TenantID != acme.ID {
+		t.Fatalf("receipt = %+v", receipt)
+	}
+	if receipt.Path == "" {
+		t.Fatal("receipt path missing")
+	}
+	if _, err := os.Stat(receipt.Path); err != nil {
+		t.Fatalf("receipt file: %v", err)
+	}
+}
+
 func TestDeleteTenantWithoutPurgeKeepsData(t *testing.T) {
 	m, acme, _ := newTestManager(t)
 
-	if err := m.DeleteTenant(acme.ID, false); err != nil {
+	if _, err := m.DeleteTenant(acme.ID, false); err != nil {
 		t.Fatalf("DeleteTenant: %v", err)
 	}
 
@@ -110,7 +132,7 @@ func TestListTenantViewsReportsRunningAndDown(t *testing.T) {
 func TestDeleteUnknownTenant(t *testing.T) {
 	m, _, _ := newTestManager(t)
 
-	if err := m.DeleteTenant("nobody", true); err == nil {
+	if _, err := m.DeleteTenant("nobody", true); err == nil {
 		t.Error("expected an error when deleting a tenant that does not exist")
 	}
 }
@@ -210,6 +232,153 @@ func TestPromoteSwapsPrimaryPorts(t *testing.T) {
 	}
 }
 
+func TestPromoteKeepsReplicaEngineAlive(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("DBX_DATA_DIR", root)
+	t.Setenv("DBX_ISOLATION_MODE", "inprocess")
+	httpPort, respPort, replPort := spacedTenantPorts(t)
+	m := &Manager{
+		tenants:      make(map[string]*Tenant),
+		stateFile:    filepath.Join(root, "state.json"),
+		instances:    make(map[string]*server.Instance),
+		workers:      make(map[string]*isolatedWorker),
+		starting:     make(map[string]bool),
+		restarts:     make(map[string]int),
+		tenantQuotas: make(map[string]int64),
+		nextHTTPPort: httpPort,
+		nextRESPPort: respPort,
+		nextReplPort: replPort,
+	}
+	primary, err := m.Provision("acme", "Acme", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopAll()
+	waitTenantReady(t, m, primary.ID)
+	waitTenantReady(t, m, "acme-r1")
+	secret, key, err := m.CreateTenantKey(primary.ID, "w", "writer", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(700 * time.Millisecond)
+	auth := key.ID
+	replicaInst := m.instances["acme-r1"]
+	if replicaInst == nil {
+		t.Fatal("replica engine was not running")
+	}
+	if got := tenantRESP(t, primary, auth, secret, "SET", "k", "v1"); got != "+OK\r\n" {
+		t.Fatalf("primary SET = %q", got)
+	}
+	deadline := time.Now().Add(15 * time.Second)
+	replica, _ := m.GetTenant("acme-r1")
+	for {
+		got := tenantRESP(t, replica, auth, secret, "GET", "k")
+		if got == "$2\r\nv1\r\n" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("replica never caught up: %q", got)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err := m.Promote("acme-r1"); err != nil {
+		t.Fatal(err)
+	}
+	if m.instances[primary.ID] != replicaInst {
+		t.Fatal("promote restarted the replica engine instead of keeping it")
+	}
+	primary, ok := m.GetTenant("acme")
+	if !ok {
+		t.Fatal("public tenant missing after promote")
+	}
+	if got := tenantRESP(t, primary, auth, secret, "SET", "k", "v2"); got != "+OK\r\n" {
+		t.Fatalf("promoted SET = %q", got)
+	}
+	if got := tenantRESP(t, primary, auth, secret, "GET", "k"); got != "$2\r\nv2\r\n" {
+		t.Fatalf("promoted GET = %q", got)
+	}
+}
+
+func waitTenantReady(t *testing.T, m *Manager, id string) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		tenant, ok := m.GetTenant(id)
+		if ok && m.TenantRunning(id) {
+			if isolation.UnixAvailable() {
+				if _, err := os.Stat(isolation.RESPSocket(tenant.DataDir)); err == nil {
+					return
+				}
+			} else {
+				return
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("tenant %s did not start", id)
+}
+
+// spacedTenantPorts returns HTTP/RESP/replication bases far enough apart
+// that allocating a primary plus replicas cannot bind the same TCP port.
+// On Windows those loopback ports are actually listened on; Unix sockets
+// hide the collision on Linux/macOS.
+func spacedTenantPorts(t *testing.T) (httpPort, respPort, replPort int) {
+	t.Helper()
+	base := freeTCPPort(t)
+	offset := base % 1000
+	return 21000 + offset, 23000 + offset, 25000 + offset
+}
+
+func tenantRESP(t *testing.T, tenant *Tenant, auth, secret string, args ...string) string {
+	t.Helper()
+	var (
+		conn net.Conn
+		err  error
+	)
+	if isolation.UnixAvailable() {
+		conn, err = net.DialTimeout("unix", isolation.RESPSocket(tenant.DataDir), 2*time.Second)
+	} else {
+		conn, err = net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", tenant.RESPPort), 2*time.Second)
+	}
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	send := func(parts ...string) {
+		var buf bytes.Buffer
+		fmt.Fprintf(&buf, "*%d\r\n", len(parts))
+		for _, p := range parts {
+			fmt.Fprintf(&buf, "$%d\r\n%s\r\n", len(p), p)
+		}
+		if _, err := conn.Write(buf.Bytes()); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+	}
+	reader := bufio.NewReader(conn)
+	send("AUTH", auth, secret)
+	authLine, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("auth: %v", err)
+	}
+	if !strings.HasPrefix(authLine, "+OK") {
+		return authLine
+	}
+	send(args...)
+	line, err := reader.ReadString('\n')
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.HasPrefix(line, "$") && !strings.HasPrefix(line, "$-1") {
+		body, err := reader.ReadString('\n')
+		if err != nil {
+			t.Fatalf("body: %v", err)
+		}
+		return line + body
+	}
+	return line
+}
+
 func TestDeletePrimaryRemovesReplicas(t *testing.T) {
 	root := t.TempDir()
 	m := &Manager{
@@ -234,7 +403,7 @@ func TestDeletePrimaryRemovesReplicas(t *testing.T) {
 	m.tenants["acme-r1"] = &Tenant{
 		ID: "acme-r1", DataDir: replicaDir, Role: "replica", ReplicaOf: "acme",
 	}
-	if err := m.DeleteTenant("acme", true); err != nil {
+	if _, err := m.DeleteTenant("acme", true); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok := m.GetTenant("acme"); ok {

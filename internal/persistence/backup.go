@@ -20,6 +20,7 @@ type BackupManifest struct {
 	TenantID           string       `json:"tenant_id"`
 	Format             string       `json:"format"`
 	CheckpointSequence uint64       `json:"checkpoint_sequence"`
+	CheckpointID       string       `json:"checkpoint_id"`
 	CreatedAt          time.Time    `json:"created_at"`
 	Files              []BackupFile `json:"files"`
 }
@@ -78,6 +79,7 @@ func CreateBackupArchive(tenantID, dataDir, snapshotPath, outputPath string, seq
 			Path: filepath.ToSlash(relative), Size: size, SHA256: hex.EncodeToString(hash.Sum(nil)),
 		})
 	}
+	manifest.CheckpointID = checkpointID(manifest)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0700); err != nil {
 		return BackupManifest{}, err
 	}
@@ -203,5 +205,22 @@ func ExtractAndValidateBackup(archivePath, stagingDir, tenantID string, maxBytes
 			return manifest, copyErr
 		}
 	}
+	if manifest.CheckpointID != "" && manifest.CheckpointID != checkpointID(manifest) {
+		return manifest, fmt.Errorf("backup checkpoint_id mismatch")
+	}
 	return manifest, nil
+}
+
+func checkpointID(manifest BackupManifest) string {
+	h := sha256.New()
+	_, _ = io.WriteString(h, manifest.TenantID)
+	_, _ = io.WriteString(h, "\n")
+	_, _ = fmt.Fprintf(h, "%d\n", manifest.CheckpointSequence)
+	for _, item := range manifest.Files {
+		_, _ = io.WriteString(h, item.Path)
+		_, _ = io.WriteString(h, "\n")
+		_, _ = io.WriteString(h, item.SHA256)
+		_, _ = io.WriteString(h, "\n")
+	}
+	return hex.EncodeToString(h.Sum(nil))
 }

@@ -136,7 +136,10 @@ Losing a node today without a replica means restoring a tenant from an archive.
 Each tenant can now run a primary plus up to two asynchronous WAL replicas.
 The primary appends locally and acks; replica TCP is a non-blocking side
 channel. Ingress keeps AUTH'ing the original tenant id; `POST /api/tenants/promote`
-swaps the public tenant onto the replica's data directory and ports.
+swaps the public tenant onto the replica's data directory and ports. Promote
+keeps the replica engine process running: the old primary is fenced, the replica
+becomes writable, and AUTH identity does not change. Other replicas restart to
+retarget the new primary. This is tenant-grain HA, not cluster failover.
 
 Data-plane Raft remains fail-closed: its log is still in-memory and snapshots
 are placeholders. Do not enable `raft_enabled` on tenant engines.
@@ -146,17 +149,14 @@ and acknowledge locally for asynchronous replicas. Routing every write through J
 is what previously cost roughly two orders of magnitude of write throughput.
 
 **Done when:** killing the primary for one tenant costs seconds, not minutes, and the other
-tenants on the node are unaffected. Promote currently restarts the replica set (seconds of
-unavailable writes for that tenant only).
+tenants on the node are unaffected. Promote no longer restarts the promoted replica.
 
 ### 5. Published recall for quantized search
-**Status:** 100k recall@10, ingest, and search-latency gates passing · **Thesis:** USP 3
+**Status:** 100k recall@10 gates passing; optional per-tenant float32 shipped · **Thesis:** USP 3
 
-We claim a ~4× smaller vector payload from SQ8 but publish nothing about the accuracy cost, so
-half of the claim is unverifiable.
-
-**Shape of the work:** a recall@k harness against a fixed dataset, an opt-in float32 storage
-mode for accuracy-sensitive tenants, and both numbers in the benchmark documentation.
+SQ8 remains the default density path. Tenants that need full-precision cosine
+can set `engine.vector_encoding: float32` at provision (`vector_encoding` on
+`POST /api/provision`). Float32 is not the density claim.
 
 **Measured:** 100k × 128 SQ8 produces mean recall@10 0.920 and fifth-percentile 0.800,
 ingest 7,233 vectors/s, and search p50/p95/p99 of 2.304/3.132/3.730 ms on the

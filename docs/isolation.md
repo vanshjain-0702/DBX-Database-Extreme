@@ -73,10 +73,10 @@ macOS or Windows as Landlock-isolated.
 - **VADD_BATCH metadata persist.** Every batch write flushes ids/tombstones to
   the sealed `.meta` file so a checkpoint that stores the TypeVector key as nil
   can reopen the mmap on restart.
-- **Vector reopen after snapshot.** Recovery calls `VectorStore.ReopenPersisted`
-  after WAL replay to attach mmap indexes for TypeVector keys that the snapshot
-  restored with a nil value. Without this, VSEARCH returns an empty list while
-  KV still has the index key.
+- **Vector reopen after snapshot.** Recovery reopens mmap indexes **before** WAL
+  replay and verifies checkpoint `VectorSeals` (dim, count, SHA-256 of `.vec.meta`)
+  against the on-disk files. WAL mutations after that sequence then apply. Empty
+  seals are legacy checkpoints and are not enforced.
 - **Worker HTTP timeout.** The Unix-socket HTTP client for worker control
   endpoints has a 2-minute timeout so large-tenant backup downloads do not
   time out.
@@ -88,13 +88,15 @@ macOS or Windows as Landlock-isolated.
 
 Read this section before repeating any of the claims above.
 
-- **`.vec` rows are not encrypted by DBX.** SQ8 rows stay mmap'd so idle tenants
-  live in page cache (USP 3). Decrypting them into anonymous memory would put
-  every tenant's vectors on the Go heap, and re-encrypting the whole file per
-  insert is not affordable. For embedding confidentiality at rest, run the data
-  directory on fscrypt or LUKS. What DBX encrypts is the searchable surface —
-  ids, tombstones, the graph, the WAL, and checkpoints — so shredding a DEK
-  leaves anonymous SQ8 bytes with no ids and no index.
+- **`.vec` rows are not encrypted by DBX.** SQ8 (and optional float32) rows stay
+  mmap'd so idle tenants live in page cache (USP 3). Decrypting them into
+  anonymous memory would put every tenant's vectors on the Go heap, and
+  re-encrypting the whole file per insert is not affordable. **Operator path:**
+  put `DBX_DATA_DIR` on LUKS (block device) or fscrypt (directory). Set
+  `DBX_REQUIRE_DISK_ENCRYPTION=1` to refuse boot on a plaintext volume. What DBX
+  encrypts is the searchable surface — ids, tombstones, the graph, the WAL, and
+  checkpoints — so shredding a DEK leaves anonymous mmap bytes with no ids and
+  no index. DBX does not encrypt SQ8 rows in-process.
 - **Landlock governs file opens, not sockets or metadata.** ABI 1–3 has no right
   covering `connect()` to an existing Unix socket, and `stat()` on a sibling
   path still succeeds. Cross-tenant socket access is stopped by `SO_PEERCRED`

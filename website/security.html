@@ -74,7 +74,11 @@
           </article>
           <article class="secure-card">
             <h3>Blast radius</h3>
-            <p>Provision, backup, restore, and purge operate on one tenant directory. There is no cluster-wide keyscan to “delete my data.”</p>
+            <p>Provision, backup, restore, and purge operate on one tenant directory. There is no cluster-wide keyscan to “delete my data.” <code>purge=true</code> returns a forget receipt (DEK shred + directory erase). That is an operator artifact, not a compliance badge.</p>
+          </article>
+          <article class="secure-card">
+            <h3>.vec rows and disk encryption</h3>
+            <p>SQ8 mmap rows stay plaintext so idle tenants live in page cache. DBX encrypts ids, the graph, WAL, and checkpoints. For embedding confidentiality at rest, put <code>DBX_DATA_DIR</code> on LUKS or fscrypt and set <code>DBX_REQUIRE_DISK_ENCRYPTION=1</code>. Details in <a href="docs/positioning.html">positioning</a> and the isolation doc in the repo.</p>
           </article>
         </div>
         <p class="muted">v1 is a single-node profile. Raft and cluster mode fail closed. Optional async WAL replicas ack on the primary; replica lag is possible. Details in <a href="docs/architecture.html">architecture</a>.</p>

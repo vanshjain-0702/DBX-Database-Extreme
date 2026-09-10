@@ -38,40 +38,49 @@ type MMapVectorIndex struct {
 	atRest      *security.Encryptor
 	metaDirty   int
 	lastMeta    time.Time
+	encoding    string
 }
 
 type shardSearchJob struct {
-	graph  *HNSWGraph
-	q8     []int8
-	qInv   float32
-	mmap   []byte
-	dim    int
-	k      int
-	filter func(id int) bool
-	rowInv []float32
-	out    *[]intNode
-	wg     *sync.WaitGroup
+	graph    *HNSWGraph
+	q8       []int8
+	qInv     float32
+	qf32     []float32
+	qNorm    float32
+	mmap     []byte
+	dim      int
+	k        int
+	filter   func(id int) bool
+	rowInv   []float32
+	encoding string
+	out      *[]intNode
+	wg       *sync.WaitGroup
 }
 
 type vectorMetadata struct {
 	Version     int      `json:"version"`
 	Dim         int      `json:"dim"`
+	Encoding    string   `json:"encoding,omitempty"`
 	IDs         []string `json:"ids"`
 	Tombstones  []bool   `json:"tombstones"`
 	Generations []uint64 `json:"generations"`
 }
 
 func NewMMapVectorIndex(path string, dim int) (*MMapVectorIndex, error) {
-	return newMMapVectorIndex(path, dim, 1000, nil)
+	return newMMapVectorIndex(path, dim, 1000, nil, EncodingSQ8)
 }
 
-// newMMapVectorIndex maps SQ8 rows straight off disk. Rows stay mmap'd even
+// newMMapVectorIndex maps vector rows straight off disk. Rows stay mmap'd even
 // when enc is set: decrypting them into anonymous memory would put every idle
 // tenant's vectors on the Go heap instead of in page cache, and rewriting the
 // whole file per mutation is not affordable. Row confidentiality at rest is a
 // filesystem-level concern (fscrypt/LUKS); see docs/isolation.md. The
 // searchable surface — ids, tombstones, and the HNSW graph — is encrypted.
-func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor) (*MMapVectorIndex, error) {
+func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor, encoding string) (*MMapVectorIndex, error) {
+	encoding, err := NormalizeVectorEncoding(encoding)
+	if err != nil {
+		return nil, err
+	}
 	mode := os.FileMode(0644)
 	if enc != nil {
 		mode = 0600
@@ -85,8 +94,9 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor)
 		capacity = 1000
 	}
 	info, _ := f.Stat()
+	rowSize := VectorRowSize(dim, encoding)
 	if info.Size() == 0 {
-		initialSize := int64(capacity * (dim + 8))
+		initialSize := int64(capacity * rowSize)
 		f.Truncate(initialSize)
 	}
 
@@ -106,6 +116,7 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor)
 		generations: make([]uint64, 0),
 		graphs:      newHNSWShards(),
 		atRest:      enc,
+		encoding:    encoding,
 	}
 	idx.startSearchWorkers()
 	metaPath := path + ".meta"
@@ -115,7 +126,18 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor)
 			idx.Close()
 			return nil, fmt.Errorf("invalid vector metadata: %w", err)
 		}
-		if len(meta.IDs) > len(idx.mmap)/(dim+8) {
+		fileEnc, encErr := NormalizeVectorEncoding(meta.Encoding)
+		if encErr != nil {
+			idx.Close()
+			return nil, fmt.Errorf("invalid vector metadata encoding: %w", encErr)
+		}
+		if fileEnc != encoding {
+			idx.Close()
+			return nil, fmt.Errorf("vector encoding mismatch: index is %s, tenant is %s", fileEnc, encoding)
+		}
+		idx.encoding = fileEnc
+		rowSize = idx.rowBytes()
+		if len(meta.IDs) > len(idx.mmap)/rowSize {
 			idx.Close()
 			return nil, fmt.Errorf("vector metadata exceeds index capacity")
 		}
@@ -200,13 +222,13 @@ func (idx *MMapVectorIndex) rebuildGraph() {
 		go func(shard int) {
 			defer wg.Done()
 			graph := idx.graphs[shard]
-			rowSize := idx.dim + 8
+			rowSize := idx.rowBytes()
 			for row := shard; row < idx.count; row += hnswShards {
 				off := row * rowSize
 				if off+rowSize > len(idx.mmap) {
 					return
 				}
-				graph.Insert(row, idx.mmap, idx.dim, idx.rowInv)
+				graph.Insert(row, idx.mmap, idx.dim, idx.rowInv, idx.encoding)
 			}
 		}(shard)
 	}
@@ -220,7 +242,7 @@ func (idx *MMapVectorIndex) syncRowInv() {
 		idx.rowInv = idx.rowInv[:idx.count]
 	}
 	for row := 0; row < idx.count; row++ {
-		idx.rowInv[row] = mmapRowInv(idx.mmap, idx.dim, row)
+		idx.rowInv[row] = mmapRowInvEncoded(idx.mmap, idx.dim, row, idx.encoding)
 	}
 }
 
@@ -243,7 +265,7 @@ func (idx *MMapVectorIndex) setRowInv(row int) {
 	if row >= len(idx.rowInv) {
 		idx.rowInv = idx.rowInv[:row+1]
 	}
-	idx.rowInv[row] = mmapRowInv(idx.mmap, idx.dim, row)
+	idx.rowInv[row] = mmapRowInvEncoded(idx.mmap, idx.dim, row, idx.encoding)
 }
 
 func (idx *MMapVectorIndex) persistMetadata() error {
@@ -259,8 +281,12 @@ func (idx *MMapVectorIndex) writeMetadata(durable bool) error {
 	if !durable && idx.metaDirty < metaFlushRows && !idx.lastMeta.IsZero() && time.Since(idx.lastMeta) < metaFlushAge {
 		return nil
 	}
+	encoding := idx.encoding
+	if encoding == EncodingSQ8 {
+		encoding = ""
+	}
 	data, err := json.Marshal(vectorMetadata{
-		Version: 2, Dim: idx.dim, IDs: idx.idList,
+		Version: 2, Dim: idx.dim, Encoding: encoding, IDs: idx.idList,
 		Tombstones: idx.tombstones, Generations: idx.generations,
 	})
 	if err != nil {
@@ -286,7 +312,7 @@ func (idx *MMapVectorIndex) startSearchWorkers() {
 		go func() {
 			defer idx.searchWG.Done()
 			for job := range jobs {
-				*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv)
+				*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv, job.qf32, job.qNorm, job.encoding)
 				job.wg.Done()
 			}
 		}()
@@ -372,6 +398,7 @@ type VectorStore struct {
 	maxVectors int
 	maxMemory  int64
 	atRest     *security.Encryptor
+	encoding   string
 }
 
 const (
@@ -382,7 +409,17 @@ const (
 
 func NewVectorStore(kv *KVStore, dataDir string, maxVectors int) *VectorStore {
 	os.MkdirAll(dataDir, 0755)
-	return &VectorStore{kv: kv, dataDir: dataDir, maxVectors: maxVectors}
+	return &VectorStore{kv: kv, dataDir: dataDir, maxVectors: maxVectors, encoding: EncodingSQ8}
+}
+
+// SetEncoding selects sq8 (default) or float32 for new indexes on this tenant.
+func (s *VectorStore) SetEncoding(encoding string) error {
+	normalized, err := NormalizeVectorEncoding(encoding)
+	if err != nil {
+		return err
+	}
+	s.encoding = normalized
+	return nil
 }
 
 // SetAtRest encrypts vector files on disk. Search still runs over plaintext rows in memory.
@@ -448,7 +485,7 @@ func (s *VectorStore) validateBatchCapacity(key string, dim int, ids []string) e
 		for _, id := range ids {
 			newIDs[id] = struct{}{}
 		}
-		additional += int64(1000*(dim+8) + len(key) + 96)
+		additional += int64(1000*s.rowBytes(dim) + len(key) + 96)
 	}
 	if s.maxVectors > 0 && currentCount+len(newIDs) > s.maxVectors {
 		return fmt.Errorf("tenant vector quota exceeded: maximum of %d vectors allowed", s.maxVectors)
@@ -456,7 +493,7 @@ func (s *VectorStore) validateBatchCapacity(key string, dim int, ids []string) e
 	for id := range newIDs {
 		additional += int64(len(id) + 160)
 	}
-	neededBytes := (currentCount + len(newIDs)) * (dim + 8)
+	neededBytes := (currentCount + len(newIDs)) * s.rowBytes(dim)
 	if idx != nil && neededBytes > currentCapacityBytes {
 		newCapacity := currentCapacityBytes * 2
 		if newCapacity < neededBytes {
@@ -474,7 +511,7 @@ func (s *VectorStore) getOrCreate(key string, dim int) (*MMapVectorIndex, func()
 	e, unlock := s.kv.GetForWrite(key)
 	if e == nil {
 		path := filepath.Join(s.dataDir, vectorIndexFilename(key))
-		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest)
+		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest, s.encoding)
 		if err != nil {
 			unlock()
 			return nil, func() {}, err
@@ -489,7 +526,7 @@ func (s *VectorStore) getOrCreate(key string, dim int) (*MMapVectorIndex, func()
 	}
 	if e.Value == nil {
 		path := filepath.Join(s.dataDir, vectorIndexFilename(key))
-		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest)
+		idx, err := newMMapVectorIndex(path, dim, s.maxVectors, s.atRest, s.encoding)
 		if err != nil {
 			unlock()
 			return nil, func() {}, err
@@ -582,7 +619,7 @@ func (s *VectorStore) IndexSeals() []IndexSeal {
 			}
 			idx.mu.RLock()
 			seal := IndexSeal{Key: key, Dim: idx.dim, Count: idx.count}
-			if data, err := os.ReadFile(idx.file.Name() + ".meta"); err == nil {
+			if data, err := isolation.ReadSealedFile(idx.file.Name()+".meta", idx.atRest); err == nil {
 				seal.MetaHash = sha256.Sum256(data)
 			}
 			idx.mu.RUnlock()
@@ -591,6 +628,29 @@ func (s *VectorStore) IndexSeals() []IndexSeal {
 		sh.mu.RUnlock()
 	}
 	return seals
+}
+
+// VerifySeals checks mmap metadata against a checkpoint's vector seals.
+// An empty seal list is treated as a legacy checkpoint and is not enforced.
+func (s *VectorStore) VerifySeals(seals []IndexSeal) error {
+	if s == nil || len(seals) == 0 {
+		return nil
+	}
+	live := s.IndexSeals()
+	byKey := make(map[string]IndexSeal, len(live))
+	for _, seal := range live {
+		byKey[seal.Key] = seal
+	}
+	for _, want := range seals {
+		got, ok := byKey[want.Key]
+		if !ok {
+			return fmt.Errorf("missing vector index %q at checkpoint", want.Key)
+		}
+		if got.Dim != want.Dim || got.Count != want.Count || got.MetaHash != want.MetaHash {
+			return fmt.Errorf("vector index %q seal mismatch (dim/count/meta)", want.Key)
+		}
+	}
+	return nil
 }
 
 func (s *VectorStore) getReadOnly(key string) (*MMapVectorIndex, func(), error) {
@@ -690,7 +750,7 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 	if !exists {
 		neededCount++
 	}
-	if err := idx.ensureCapacity(neededCount * (dim + 8)); err != nil {
+	if err := idx.ensureCapacity(neededCount * idx.rowBytes()); err != nil {
 		idx.mu.Unlock()
 		return err
 	}
@@ -714,12 +774,12 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 		isNew = true
 	}
 
-	off := row * (dim + 8)
-	writeQuantized(idx.mmap[off:off+dim+8], vec)
+	idx.writeRow(row, vec)
 	idx.setRowInv(row)
 	graph := idx.graphs[shardIndex(row)]
 	mmap := idx.mmap
 	rowInv := idx.rowInv
+	encoding := idx.encoding
 	if err := idx.writeMetadata(false); err != nil {
 		idx.mu.Unlock()
 		return err
@@ -728,7 +788,7 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 
 	if isNew {
 		idx.mmapHold.RLock()
-		graph.Insert(row, mmap, dim, rowInv)
+		graph.Insert(row, mmap, dim, rowInv, encoding)
 		idx.mmapHold.RUnlock()
 	}
 	return nil
@@ -783,7 +843,7 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 		return fmt.Errorf("tenant vector quota exceeded: maximum of %d vectors allowed", s.maxVectors)
 	}
 
-	if err := idx.ensureCapacity((idx.count + newAdditions) * (dim + 8)); err != nil {
+	if err := idx.ensureCapacity((idx.count + newAdditions) * idx.rowBytes()); err != nil {
 		idx.mu.Unlock()
 		return err
 	}
@@ -809,14 +869,14 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 			newRows = append(newRows, row)
 		}
 
-		off := row * (dim + 8)
-		writeQuantized(idx.mmap[off:off+dim+8], vec)
+		idx.writeRow(row, vec)
 		idx.setRowInv(row)
 	}
 
 	mmap := idx.mmap
 	rowInv := idx.rowInv
 	graphs := idx.graphs
+	encoding := idx.encoding
 	if err := idx.writeMetadata(false); err != nil {
 		idx.mu.Unlock()
 		return err
@@ -837,7 +897,7 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 				if shardIndex(row) != shard {
 					continue
 				}
-				graph.Insert(row, mmap, dim, rowInv)
+				graph.Insert(row, mmap, dim, rowInv, encoding)
 			}
 		}(shard)
 	}
@@ -986,7 +1046,7 @@ func (s *VectorStore) VCompact(key string) (int, error) {
 	}
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	rowSize := idx.dim + 8
+	rowSize := idx.rowBytes()
 	activeIDs := make([]string, 0, idx.count)
 	activeGenerations := make([]uint64, 0, idx.count)
 	activeRows := make([][]byte, 0, idx.count)
@@ -1078,9 +1138,14 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 	if retrieve < 10 {
 		retrieve = 10
 	}
-	q8 := make([]int8, idx.dim)
-	scale, recon := quantizeInto(query, q8)
-	qInv := invScale(scale, recon)
+	queryNorm := l2Norm(query)
+	var q8 []int8
+	var qInv float32
+	if idx.encoding != EncodingFloat32 {
+		q8 = make([]int8, idx.dim)
+		scale, recon := quantizeInto(query, q8)
+		qInv = invScale(scale, recon)
+	}
 	parts := make([][]intNode, len(idx.graphs))
 	var wg sync.WaitGroup
 	if jobs := idx.searchJobs; jobs != nil {
@@ -1090,8 +1155,9 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 			}
 			wg.Add(1)
 			jobs <- shardSearchJob{
-				graph: graph, q8: q8, qInv: qInv, mmap: idx.mmap, dim: idx.dim,
-				k: retrieve, filter: hnswFilter, rowInv: idx.rowInv, out: &parts[i], wg: &wg,
+				graph: graph, q8: q8, qInv: qInv, qf32: query, qNorm: queryNorm,
+				mmap: idx.mmap, dim: idx.dim, k: retrieve, filter: hnswFilter,
+				rowInv: idx.rowInv, encoding: idx.encoding, out: &parts[i], wg: &wg,
 			}
 		}
 		wg.Wait()
@@ -1100,16 +1166,19 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 			if graph == nil {
 				continue
 			}
-			parts[i] = graph.Search(q8, qInv, idx.mmap, idx.dim, retrieve, hnswFilter, idx.rowInv)
+			parts[i] = graph.Search(q8, qInv, idx.mmap, idx.dim, retrieve, hnswFilter, idx.rowInv, query, queryNorm, idx.encoding)
 		}
 	}
 	hnswResults := make([]intNode, 0, retrieve*len(idx.graphs))
 	for _, part := range parts {
 		hnswResults = append(hnswResults, part...)
 	}
-	queryNorm := l2Norm(query)
 	for i, res := range hnswResults {
-		hnswResults[i].Score = cosineF32Query(query, queryNorm, idx.mmap, idx.dim, res.ID, idx.rowInv)
+		if idx.encoding == EncodingFloat32 {
+			hnswResults[i].Score = cosineF32Native(query, queryNorm, idx.mmap, idx.dim, res.ID, idx.rowInv)
+		} else {
+			hnswResults[i].Score = cosineF32Query(query, queryNorm, idx.mmap, idx.dim, res.ID, idx.rowInv)
+		}
 	}
 	sort.Slice(hnswResults, func(i, j int) bool {
 		return hnswResults[i].Score > hnswResults[j].Score

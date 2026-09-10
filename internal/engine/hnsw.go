@@ -157,9 +157,14 @@ func (s *searchScratch) mark(id int) bool {
 	return false
 }
 
-func (g *HNSWGraph) Insert(row int, mmapSlice []byte, dim int, rowInv []float32) {
+func (g *HNSWGraph) Insert(row int, mmapSlice []byte, dim int, rowInv []float32, encoding ...string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+
+	enc := EncodingSQ8
+	if len(encoding) > 0 && encoding[0] != "" {
+		enc = encoding[0]
+	}
 
 	l := deterministicLevel(row)
 	newNode := &Node{
@@ -178,7 +183,7 @@ func (g *HNSWGraph) Insert(row int, mmapSlice []byte, dim int, rowInv []float32)
 
 	scratch := acquireScratch(g.Size + 2)
 	defer releaseScratch(scratch)
-	q := sq8Query{mmap: mmapSlice, dim: dim, rowInv: rowInv, queryRow: row}
+	q := sq8Query{mmap: mmapSlice, dim: dim, rowInv: rowInv, queryRow: row, encoding: enc}
 
 	ep := g.EntryPoint
 	maxLayer := g.MaxLayer
@@ -220,7 +225,7 @@ func (g *HNSWGraph) Insert(row int, mmapSlice []byte, dim int, rowInv []float32)
 				revLimit = maxM * 2
 			}
 			neighbor.Edges[lc] = insertNeighborID(
-				neighborID, neighbor.Edges[lc], row, revLimit, mmapSlice, dim, rowInv,
+				neighborID, neighbor.Edges[lc], row, revLimit, mmapSlice, dim, rowInv, enc,
 			)
 		}
 
@@ -261,17 +266,20 @@ func min(a, b int) int {
 	return b
 }
 
-func (g *HNSWGraph) Search(q8 []int8, qInv float32, mmapSlice []byte, dim int, k int, filter func(id int) bool, rowInv []float32) []intNode {
+func (g *HNSWGraph) Search(q8 []int8, qInv float32, mmapSlice []byte, dim int, k int, filter func(id int) bool, rowInv []float32, qf32 []float32, qNorm float32, encoding string) []intNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 	if g.Size == 0 || k <= 0 {
 		return nil
 	}
+	if encoding == "" {
+		encoding = EncodingSQ8
+	}
 	ep := g.EntryPoint
 	maxLayer := g.MaxLayer
 	scratch := acquireScratch(len(g.byID) + 1)
 	defer releaseScratch(scratch)
-	q := sq8Query{q8: q8, qInv: qInv, mmap: mmapSlice, dim: dim, rowInv: rowInv, queryRow: -1}
+	q := sq8Query{q8: q8, qInv: qInv, qf32: qf32, qNorm: qNorm, mmap: mmapSlice, dim: dim, rowInv: rowInv, queryRow: -1, encoding: encoding}
 
 	for lc := maxLayer; lc > 0; lc-- {
 		scratch.reset(len(g.byID) + 1)
@@ -306,7 +314,7 @@ func (g *HNSWGraph) SetEfSearch(value int) {
 	g.mu.Unlock()
 }
 
-func insertNeighborID(owner int, edges []int, candidate int, limit int, mmapSlice []byte, dim int, rowInv []float32) []int {
+func insertNeighborID(owner int, edges []int, candidate int, limit int, mmapSlice []byte, dim int, rowInv []float32, encoding string) []int {
 	if candidate == owner {
 		return edges
 	}
@@ -315,9 +323,9 @@ func insertNeighborID(owner int, edges []int, candidate int, limit int, mmapSlic
 			return edges
 		}
 	}
-	score := cosineSQ8Rows(mmapSlice, dim, owner, candidate, rowInv)
+	score := neighborScore(mmapSlice, dim, owner, candidate, rowInv, encoding)
 	position := sort.Search(len(edges), func(i int) bool {
-		return cosineSQ8Rows(mmapSlice, dim, owner, edges[i], rowInv) <= score
+		return neighborScore(mmapSlice, dim, owner, edges[i], rowInv, encoding) <= score
 	})
 	if len(edges) >= limit && position == len(edges) {
 		return edges
@@ -461,17 +469,33 @@ func (h minHeap) down(i int) {
 type sq8Query struct {
 	q8       []int8
 	qInv     float32
+	qf32     []float32
+	qNorm    float32
 	mmap     []byte
 	dim      int
 	rowInv   []float32
 	queryRow int
+	encoding string
 }
 
 func (q sq8Query) score(row int) float32 {
+	if q.encoding == EncodingFloat32 {
+		if q.queryRow >= 0 {
+			return cosineF32Rows(q.mmap, q.dim, q.queryRow, row, q.rowInv)
+		}
+		return cosineF32Native(q.qf32, q.qNorm, q.mmap, q.dim, row, q.rowInv)
+	}
 	if q.queryRow >= 0 {
 		return cosineSQ8Rows(q.mmap, q.dim, q.queryRow, row, q.rowInv)
 	}
 	return cosineSQ8Query(q.q8, q.qInv, q.mmap, q.dim, row, q.rowInv)
+}
+
+func neighborScore(mmapSlice []byte, dim, rowA, rowB int, rowInv []float32, encoding string) float32 {
+	if encoding == EncodingFloat32 {
+		return cosineF32Rows(mmapSlice, dim, rowA, rowB, rowInv)
+	}
+	return cosineSQ8Rows(mmapSlice, dim, rowA, rowB, rowInv)
 }
 
 func (g *HNSWGraph) searchLayer(q sq8Query, entryPoints []int, ef int, lc int, filter func(id int) bool, scratch *searchScratch) []intNode {

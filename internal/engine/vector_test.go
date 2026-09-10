@@ -61,6 +61,50 @@ func TestVectorStore_VAdd_VSearch(t *testing.T) {
 	}
 }
 
+func TestVectorStore_Float32Encoding(t *testing.T) {
+	dir := t.TempDir()
+	store := NewVectorStore(New(16), dir, 0)
+	if err := store.SetEncoding(EncodingFloat32); err != nil {
+		t.Fatal(err)
+	}
+	defer store.CloseAll()
+	if err := store.VAdd("idx", "a", []float32{1, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.VAdd("idx", "b", []float32{0, 1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	results, err := store.VSearch("idx", []float32{1, 0, 0}, 2, nil)
+	if err != nil || len(results) == 0 || results[0].ID != "a" {
+		t.Fatalf("float32 search = %#v, %v", results, err)
+	}
+	if math.Abs(float64(results[0].Score-1)) > 1e-5 {
+		t.Fatalf("float32 score = %f", results[0].Score)
+	}
+	path := filepath.Join(dir, vectorIndexFilename("idx"))
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() < int64(VectorRowSize(3, EncodingFloat32)) {
+		t.Fatalf(".vec is %d bytes, too small for float32 rows", info.Size())
+	}
+	sq8 := NewVectorStore(New(16), t.TempDir(), 0)
+	defer sq8.CloseAll()
+	if err := sq8.VAdd("idx", "a", []float32{1, 0, 0}); err != nil {
+		t.Fatal(err)
+	}
+	idx, unlock, err := store.getReadOnly("idx")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc := idx.encoding
+	unlock()
+	if enc != EncodingFloat32 {
+		t.Fatalf("encoding = %q", enc)
+	}
+}
+
 func TestVectorStore_RestoresMetadataAndReplacesID(t *testing.T) {
 	dir := t.TempDir()
 	key := "tenant/index/with unsafe path"

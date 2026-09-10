@@ -32,6 +32,7 @@ type Tenant struct {
 	Replicas        []string              `json:"replicas,omitempty"`
 	Keys            map[string]*TenantKey `json:"keys,omitempty"`
 	Hibernated      bool                  `json:"hibernated,omitempty"`
+	VectorEncoding  string                `json:"vector_encoding,omitempty"`
 }
 
 const (
@@ -197,6 +198,10 @@ func replicaTenantID(id string, n int) string {
 }
 
 func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) {
+	return m.ProvisionWith(id, name, replicaCount, "")
+}
+
+func (m *Manager) ProvisionWith(id, name string, replicaCount int, vectorEncoding string) (*Tenant, error) {
 	if id == "" {
 		return nil, fmt.Errorf("invalid tenant id")
 	}
@@ -213,6 +218,10 @@ func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) 
 	}
 	if replicaCount > maxReplicasPerTenant {
 		return nil, fmt.Errorf("at most %d replicas per tenant", maxReplicasPerTenant)
+	}
+	encoding, err := config.NormalizeVectorEncoding(vectorEncoding)
+	if err != nil {
+		return nil, err
 	}
 	m.mu.Lock()
 	if _, exists := m.tenants[id]; exists {
@@ -232,11 +241,12 @@ func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) 
 	}
 
 	primary := &Tenant{
-		ID:       id,
-		Name:     name,
-		HTTPPort: m.nextHTTPPort,
-		RESPPort: m.nextRESPPort,
-		DataDir:  filepath.Join(dataRoot(), "tenants", id),
+		ID:             id,
+		Name:           name,
+		HTTPPort:       m.nextHTTPPort,
+		RESPPort:       m.nextRESPPort,
+		DataDir:        filepath.Join(dataRoot(), "tenants", id),
+		VectorEncoding: encoding,
 	}
 	m.nextHTTPPort++
 	m.nextRESPPort++
@@ -257,6 +267,7 @@ func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) 
 				Role:            "replica",
 				ReplicaOf:       id,
 				ReplicationPort: m.nextReplPort,
+				VectorEncoding:  encoding,
 			}
 			m.nextHTTPPort++
 			m.nextRESPPort++
@@ -284,7 +295,7 @@ func (m *Manager) Provision(id, name string, replicaCount int) (*Tenant, error) 
 	for _, r := range replicas {
 		m.tenants[r.ID] = r
 	}
-	err := m.saveState()
+	err = m.saveState()
 	m.mu.Unlock()
 	if err != nil {
 		return nil, err
@@ -307,13 +318,18 @@ func (m *Manager) startReplicaSet(primary *Tenant, replicas []*Tenant) {
 
 // DeleteTenant removes a tenant from the control plane and stops its engine.
 // When purge is true the tenant's data directory is erased as well, which is
-// what customer off-boarding and "delete my data" requests require.
-func (m *Manager) DeleteTenant(id string, purge bool) error {
+// what customer off-boarding and "delete my data" requests require. A purge
+// writes a forget receipt under the control-plane receipts directory.
+func (m *Manager) DeleteTenant(id string, purge bool) (*PurgeReceipt, error) {
+	return m.deleteTenant(id, purge, "")
+}
+
+func (m *Manager) deleteTenant(id string, purge bool, operator string) (*PurgeReceipt, error) {
 	m.mu.RLock()
 	t, ok := m.tenants[id]
 	if !ok {
 		m.mu.RUnlock()
-		return fmt.Errorf("tenant not found")
+		return nil, fmt.Errorf("tenant not found")
 	}
 	var members []*Tenant
 	if t.Role != "replica" {
@@ -328,32 +344,33 @@ func (m *Manager) DeleteTenant(id string, purge bool) error {
 
 	if m.RaftNode != nil {
 		if m.RaftNode.Raft.State() != raft.Leader {
-			return fmt.Errorf("deprovisioning failed: not the leader")
+			return nil, fmt.Errorf("deprovisioning failed: not the leader")
 		}
 		cmd := fsmUpdateCommand{Action: "deprovision", Tenant: t, Members: members, Purge: purge}
 		data, err := json.Marshal(cmd)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		return m.RaftNode.Raft.Apply(data, 10*time.Second).Error()
+		return nil, m.RaftNode.Raft.Apply(data, 10*time.Second).Error()
 	}
 
 	for _, member := range members {
-		if err := m.removeTenant(member, purge); err != nil {
-			return err
+		if _, err := m.removeTenant(member, purge, operator); err != nil {
+			return nil, err
 		}
 	}
-	if err := m.removeTenant(t, purge); err != nil {
-		return err
+	receipt, err := m.removeTenant(t, purge, operator)
+	if err != nil {
+		return nil, err
 	}
 	if replicaOf == "" {
-		return nil
+		return receipt, nil
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	primary, ok := m.tenants[replicaOf]
 	if !ok {
-		return nil
+		return receipt, nil
 	}
 	kept := make([]string, 0, len(primary.Replicas))
 	for _, rid := range primary.Replicas {
@@ -362,12 +379,12 @@ func (m *Manager) DeleteTenant(id string, purge bool) error {
 		}
 	}
 	primary.Replicas = kept
-	return m.saveState()
+	return receipt, m.saveState()
 }
 
 // removeTenant tears down a single tenant locally: stop the engine, drop the
 // control-plane record, then optionally erase its isolated data directory.
-func (m *Manager) removeTenant(t *Tenant, purge bool) error {
+func (m *Manager) removeTenant(t *Tenant, purge bool, operator string) (*PurgeReceipt, error) {
 	m.mu.Lock()
 	inst := m.instances[t.ID]
 	worker := m.workers[t.ID]
@@ -385,19 +402,26 @@ func (m *Manager) removeTenant(t *Tenant, purge bool) error {
 		worker.Stop()
 	}
 	if saveErr != nil {
-		return saveErr
+		return nil, saveErr
 	}
 
 	_ = os.Remove(fmt.Sprintf("./configs/tenant-%s.yaml", t.ID))
 
+	var receipt *PurgeReceipt
 	if purge {
-		_ = isolation.ShredDEK(t.DataDir)
+		wrapHash := hashWrapFile(t.DataDir)
+		dekErr := isolation.ShredDEK(t.DataDir)
 		if err := os.RemoveAll(t.DataDir); err != nil {
-			return fmt.Errorf("tenant %s removed from control plane but data purge failed: %w", t.ID, err)
+			return nil, fmt.Errorf("tenant %s removed from control plane but data purge failed: %w", t.ID, err)
 		}
+		written, recErr := m.writePurgeReceipt(t, operator, wrapHash, dekErr == nil)
+		if recErr != nil {
+			return written, fmt.Errorf("tenant %s purged but receipt write failed: %w", t.ID, recErr)
+		}
+		receipt = written
 	}
 	fmt.Printf("[Orchestrator] Deleted tenant %s (purge=%v)\n", t.ID, purge)
-	return nil
+	return receipt, nil
 }
 
 func (m *Manager) GetTenant(id string) (*Tenant, bool) {
@@ -550,6 +574,9 @@ func (m *Manager) StartTenant(t *Tenant) error {
 	}
 
 	cfgObj := config.TenantEngine(t.DataDir, t.RESPPort, t.HTTPPort)
+	if t.VectorEncoding != "" {
+		cfgObj.Engine.VectorEncoding = t.VectorEncoding
+	}
 	cfgObj.Auth.ACLFile = isolation.ACLFile(t.DataDir)
 	// Every orchestrator-managed tenant binds Unix sockets when the kernel
 	// supports them. Isolated workers already did; in-process engines were
@@ -678,22 +705,31 @@ func (m *Manager) superviseWorker(t *Tenant, worker *isolatedWorker) {
 		return
 	}
 	m.mu.Lock()
-	if t.Hibernated || m.workers[t.ID] != worker {
+	var owner *Tenant
+	ownerID := ""
+	for id, live := range m.workers {
+		if live == worker {
+			ownerID = id
+			owner = m.tenants[id]
+			delete(m.workers, id)
+			break
+		}
+	}
+	if owner == nil || owner.Hibernated {
 		m.mu.Unlock()
 		return
 	}
-	delete(m.workers, t.ID)
-	m.restarts[t.ID]++
-	attempt := m.restarts[t.ID]
+	m.restarts[ownerID]++
+	attempt := m.restarts[ownerID]
 	m.mu.Unlock()
 	worker.Stop()
 	if attempt > 3 {
-		fmt.Printf("[Orchestrator] tenant %s worker unhealthy after %d restart attempts: %v\n", t.ID, attempt-1, err)
+		fmt.Printf("[Orchestrator] tenant %s worker unhealthy after %d restart attempts: %v\n", ownerID, attempt-1, err)
 		return
 	}
 	time.Sleep(time.Duration(attempt) * time.Second)
-	if startErr := m.StartTenant(t); startErr != nil {
-		fmt.Printf("[Orchestrator] tenant %s worker restart %d failed: %v\n", t.ID, attempt, startErr)
+	if startErr := m.StartTenant(owner); startErr != nil {
+		fmt.Printf("[Orchestrator] tenant %s worker restart %d failed: %v\n", ownerID, attempt, startErr)
 	}
 }
 
@@ -703,27 +739,37 @@ func (m *Manager) superviseTenant(t *Tenant, inst *server.Instance) {
 		return
 	}
 	m.mu.Lock()
-	if t.Hibernated || m.instances[t.ID] != inst {
+	var owner *Tenant
+	ownerID := ""
+	for id, live := range m.instances {
+		if live == inst {
+			ownerID = id
+			owner = m.tenants[id]
+			delete(m.instances, id)
+			break
+		}
+	}
+	if owner == nil || owner.Hibernated {
 		m.mu.Unlock()
 		return
 	}
-	delete(m.instances, t.ID)
-	m.restarts[t.ID]++
-	attempt := m.restarts[t.ID]
+	m.restarts[ownerID]++
+	attempt := m.restarts[ownerID]
 	m.mu.Unlock()
 	inst.Stop()
 	if attempt > 3 {
-		fmt.Printf("[Orchestrator] tenant %s unhealthy after %d restart attempts: %v\n", t.ID, attempt-1, err)
+		fmt.Printf("[Orchestrator] tenant %s unhealthy after %d restart attempts: %v\n", ownerID, attempt-1, err)
 		return
 	}
 	time.Sleep(time.Duration(attempt) * time.Second)
-	if startErr := m.StartTenant(t); startErr != nil {
-		fmt.Printf("[Orchestrator] tenant %s restart %d failed: %v\n", t.ID, attempt, startErr)
+	if startErr := m.StartTenant(owner); startErr != nil {
+		fmt.Printf("[Orchestrator] tenant %s restart %d failed: %v\n", ownerID, attempt, startErr)
 	}
 }
 
 // Promote fails the public tenant over to replicaID. Ingress keeps AUTH'ing the
-// original tenant id; only the data directory and loopback ports swap.
+// original tenant id. The replica engine stays up; only the old primary and
+// other replicas are restarted.
 func (m *Manager) Promote(replicaID string) error {
 	if m.RaftNode != nil {
 		if m.RaftNode.Raft.State() != raft.Leader {
@@ -751,38 +797,71 @@ func (m *Manager) promoteLocal(replicaID string) error {
 		m.mu.Unlock()
 		return fmt.Errorf("primary %s not found", replica.ReplicaOf)
 	}
-	stopIDs := append([]string{primary.ID}, primary.Replicas...)
-	instances := make([]*server.Instance, 0, len(stopIDs))
-	workers := make([]*isolatedWorker, 0, len(stopIDs))
-	for _, id := range stopIDs {
-		if inst := m.instances[id]; inst != nil {
-			instances = append(instances, inst)
-			delete(m.instances, id)
+
+	primaryInst := m.instances[primary.ID]
+	primaryWorker := m.workers[primary.ID]
+	replicaInst := m.instances[replica.ID]
+	replicaWorker := m.workers[replica.ID]
+	delete(m.instances, primary.ID)
+	if m.workers != nil {
+		delete(m.workers, primary.ID)
+	}
+
+	var otherReplicas []*Tenant
+	var otherInsts []*server.Instance
+	var otherWorkers []*isolatedWorker
+	for _, rid := range primary.Replicas {
+		if rid == replicaID {
+			continue
 		}
-		if worker := m.workers[id]; worker != nil {
-			workers = append(workers, worker)
-			delete(m.workers, id)
+		if rt, ok := m.tenants[rid]; ok {
+			otherReplicas = append(otherReplicas, rt)
+		}
+		if inst := m.instances[rid]; inst != nil {
+			otherInsts = append(otherInsts, inst)
+			delete(m.instances, rid)
+		}
+		if worker := m.workers[rid]; worker != nil {
+			otherWorkers = append(otherWorkers, worker)
+			delete(m.workers, rid)
 		}
 	}
+
 	primary.DataDir, replica.DataDir = replica.DataDir, primary.DataDir
 	primary.HTTPPort, replica.HTTPPort = replica.HTTPPort, primary.HTTPPort
 	primary.RESPPort, replica.RESPPort = replica.RESPPort, primary.RESPPort
 	primary.ReplicationPort, replica.ReplicationPort = replica.ReplicationPort, primary.ReplicationPort
-	replicas := make([]*Tenant, 0, len(primary.Replicas))
-	for _, rid := range primary.Replicas {
-		if rt, ok := m.tenants[rid]; ok {
-			replicas = append(replicas, rt)
-		}
+
+	if replicaInst != nil {
+		m.instances[primary.ID] = replicaInst
+		delete(m.instances, replica.ID)
+		replicaInst.SetTenantID(primary.ID)
 	}
+	if replicaWorker != nil {
+		if m.workers == nil {
+			m.workers = make(map[string]*isolatedWorker)
+		}
+		m.workers[primary.ID] = replicaWorker
+		delete(m.workers, replica.ID)
+	}
+
 	saveErr := m.saveState()
 	primaryCopy := primary
-	hadEngines := len(instances) > 0 || len(workers) > 0
+	replicaCopy := replica
+	hadEngines := primaryInst != nil || primaryWorker != nil || replicaInst != nil || replicaWorker != nil || len(otherInsts) > 0 || len(otherWorkers) > 0
+	liveReplica := replicaInst != nil || replicaWorker != nil
 	m.mu.Unlock()
 
-	for _, inst := range instances {
+	if primaryInst != nil {
+		primaryInst.Stop()
+	}
+	if primaryWorker != nil {
+		primaryWorker.Stop()
+	}
+	for _, inst := range otherInsts {
 		inst.Stop()
 	}
-	for _, worker := range workers {
+	for _, worker := range otherWorkers {
 		worker.Stop()
 	}
 	if saveErr != nil {
@@ -791,15 +870,62 @@ func (m *Manager) promoteLocal(replicaID string) error {
 	if !hadEngines {
 		return nil
 	}
-	if err := m.StartTenant(primaryCopy); err != nil {
-		return err
+
+	listenAddr := fmt.Sprintf("127.0.0.1:%d", primaryCopy.ReplicationPort)
+	profile := m.profile
+	if profile.Mode == "" {
+		profile = isolation.FromEnv()
 	}
-	for _, r := range replicas {
+	if profile.UnixIPC {
+		listenAddr = isolation.ReplSocket(primaryCopy.DataDir)
+	}
+	if replicaInst != nil {
+		if err := replicaInst.BecomePrimary(listenAddr); err != nil {
+			return err
+		}
+	}
+	if replicaWorker != nil {
+		if err := replicaWorker.BecomePrimary(listenAddr); err != nil {
+			return err
+		}
+	}
+	if err := m.writePromotedEngineConfig(primaryCopy, listenAddr); err != nil {
+		fmt.Printf("[Orchestrator] promote engine.yaml for %s: %v\n", primaryCopy.ID, err)
+	}
+
+	if !liveReplica {
+		if err := m.StartTenant(primaryCopy); err != nil {
+			return err
+		}
+	}
+	if err := m.StartTenant(replicaCopy); err != nil {
+		fmt.Printf("[Orchestrator] demoted replica %s failed to start after promote: %v\n", replicaCopy.ID, err)
+	}
+	for _, r := range otherReplicas {
 		if err := m.StartTenant(r); err != nil {
 			fmt.Printf("[Orchestrator] replica %s failed to start after promote: %v\n", r.ID, err)
 		}
 	}
 	return nil
+}
+
+func (m *Manager) writePromotedEngineConfig(t *Tenant, listenAddr string) error {
+	cfgObj := config.TenantEngine(t.DataDir, t.RESPPort, t.HTTPPort)
+	if t.VectorEncoding != "" {
+		cfgObj.Engine.VectorEncoding = t.VectorEncoding
+	}
+	if isolation.UnixAvailable() {
+		cfgObj.Server.Socket = isolation.RESPSocket(t.DataDir)
+		cfgObj.Server.HTTPSocket = isolation.HTTPSocket(t.DataDir)
+	}
+	if err := config.ApplyReplication(cfgObj, "primary", listenAddr, ""); err != nil {
+		return err
+	}
+	out, err := yaml.Marshal(cfgObj)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(t.DataDir, "engine.yaml"), out, 0600)
 }
 
 // StopAll performs one ordered process-wide tenant shutdown.

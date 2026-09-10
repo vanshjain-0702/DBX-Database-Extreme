@@ -101,9 +101,11 @@ DBX uses a two-layer persistence model:
    partial WAL frame may be truncated; CRC corruption is fatal.
 3. **Vector files:** SQ8 rows, generation tombstones, metadata, and a rebuildable checksummed
    HNSW cache live in the tenant directory.
-4. **Backup/restore:** A maintenance lock produces a manifest with SHA-256 checksums. Restore
-   validates into a sibling directory and swaps with rollback. `POST /api/tenants/export`
-   and `/import` are aliases. Hibernate stops the engine process and keeps the directory.
+4. **Backup/restore:** A maintenance lock produces a manifest with SHA-256 checksums
+   and a `checkpoint_id` over those hashes. Restore validates into a sibling
+   directory and swaps with rollback. Recovery verifies vector seals before WAL
+   replay. `POST /api/tenants/export` and `/import` are aliases. Hibernate stops
+   the engine process and keeps the directory.
 5. **Density:** CI runs 12 idle / 4 active engines. Operators run `make soak` for
    100 idle / 25 active. That is not a 100-orchestrator-process soak.
 

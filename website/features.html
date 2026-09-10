@@ -48,7 +48,7 @@
           <div>
             <h2>State and memory in one engine</h2>
             <p>KV with TTL (session, scratchpad, rate counters) and HNSW vectors (semantic recall) live in the same process, behind one connection, in one data directory, and inside one backup archive. An agent’s session and its recall cannot drift apart — there is no second system to drift from.</p>
-            <p class="note">Honest limit: the periodic <code>.rdb</code> snapshot serializes KV only. Vectors are durable through checksummed metadata, mmap rows, and the WAL. A single atomic KV+vector point-in-time image does not exist.</p>
+            <p class="note">Honest limit: the periodic <code>.rdb</code> snapshot still serializes KV only. The tenant backup archive is the point-in-time unit: checksummed <code>.rdb</code> plus vector files, bound by seals that recovery verifies before WAL replay. Do not read that as “vectors live inside the <code>.rdb</code>.”</p>
           </div>
         </article>
         <article class="usp">

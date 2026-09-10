@@ -37,17 +37,20 @@ snapshot lineage. Requires auth.
 
 **Request:**
 ```json
-{ "id": "my-app-prod", "name": "My Production App", "replicas": 1 }
+{ "id": "my-app-prod", "name": "My Production App", "replicas": 1, "vector_encoding": "sq8" }
 ```
 
 `replicas` is optional (0–2). `0` is the certified single-node path. `1` or `2`
 starts async WAL replicas (`{id}-r1`, `{id}-r2`). The primary still acks writes
 locally; replica lag is possible.
 
+`vector_encoding` is optional: `sq8` (default, density path) or `float32` (opt-in
+accuracy). SQ8 remains the published density claim.
+
 ### POST `/api/tenants/promote`
-Fail a public tenant over to a replica. AUTH identity is unchanged; the control
-plane swaps data directories and loopback ports onto the replica copy, then
-restarts the replica set.
+Fail a public tenant over to a replica. AUTH identity is unchanged. The replica
+engine stays up and becomes writable; the old primary is fenced and restarted as
+a replica. Other replicas restart to follow the new primary.
 
 ```json
 { "replica_id": "my-app-prod-r1" }
@@ -83,7 +86,9 @@ tenants have no default superuser.
 ### POST `/api/tenants/delete`
 Off-board a tenant: stop its engine and remove it from the control plane. With `purge: true`
 the tenant's data directory is erased, which is what a customer deletion request requires.
-No other tenant's data is read or modified. Requires auth.
+A successful purge also writes a forget receipt (`receipt_id`, `dek_shredded`, optional
+`wrap_sha256` of the wrapped DEK before shred). That is an operator artifact, not a
+compliance certification. No other tenant's data is read or modified. Requires auth.
 
 **Request:**
 ```json
@@ -91,7 +96,18 @@ No other tenant's data is read or modified. Requires auth.
 ```
 **Response:**
 ```json
-{ "status": "deleted", "id": "my-app-prod", "purged": true }
+{
+  "status": "deleted",
+  "id": "my-app-prod",
+  "purged": true,
+  "receipt": {
+    "receipt_id": "…",
+    "tenant_id": "my-app-prod",
+    "purged": true,
+    "dek_shredded": true,
+    "ts": "2026-09-10T00:00:00Z"
+  }
+}
 ```
 
 ### GET `/api/v1/tenants/{id}/usage` and GET `/api/usage`

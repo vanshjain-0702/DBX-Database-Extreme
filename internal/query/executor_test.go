@@ -2,6 +2,7 @@ package query
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -196,5 +197,54 @@ func TestCheckpointFlushesVectorsAndCURRENT(t *testing.T) {
 	results, err := restoredVec.VSearch("mem", []float32{1, 0}, 1, nil)
 	if err != nil || len(results) == 0 || results[0].ID != "a" {
 		t.Fatalf("search after checkpoint recover = %#v, %v", results, err)
+	}
+}
+
+func TestRecoveryRejectsMismatchedVectorSeals(t *testing.T) {
+	dir := t.TempDir()
+	kv := engine.New(8)
+	wal, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vec := engine.NewVectorStore(kv, dir, 0)
+	executor := NewExecutor(
+		kv, vec,
+		transaction.NewMultiManager(), transaction.NewWatchSet(), transaction.NewMVCCStore(8),
+		events.NewPubSub(10, 10), &observability.Metrics{}, wal,
+	)
+	executor.SetMemoryLimit(16 << 20)
+	if got := executeForTest(t, executor, "VADD", "mem", "a", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("vadd = %q", got)
+	}
+	snap := persistence.NewSnapshotter(filepath.Join(dir, "snapshots"))
+	if _, err := executor.Checkpoint(snap); err != nil {
+		t.Fatal(err)
+	}
+	vec.CloseAll()
+	if err := wal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "*.vec.meta"))
+	if err != nil || len(matches) == 0 {
+		t.Fatalf("meta files: %v %v", matches, err)
+	}
+	data, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(matches[0], append(data, ' '), 0600); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored := engine.New(8)
+	restoredVec := engine.NewVectorStore(restored, dir, 0)
+	defer restoredVec.CloseAll()
+	if err := persistence.NewRecovery(reopened, snap).Recover(restored, restoredVec); err == nil {
+		t.Fatal("expected torn vector metadata to fail recovery")
 	}
 }

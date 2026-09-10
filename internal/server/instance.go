@@ -70,6 +70,11 @@ func (i *Instance) Start(ctx context.Context) error {
 	kv := engine.New(numShards)
 	i.kv = kv
 	vecStore := engine.NewVectorStore(kv, cfg.Persistence.DataDir, cfg.Engine.MaxVectorsPerTenant)
+	if cfg.Engine.VectorEncoding != "" {
+		if err := vecStore.SetEncoding(cfg.Engine.VectorEncoding); err != nil {
+			return err
+		}
+	}
 	if i.atRest != nil {
 		vecStore.SetAtRest(i.atRest)
 	}
@@ -330,6 +335,7 @@ func (i *Instance) Start(ctx context.Context) error {
 		tenantID = os.Getenv("DBX_TENANT_ID")
 	}
 	i.httpServer.SetBackup(tenantID, i.CreateBackup)
+	i.httpServer.SetPromote(i.BecomePrimary)
 	if cfg.Auth.ACLFile != "" {
 		i.httpServer.SetACLReload(func() error {
 			return aclStore.LoadFile(cfg.Auth.ACLFile)
@@ -538,4 +544,37 @@ func (i *Instance) CreateBackup(tenantID, outputPath string) (persistence.Backup
 		return err
 	})
 	return manifest, err
+}
+
+// BecomePrimary stops replica consumption, accepts client writes, and starts
+// a WAL replication listener. The process is not restarted.
+func (i *Instance) BecomePrimary(listenAddr string) error {
+	if i == nil || i.executor == nil {
+		return fmt.Errorf("tenant engine is not running")
+	}
+	if i.replicaStream != nil {
+		i.replicaStream.Stop()
+		i.replicaStream = nil
+	}
+	i.executor.SetReadOnly(false)
+	if i.primaryStream != nil {
+		i.cfg.Replication.Role = "primary"
+		i.cfg.Replication.ListenAddr = listenAddr
+		i.cfg.Replication.PrimaryAddr = ""
+		return nil
+	}
+	if i.wal != nil && listenAddr != "" && (i.cfg == nil || !i.cfg.Replication.RaftEnabled) {
+		primary := replication.NewPrimaryStream()
+		if err := primary.Start(listenAddr, i.wal); err != nil {
+			return fmt.Errorf("replication listener failed: %w", err)
+		}
+		i.wal.Subscribe(primary.BroadcastRecord)
+		i.primaryStream = primary
+	}
+	if i.cfg != nil {
+		i.cfg.Replication.Role = "primary"
+		i.cfg.Replication.ListenAddr = listenAddr
+		i.cfg.Replication.PrimaryAddr = ""
+	}
+	return nil
 }
