@@ -191,24 +191,48 @@
 
     <section class="section-tight" id="leak">
       <div class="wrap" data-in>
-        <p class="kicker">The failure mode</p>
-        <h2>A missing prefix leaks. A tenant worker cannot.</h2>
-        <p class="lede">Left: one process, two logical DBs, <code>KEYS user:*</code>. Right: two DBX engines. Browser sketch, not a live node.</p>
-        <div class="interact" id="leak-demo">
-          <div class="interact-bar">
-            <button type="button" class="btn" id="leak-run">Run both traces</button>
-          </div>
+        <p class="kicker">Sketch · not a live node</p>
+        <h2>A forgotten prefix leaks. A tenant worker cannot.</h2>
+        <p class="lede">Two isolation models, side by side. Left is the accident on a shared cluster. Right is DBX: AUTH switches process, not a key name. This widget does not talk to a node.</p>
+        <div class="interact leak-demo" id="leak-demo">
           <div class="leak-grid">
-            <div class="leak-pane">
-              <h3>Shared cluster + prefix</h3>
-              <div class="leak-log" id="leak-shared" aria-live="polite">Idle. Press run.</div>
-            </div>
-            <div class="leak-pane">
-              <h3>DBX · one worker per tenant</h3>
-              <div class="leak-log" id="leak-dbx" aria-live="polite">Idle. Press run.</div>
-            </div>
+            <article class="leak-pane leak-pane--accident">
+              <header class="leak-head">
+                <span class="leak-badge leak-badge--accident">Shared cluster</span>
+                <h3>Tenancy is a prefix</h3>
+              </header>
+              <div class="leak-log" id="leak-shared" aria-live="polite">
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> AUTH default</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> SET user:alice:session tok-a</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> SELECT 1</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> SET user:bob:session tok-b</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> KEYS user:*</div>
+                <div class="term-line term-line--leak"><span class="leak-tag">leaked</span> 1) user:alice:session</div>
+                <div class="term-line term-line--leak"><span class="leak-tag">leaked</span> 2) user:bob:session</div>
+              </div>
+              <p class="leak-verdict leak-verdict--accident">One <code>KEYS user:*</code> returns alice <em>and</em> bob. The prefix was the only wall.</p>
+            </article>
+            <article class="leak-pane leak-pane--ok">
+              <header class="leak-head">
+                <span class="leak-badge leak-badge--ok">DBX</span>
+                <h3>Tenancy is a process</h3>
+              </header>
+              <div class="leak-log" id="leak-dbx" aria-live="polite">
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> AUTH tenant-alice</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> SET session tok-a</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> KEYS *</div>
+                <div class="term-line term-line--hold"><span class="leak-tag leak-tag--ok">this worker</span> 1) session</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> AUTH tenant-bob</div>
+                <div class="term-line term-line--in"><span class="leak-prompt">&gt;</span> GET user:alice:session</div>
+                <div class="term-line term-line--hold"><span class="leak-tag leak-tag--ok">isolated</span> (nil) — alice’s heap is not here</div>
+              </div>
+              <p class="leak-verdict leak-verdict--ok">AUTH switched workers. Bob’s engine never held alice’s keys.</p>
+            </article>
           </div>
-          <p class="note">The left pane is the accident this product exists to make impossible. The right pane is the invariant: AUTH switches process, not a key namespace.</p>
+          <div class="interact-bar">
+            <button type="button" class="btn btn-ghost" id="leak-run">Replay sketch</button>
+            <p class="muted" style="margin:0">Browser theatre. Same shape as the isolation bench above.</p>
+          </div>
         </div>
       </div>
     </section>
