@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DBX — Incubation pitch deck</title>
-  <meta name="description" content="Confidential incubation briefing for DBX, the per-tenant memory engine for AI products. v1.1.0. Isolation Kernel, BSL 1.1 business model, 18-month plan.">
+  <meta name="description" content="Confidential incubation briefing for DBX, the per-tenant memory engine for AI products. v1.2.0. Isolation Kernel, VSEARCH / VSIM / VFUSE, BSL 1.1 business model, 18-month plan.">
   <meta name="robots" content="noindex">
   <meta property="og:title" content="DBX — Incubation pitch">
   <meta property="og:description" content="The tenant is the database. Per-tenant memory engine for AI products.">
@@ -23,7 +23,7 @@
   <div class="stage">
     <div class="deck" role="region" aria-label="DBX incubation pitch">
 
-      <section class="slide is-on" data-notes="Open with the category, not a Redis comparison. Pause after the thesis. Mention this is v1.1.0, shipped, not a mockup.">
+      <section class="slide is-on" data-notes="Open with the category, not a Redis comparison. Pause after the thesis. Mention this is v1.2.0, shipped, not a mockup. Isolation Kernel shipped in v1.1.0.">
         <div class="cover-grid">
           <div class="cover-copy">
             <div class="cover-brand">
@@ -37,7 +37,7 @@
             <h1>The tenant is<br>the <em>database.</em></h1>
             <p class="lede">DBX is the per-tenant memory engine for AI products: one isolated store per customer, holding working state and vector memory. Not a shared cluster with a prefix.</p>
             <div class="cover-meta">
-              <span>Product <b>v1.1.0</b></span>
+              <span>Product <b>v1.2.0</b></span>
               <span>Profile <b>100 tenants / node</b></span>
               <span>License <b>BSL 1.1</b></span>
               <span>Founder <b>Vansh Jain · DTU</b></span>
@@ -266,13 +266,13 @@
         <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" width="16" height="16" alt="">DBX · Incubation deck</span><span>10</span></div>
       </section>
 
-      <section class="slide" data-notes="Traction is product, not ARR. Do not invent customers. Certification date 27 Aug 2026; Isolation Kernel in v1.1.0 (5 Sep 2026).">
-        <p class="kicker">Status · v1.1.0</p>
+      <section class="slide" data-notes="Traction is product, not ARR. Do not invent customers. Certification date 27 Aug 2026; Isolation Kernel in v1.1.0 (5 Sep 2026); recall surface in v1.2.0 (10 Sep 2026). Same ANN p50.">
+        <p class="kicker">Status · v1.2.0</p>
         <h2>Shipped. Certified. Open.</h2>
         <div class="grid-4">
           <div class="stat"><b>GO</b><span>Single-node production profile</span></div>
           <div class="stat"><b>100 / 100k</b><span>Tenants per node · vectors per tenant</span></div>
-          <div class="stat"><b>v1.1.0</b><span>Isolation Kernel · Unix data plane</span></div>
+          <div class="stat"><b>v1.2.0</b><span>VSEARCH / VSIM / VFUSE · Isolation Kernel</span></div>
           <div class="stat"><b>BSL 1.1</b><span>Free in your SaaS · paid if you sell ours</span></div>
         </div>
         <div class="grid-2" style="flex:1;min-height:0">
@@ -281,9 +281,10 @@
             <ul class="clean">
               <li>Single RESP ingress on :6380, scoped keys, quotas, usage API</li>
               <li>Linux strict Isolation Kernel + GHCR orchestrator image on release</li>
-              <li>Python SDK, LangChain and Next.js examples, embedded dashboard</li>
+              <li>Recall: VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE (weighted cosine, not a model)</li>
+              <li>Python SDK 1.2.0, LangChain and Next.js examples, embedded dashboard</li>
               <li>Async WAL replicas; data-plane Raft still fail-closed</li>
-              <li>Public site, 5m18s walkthrough, DEV.to Isolation Kernel article kit</li>
+              <li>Public site, narrated recall clip, 5m18s walkthrough, DEV.to Isolation Kernel article kit</li>
             </ul>
             <p class="tiny">We do not claim ARR, customer logos, SOC 2, a cluster, or a managed cloud. Windows is the certification host; Linux is the production USP. <code>hello@dbxdb.io</code> has no MX yet.</p>
           </article>
@@ -378,7 +379,7 @@
           <article class="card">
             <h3>Product sequencing</h3>
             <ul class="clean">
-              <li>Now: v1.1.0 single-node, Isolation Kernel, usage meter</li>
+              <li>Now: v1.2.0 single-node, Isolation Kernel, VSEARCH / VSIM / VFUSE, usage meter</li>
               <li>Next: published Linux density, engine coverage, promote-without-restart</li>
               <li>Then: larger soak beyond 100 tenants/node when measured</li>
               <li>Company decision: managed DBX when design partners pull, not before</li>
@@ -481,7 +482,7 @@
             <figcaption>Same binary as the Isolation Kernel</figcaption>
           </figure>
         </div>
-        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" width="16" height="16" alt="">DBX · Incubation deck · v1.1.0 · September 2026</span><span>19</span></div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" width="16" height="16" alt="">DBX · Incubation deck · v1.2.0 · September 2026</span><span>19</span></div>
       </section>
 
       <section class="slide" data-notes="Appendix. Skip in a 10-minute slot. Use if a judge asks 'what will you never build'.">
