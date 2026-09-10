@@ -58,6 +58,26 @@ func (idx *MMapVectorIndex) writeRow(row int, vec []float32) {
 	writeQuantized(dst, vec)
 }
 
+func (idx *MMapVectorIndex) readRow(row int) []float32 {
+	off := row * idx.rowBytes()
+	if off < 0 || off+idx.rowBytes() > len(idx.mmap) {
+		return nil
+	}
+	src := idx.mmap[off : off+idx.rowBytes()]
+	if idx.encoding == EncodingFloat32 {
+		return readFloat32Row(src, idx.dim)
+	}
+	return readSQ8(src, idx.dim)
+}
+
+func readFloat32Row(src []byte, dim int) []float32 {
+	vec := make([]float32, dim)
+	for i := 0; i < dim; i++ {
+		vec[i] = math.Float32frombits(binary.LittleEndian.Uint32(src[i*4 : i*4+4]))
+	}
+	return vec
+}
+
 func writeFloat32Row(dst []byte, vec []float32) {
 	var sum float32
 	for i, v := range vec {

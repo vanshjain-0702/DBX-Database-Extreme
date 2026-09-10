@@ -26,7 +26,7 @@ mem.forget("doc:1")
 plane.shred("acme-corp")
 ```
 
-`DBXClient` is still there if you want raw RESP (`SET` / `VADD`). `TenantMemory`
+`DBXClient` is still there if you want raw RESP (`SET` / `VADD` / `VSEARCH` / `VSIM` / `VFUSE`). `TenantMemory`
 is the product: one customer's working state and recall.
 
 Worked paths: [`examples/quickstart.py`](../../examples/quickstart.py),

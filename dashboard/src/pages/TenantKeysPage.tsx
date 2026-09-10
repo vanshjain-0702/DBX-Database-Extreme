@@ -99,7 +99,7 @@ export default function TenantKeysPage({ clusterId }: { clusterId: string }) {
                 <input className="input-field mb-4" value={name} onChange={e => setName(e.target.value)} required />
                 <label className="block mb-1.5">Role</label>
                 <select className="input-field mb-5" value={role} onChange={e => setRole(e.target.value)}>
-                  <option value="reader">reader — GET, VSEARCH</option>
+                  <option value="reader">reader — GET, VSEARCH, VSIM, VFUSE</option>
                   <option value="writer">writer — strings + VADD</option>
                   <option value="tenant-admin">tenant-admin — compact / admin</option>
                 </select>

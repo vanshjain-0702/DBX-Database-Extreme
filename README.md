@@ -319,7 +319,7 @@ curl -X POST http://localhost:8000/api/tenants/delete \
 
 Mint a **writer** key after you provision: dashboard **Tenant keys**
 (`/cluster/{tenant}/keys`) or `POST /api/v1/tenants/{id}/keys`. The secret is shown
-once. A **reader** key can `GET` and `VSEARCH` and cannot `SET`, `SETEX`, `VADD`, or
+once. A **reader** key can `GET`, `VSEARCH`, `VSIM`, and `VFUSE` and cannot `SET`, `SETEX`, `VADD`, or
 `VDEL`. Orchestrator tenants have no default superuser — loopback `AUTH default`
 is rejected.
 

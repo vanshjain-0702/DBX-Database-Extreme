@@ -490,6 +490,31 @@ label {
 .result-meta    { font-family: var(--font-mono); color: var(--text-muted); font-size: 11px; padding-top: 10px; border-top: 1px solid var(--border-color); }
 .results-list   { padding: 16px; overflow-y: auto; flex: 1; }
 
+.search-mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+.search-mode-tabs button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 8px;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+}
+.search-mode-tabs button.is-on {
+  background: var(--bg-panel);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--border-color);
+}
+
 .alert-error {
   background: rgba(225, 29, 72, 0.08);
   border: 1px solid rgba(225, 29, 72, 0.22);

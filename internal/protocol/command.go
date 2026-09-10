@@ -157,9 +157,11 @@ var Registry = map[string]CommandInfo{
 	"VADD":       {Name: "VADD", Arity: -4, KeyIndex: 1, DurableV1: true},
 	"VADD_BATCH": {Name: "VADD_BATCH", Arity: -4, KeyIndex: 1, DurableV1: true},
 	"VADDBIN":    {Name: "VADDBIN", Arity: 4, KeyIndex: 1, DurableV1: true},
-	"VDEL":       {Name: "VDEL", Arity: 3, KeyIndex: 1, DurableV1: true},
-	"VCOMPACT":   {Name: "VCOMPACT", Arity: 2, KeyIndex: 1, DurableV1: true, Admin: true},
+	"VDEL":       {Name: "VDEL", Arity: -3, KeyIndex: 1, DurableV1: true},
+	"VCOMPACT":   {Name: "VCOMPACT", Arity: -2, KeyIndex: 1, DurableV1: true, Admin: true},
 	"VSEARCH":    {Name: "VSEARCH", Arity: -4, ReadOnly: true, KeyIndex: 1},
+	"VSIM":       {Name: "VSIM", Arity: -4, ReadOnly: true, KeyIndex: 1},
+	"VFUSE":      {Name: "VFUSE", Arity: -8, ReadOnly: true, KeyIndex: 1},
 	// Pub/Sub commands
 	"PUBLISH":     {Name: "PUBLISH", Arity: 3, KeyIndex: 0},
 	"SUBSCRIBE":   {Name: "SUBSCRIBE", Arity: -2, KeyIndex: 0},
@@ -212,7 +214,7 @@ func ShouldAudit(name string) bool {
 	switch strings.ToUpper(name) {
 	case "SET", "SETEX", "GET", "MSET", "MGET", "INCR", "INCRBY", "DECR", "DECRBY",
 		"HSET", "HGET", "HMSET", "HMGET", "HDEL",
-		"VADD", "VADD_BATCH", "VSEARCH":
+		"VADD", "VADD_BATCH", "VSEARCH", "VSIM", "VFUSE":
 		return false
 	default:
 		return true

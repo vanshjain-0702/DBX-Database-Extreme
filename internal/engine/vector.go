@@ -50,6 +50,7 @@ type shardSearchJob struct {
 	mmap     []byte
 	dim      int
 	k        int
+	efSearch int
 	filter   func(id int) bool
 	rowInv   []float32
 	encoding string
@@ -312,7 +313,7 @@ func (idx *MMapVectorIndex) startSearchWorkers() {
 		go func() {
 			defer idx.searchWG.Done()
 			for job := range jobs {
-				*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv, job.qf32, job.qNorm, job.encoding)
+				*job.out = job.graph.Search(job.q8, job.qInv, job.mmap, job.dim, job.k, job.filter, job.rowInv, job.qf32, job.qNorm, job.encoding, job.efSearch)
 				job.wg.Done()
 			}
 		}()
@@ -1098,8 +1099,29 @@ type SearchResult struct {
 	Score float32
 }
 
+// SearchOpts controls ANN retrieval after graph search and cosine rescoring.
+type SearchOpts struct {
+	K           int
+	Filter      func(id string) bool
+	MinScore    float32
+	HasMinScore bool
+	EfSearch    int
+	ExcludeID   string
+}
+
+// SpaceQuery is one named-space query vector for late fusion.
+type SpaceQuery struct {
+	Space string
+	Query []float32
+}
+
 // VSearch performs ANN cosine KNN search using HNSW over persisted mmap rows.
 func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id string) bool) ([]SearchResult, error) {
+	return s.VSearchOpts(key, query, SearchOpts{K: k, Filter: filter})
+}
+
+// VSearchOpts is VSearch plus min-score, per-query ef, and self-exclusion.
+func (s *VectorStore) VSearchOpts(key string, query []float32, opts SearchOpts) ([]SearchResult, error) {
 	idx, unlock, err := s.getReadOnly(key)
 	if err != nil {
 		unlock()
@@ -1123,6 +1145,7 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 		return nil, fmt.Errorf("dimension mismatch: expected %d, got %d", idx.dim, len(query))
 	}
 
+	k := opts.K
 	if k <= 0 {
 		return []SearchResult{}, nil
 	}
@@ -1131,12 +1154,27 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 		if row < 0 || row >= len(idx.idList) || row >= len(idx.tombstones) || idx.tombstones[row] {
 			return false
 		}
-		return filter == nil || filter(idx.idList[row])
+		id := idx.idList[row]
+		if opts.ExcludeID != "" && id == opts.ExcludeID {
+			return false
+		}
+		return opts.Filter == nil || opts.Filter(id)
 	}
 
 	retrieve := k
 	if retrieve < 10 {
 		retrieve = 10
+	}
+	if opts.HasMinScore || opts.ExcludeID != "" {
+		if retrieve < k*8 {
+			retrieve = k * 8
+		}
+		if retrieve < 32 {
+			retrieve = 32
+		}
+		if retrieve > 256 {
+			retrieve = 256
+		}
 	}
 	queryNorm := l2Norm(query)
 	var q8 []int8
@@ -1156,7 +1194,7 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 			wg.Add(1)
 			jobs <- shardSearchJob{
 				graph: graph, q8: q8, qInv: qInv, qf32: query, qNorm: queryNorm,
-				mmap: idx.mmap, dim: idx.dim, k: retrieve, filter: hnswFilter,
+				mmap: idx.mmap, dim: idx.dim, k: retrieve, efSearch: opts.EfSearch, filter: hnswFilter,
 				rowInv: idx.rowInv, encoding: idx.encoding, out: &parts[i], wg: &wg,
 			}
 		}
@@ -1166,7 +1204,7 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 			if graph == nil {
 				continue
 			}
-			parts[i] = graph.Search(q8, qInv, idx.mmap, idx.dim, retrieve, hnswFilter, idx.rowInv, query, queryNorm, idx.encoding)
+			parts[i] = graph.Search(q8, qInv, idx.mmap, idx.dim, retrieve, hnswFilter, idx.rowInv, query, queryNorm, idx.encoding, opts.EfSearch)
 		}
 	}
 	hnswResults := make([]intNode, 0, retrieve*len(idx.graphs))
@@ -1183,20 +1221,143 @@ func (s *VectorStore) VSearch(key string, query []float32, k int, filter func(id
 	sort.Slice(hnswResults, func(i, j int) bool {
 		return hnswResults[i].Score > hnswResults[j].Score
 	})
-	if len(hnswResults) > k {
-		hnswResults = hnswResults[:k]
-	}
 
-	results := make([]SearchResult, 0, len(hnswResults))
+	results := make([]SearchResult, 0, k)
+	seen := make(map[int]struct{}, len(hnswResults))
 	for _, res := range hnswResults {
-		if res.ID >= 0 && res.ID < len(idx.idList) {
-			results = append(results, SearchResult{
-				ID:    idx.idList[res.ID],
-				Score: res.Score,
-			})
+		if res.ID < 0 || res.ID >= len(idx.idList) {
+			continue
+		}
+		if _, dup := seen[res.ID]; dup {
+			continue
+		}
+		seen[res.ID] = struct{}{}
+		if opts.HasMinScore && res.Score < opts.MinScore {
+			continue
+		}
+		results = append(results, SearchResult{
+			ID:    idx.idList[res.ID],
+			Score: res.Score,
+		})
+		if len(results) >= k {
+			break
 		}
 	}
 
+	return results, nil
+}
+
+// GetVector returns the stored row for id. SQ8 rows are dequantized; ranking
+// still uses the mmap, so this is the same representation VSIM searches with.
+func (s *VectorStore) GetVector(key, id string) ([]float32, error) {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil {
+		return nil, err
+	}
+	if idx == nil {
+		return nil, fmt.Errorf("vector id not found")
+	}
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	idx.mmapHold.RLock()
+	defer idx.mmapHold.RUnlock()
+	row, exists := idx.idMap[id]
+	if !exists || row < 0 || row >= idx.count || (row < len(idx.tombstones) && idx.tombstones[row]) {
+		return nil, fmt.Errorf("vector id not found")
+	}
+	vec := idx.readRow(row)
+	if vec == nil {
+		return nil, fmt.Errorf("vector id not found")
+	}
+	return vec, nil
+}
+
+// VFuse late-fuses cosine hits across named spaces with caller-supplied weights.
+// Missing ids contribute 0. DBX does not run an embedding model.
+func (s *VectorStore) VFuse(index string, queries []SpaceQuery, weights []float32, opts SearchOpts) ([]SearchResult, error) {
+	if len(queries) < 2 {
+		return nil, fmt.Errorf("fuse requires at least two SPACE queries")
+	}
+	seenSpace := make(map[string]struct{}, len(queries))
+	for _, q := range queries {
+		if q.Space != "" {
+			if err := ValidateSpaceName(q.Space); err != nil {
+				return nil, err
+			}
+		}
+		if _, dup := seenSpace[q.Space]; dup {
+			return nil, fmt.Errorf("duplicate SPACE %q", q.Space)
+		}
+		seenSpace[q.Space] = struct{}{}
+		if len(q.Query) == 0 {
+			return nil, fmt.Errorf("empty query vector for SPACE %q", q.Space)
+		}
+	}
+	if len(weights) == 0 {
+		weights = make([]float32, len(queries))
+		for i := range weights {
+			weights[i] = 1
+		}
+	}
+	if len(weights) != len(queries) {
+		return nil, fmt.Errorf("WEIGHTS count must match SPACE count")
+	}
+	var weightSum float32
+	for _, w := range weights {
+		if w < 0 || math.IsNaN(float64(w)) || math.IsInf(float64(w), 0) {
+			return nil, fmt.Errorf("WEIGHTS must be finite and non-negative")
+		}
+		weightSum += w
+	}
+	if weightSum == 0 {
+		return nil, fmt.Errorf("WEIGHTS must sum to a positive value")
+	}
+
+	k := opts.K
+	if k <= 0 {
+		return []SearchResult{}, nil
+	}
+	fetchK := k * 8
+	if fetchK < 32 {
+		fetchK = 32
+	}
+	if fetchK > 256 {
+		fetchK = 256
+	}
+
+	merged := make(map[string]float32)
+	subOpts := SearchOpts{K: fetchK, Filter: opts.Filter, EfSearch: opts.EfSearch}
+	for i, q := range queries {
+		hits, err := s.VSearchOpts(VectorSpaceKey(index, q.Space), q.Query, subOpts)
+		if err != nil {
+			return nil, err
+		}
+		w := weights[i] / weightSum
+		for _, hit := range hits {
+			merged[hit.ID] += w * hit.Score
+		}
+	}
+
+	results := make([]SearchResult, 0, len(merged))
+	for id, score := range merged {
+		if opts.HasMinScore && score < opts.MinScore {
+			continue
+		}
+		if opts.ExcludeID != "" && id == opts.ExcludeID {
+			continue
+		}
+		results = append(results, SearchResult{ID: id, Score: score})
+	}
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].Score == results[j].Score {
+			return results[i].ID < results[j].ID
+		}
+		return results[i].Score > results[j].Score
+	})
+	if len(results) > k {
+		results = results[:k]
+	}
 	return results, nil
 }
 

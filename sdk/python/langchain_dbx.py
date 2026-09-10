@@ -55,7 +55,13 @@ class DBXVectorStore(VectorStore):
         self, query: str, k: int = 4, **kwargs: Any
     ) -> List[Document]:
         query_embedding = [float(x) for x in self.embedding.embed_query(query)]
-        results = self.client.vsearch(self.index_name, query_embedding, top_k=k)
+        results = self.client.vsearch(
+            self.index_name,
+            query_embedding,
+            top_k=k,
+            min_score=kwargs.get("min_score"),
+            space=kwargs.get("space"),
+        )
 
         docs = []
         for doc_id, _score in results:

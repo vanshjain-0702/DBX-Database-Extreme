@@ -53,12 +53,14 @@
         <h2>KV (v1 durable)</h2>
         <p><code>SET</code> (optional <code>EX</code>), <code>SETEX</code>, <code>GET DEL KEYS EXPIRE TTL PERSIST MSET MGET</code>. Hashes, lists, sets, sorted sets, streams, JSON, bitmap, geo, transactions, pub/sub, <code>FLUSH*</code>, cluster, and replication mutations are not in the v1 contract and fail before dispatch.</p>
         <h2>Vectors</h2>
-        <p>Index key first, so one tenant can hold several indexes.</p>
+        <p>Index key first, so one tenant can hold several indexes. Optional <code>SPACE name</code> writes a named modality graph beside the default index. Embeddings are caller-provided; DBX does not run a model.</p>
         <ul>
-          <li><code>VADD</code> / <code>VADD_BATCH</code></li>
-          <li><code>VDEL</code> — generation tombstone</li>
+          <li><code>VADD</code> / <code>VADD_BATCH</code> — optional <code>SPACE name</code></li>
+          <li><code>VDEL</code> — generation tombstone; optional <code>SPACE</code></li>
           <li><code>VCOMPACT</code> — tenant-admin; rewrite active rows and rebuild HNSW</li>
-          <li><code>VSEARCH</code> — cosine, top-k last</li>
+          <li><code>VSEARCH</code> — cosine, top-k last. Flags: <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>, <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code></li>
+          <li><code>VSIM</code> — neighbors of a stored id (self excluded); same flags as <code>VSEARCH</code></li>
+          <li><code>VFUSE</code> — late-fusion across named spaces (<code>SPACE s floats…</code> repeated, optional <code>WEIGHTS w1,w2</code>)</li>
         </ul>
         <p>There is no <code>VGET</code> or <code>VSET</code>. Recall and latency gates are on the <a href="../performance.html">performance</a> page.</p>
         <h2>Metrics</h2>

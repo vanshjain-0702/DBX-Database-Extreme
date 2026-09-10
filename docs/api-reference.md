@@ -161,16 +161,20 @@ tenant can hold several independent indexes.
 
 | Command | Example | Notes |
 |---|---|---|
-| `VADD` | `["VADD", "memories", "doc:1", "0.1", "0.2", "0.9"]` | Adds or replaces one vector. Prefer the batch form for bulk loads. |
-| `VADD_BATCH` | `["VADD_BATCH", "memories", "3", "doc:1", "0.1", "0.2", "0.9", ...]` | Writes the batch then inserts into HNSW; metadata is flushed after every batch so checkpoint-restore works. RESP caps arrays at 4096 items; use `VADDBIN` for large dims. |
-| `VDEL` | `["VDEL", "memories", "doc:1"]` | Writes a generation tombstone. Deleted rows may be traversed but are never returned. |
-| `VCOMPACT` | `["VCOMPACT", "memories"]` | Rewrites active rows and rebuilds HNSW; tenant-admin only. |
-| `VSEARCH` | `["VSEARCH", "memories", "0.1", "0.2", "0.8", "5"]` | Cosine similarity over the HNSW index, top-k last. |
+| `VADD` | `["VADD", "memories", "doc:1", "0.1", "0.2", "0.9"]` | Adds or replaces one vector. Optional `SPACE name` after the id writes a named modality graph under the same index. Prefer the batch form for bulk loads. |
+| `VADD_BATCH` | `["VADD_BATCH", "memories", "3", "doc:1", "0.1", "0.2", "0.9", ...]` | Writes the batch then inserts into HNSW; metadata is flushed after every batch so checkpoint-restore works. RESP caps arrays at 4096 items; use `VADDBIN` for large dims. Optional `SPACE name` after dim. |
+| `VDEL` | `["VDEL", "memories", "doc:1"]` | Writes a generation tombstone. Deleted rows may be traversed but are never returned. Optional `SPACE name`. |
+| `VCOMPACT` | `["VCOMPACT", "memories"]` | Rewrites active rows and rebuilds HNSW; tenant-admin only. Optional `SPACE name`. |
+| `VSEARCH` | `["VSEARCH", "memories", "0.1", "0.2", "0.8", "5"]` | Cosine similarity over HNSW, top-k last. Trailing flags: `WITHDOCS prefix`, `FILTER_CONTAINS substr` (KV `doc:{index}:{id}`), `MIN_SCORE s`, `EF n`, `SPACE name`. |
+| `VSIM` | `["VSIM", "memories", "doc:1", "5"]` | Similarity search from a stored id. Loads that row, excludes self, same flags as `VSEARCH`. |
+| `VFUSE` | `["VFUSE", "memories", "SPACE", "text", "0.1", "0.2", "SPACE", "image", "0.3", "0.4", "5", "WEIGHTS", "0.6,0.4"]` | Late-fuses cosine hits across named spaces. Weighted sum; missing ids score 0. DBX does not run an embedding model — send the floats your model produced. Same trailing flags as `VSEARCH` except `SPACE` (spaces are query segments) plus `WEIGHTS w1,w2`. |
 
 There is no `VGET` or `VSET`. The 100k-vector recall@10, ingest, and search-latency
 gates pass on the certified profile. See the
 [certification matrix](../scripts/benchmarks/performance_analysis.md) before selecting
-a production capacity.
+a production capacity. Named spaces are extra mmap/HNSW files in the same tenant
+directory; they are not a SQL payload index and they are not a multimodal model
+runtime.
 
 ---
 
@@ -187,11 +191,13 @@ plane.login("admin", password)
 mem = TenantMemory.open(plane, "acme-corp")
 mem.remember("pref", "likes dark mode", vector=[0.1, 0.2, 0.9])
 hits = mem.recall([0.1, 0.2, 0.8])
+neighbors = mem.similar("pref")
+fused = mem.fuse({"text": [0.1, 0.2, 0.8], "image": [0.1, 0.2, 0.8]})
 mem.forget("pref")
 plane.shred("acme-corp")
 ```
 
-`DBXClient` is still available for raw RESP (`SET`, `VADD`, `VSEARCH`).
+`DBXClient` is still available for raw RESP (`SET`, `VADD`, `VSEARCH`, `VSIM`, `VFUSE`).
 Worker HTTP endpoints use a 2-minute timeout for large-tenant backups.
 
 ---

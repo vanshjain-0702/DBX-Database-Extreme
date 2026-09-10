@@ -114,7 +114,7 @@ DBX uses a two-layer persistence model:
 - **Control-plane authentication:** JWT Bearer tokens issued to operators.
 - **Data-plane authentication:** 256-bit tenant keys stored only as hashes. Roles
   `reader`, `writer`, and `tenant-admin` are enforced on every RESP command.
-  A reader cannot `SET`, `SETEX`, `VADD`, or `VDEL`. Revoke deletes the user so
+  A reader cannot `SET`, `SETEX`, `VADD`, or `VDEL`. `VSEARCH`, `VSIM`, and `VFUSE` are reads. Revoke deletes the user so
   existing connections fail on the next command.
 - **Authorization:** `reader`, `writer`, and `tenant-admin` roles with key-pattern scopes.
 - **Rate Limiting:** Per-IP brute-force protection on the `/api/login` endpoint (5 failures = 60-second lockout).

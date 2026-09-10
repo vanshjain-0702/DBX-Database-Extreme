@@ -1610,25 +1610,29 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		}
 		key := cmd.Arg(0)
 		id := cmd.Arg(1)
-		vec := make([]float32, cmd.NumArgs()-2)
-		for i := 2; i < cmd.NumArgs(); i++ {
-			val, err := strconv.ParseFloat(cmd.Arg(i), 32)
-			if err != nil {
-				return w.WriteError(fmt.Sprintf("ERR value is not a valid float: '%s'", cmd.Arg(i)))
-			}
-			vec[i-2] = float32(val)
+		space, start, err := parseOptionalSpace(cmd, 2)
+		if err != nil {
+			return w.WriteError(err.Error())
 		}
-		if err := e.vec.ValidateAdd(key, id, vec); err != nil {
+		if start >= cmd.NumArgs() {
+			return w.WriteError(protocol.WrongNumArgsError("VADD"))
+		}
+		vec, err := parseFloatArgs(cmd, start, cmd.NumArgs())
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		storageKey := engine.VectorSpaceKey(key, space)
+		if err := e.vec.ValidateAdd(storageKey, id, vec); err != nil {
 			return w.WriteError(err.Error())
 		}
 		if err := e.writeWAL(&persistence.WALRecord{
 			Type:  persistence.RecordVAdd,
-			Key:   key,
+			Key:   storageKey,
 			Value: persistence.EncodeVAddPayload(id, vec),
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}
-		if err := e.vec.VAdd(key, id, vec); err != nil {
+		if err := e.vec.VAdd(storageKey, id, vec); err != nil {
 			e.metrics.TenantReady.Store(0)
 			return w.WriteError("ERR vector apply failed after WAL append: " + err.Error())
 		}
@@ -1644,8 +1648,13 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteError("ERR dim is not a valid positive integer")
 		}
 
-		// VADD_BATCH key dim id1 v1... id2 v1...
-		argsRemaining := cmd.NumArgs() - 2
+		space, argIdx, err := parseOptionalSpace(cmd, 2)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+
+		// VADD_BATCH key dim [SPACE name] id1 v1... id2 v1...
+		argsRemaining := cmd.NumArgs() - argIdx
 		if argsRemaining%(dim+1) != 0 {
 			return w.WriteError("ERR incorrect number of arguments for the given dimension")
 		}
@@ -1658,7 +1667,6 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		ids := make([]string, numVectors)
 		vecs := make([][]float32, numVectors)
 
-		argIdx := 2
 		for i := 0; i < numVectors; i++ {
 			ids[i] = cmd.Arg(argIdx)
 			argIdx++
@@ -1675,17 +1683,18 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			vecs[i] = vec
 		}
 
-		if err = e.vec.ValidateAddBatch(key, dim, ids, vecs); err != nil {
+		storageKey := engine.VectorSpaceKey(key, space)
+		if err = e.vec.ValidateAddBatch(storageKey, dim, ids, vecs); err != nil {
 			return w.WriteError(err.Error())
 		}
 		if err := e.writeWAL(&persistence.WALRecord{
 			Type:  persistence.RecordVAddBatch,
-			Key:   key,
+			Key:   storageKey,
 			Value: persistence.EncodeVAddBatchPayload(dim, ids, vecs),
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}
-		if err = e.vec.VAddBatch(key, dim, ids, vecs); err != nil {
+		if err = e.vec.VAddBatch(storageKey, dim, ids, vecs); err != nil {
 			e.metrics.TenantReady.Store(0)
 			return w.WriteError("ERR vector apply failed after WAL append: " + err.Error())
 		}
@@ -1754,11 +1763,19 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		return w.WriteInteger(int64(len(ids)))
 
 	case "VDEL":
-		if cmd.NumArgs() != 2 {
+		if cmd.NumArgs() < 2 {
 			return w.WriteError(protocol.WrongNumArgsError("VDEL"))
 		}
 		key, id := cmd.Arg(0), cmd.Arg(1)
-		exists, err := e.vec.HasLiveVector(key, id)
+		space, next, err := parseOptionalSpace(cmd, 2)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		if next != cmd.NumArgs() {
+			return w.WriteError(protocol.WrongNumArgsError("VDEL"))
+		}
+		storageKey := engine.VectorSpaceKey(key, space)
+		exists, err := e.vec.HasLiveVector(storageKey, id)
 		if err != nil {
 			return w.WriteError(err.Error())
 		}
@@ -1766,17 +1783,17 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			return w.WriteInteger(0)
 		}
 		if err := e.writeWAL(&persistence.WALRecord{
-			Type: persistence.RecordVTombstone, Key: key, Value: []byte(id),
+			Type: persistence.RecordVTombstone, Key: storageKey, Value: []byte(id),
 		}); err != nil {
 			return w.WriteError("ERR WAL write failed: " + err.Error())
 		}
-		deleted, err := e.vec.VDel(key, id)
+		deleted, err := e.vec.VDel(storageKey, id)
 		if err != nil {
 			e.metrics.TenantReady.Store(0)
 			return w.WriteError("ERR vector tombstone apply failed after WAL append: " + err.Error())
 		}
-		if ratio, ratioErr := e.vec.TombstoneRatio(key); ratioErr == nil && ratio > 0.20 {
-			if _, compactErr := e.vec.VCompact(key); compactErr != nil {
+		if ratio, ratioErr := e.vec.TombstoneRatio(storageKey); ratioErr == nil && ratio > 0.20 {
+			if _, compactErr := e.vec.VCompact(storageKey); compactErr != nil {
 				e.metrics.TenantReady.Store(0)
 				return w.WriteError("ERR vector compaction failed: " + compactErr.Error())
 			}
@@ -1787,10 +1804,17 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		return w.WriteInteger(0)
 
 	case "VCOMPACT":
-		if cmd.NumArgs() != 1 {
+		if cmd.NumArgs() < 1 {
 			return w.WriteError(protocol.WrongNumArgsError("VCOMPACT"))
 		}
-		removed, err := e.vec.VCompact(cmd.Arg(0))
+		space, next, err := parseOptionalSpace(cmd, 1)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		if next != cmd.NumArgs() {
+			return w.WriteError(protocol.WrongNumArgsError("VCOMPACT"))
+		}
+		removed, err := e.vec.VCompact(engine.VectorSpaceKey(cmd.Arg(0), space))
 		if err != nil {
 			return w.WriteError(err.Error())
 		}
@@ -1800,101 +1824,79 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		if cmd.NumArgs() < 3 {
 			return w.WriteError(protocol.WrongNumArgsError("VSEARCH"))
 		}
-
-		end := cmd.NumArgs()
-		var withDocsPrefix string
-		var filterContains string
-		for end >= 3 {
-			flag := strings.ToUpper(cmd.Arg(end - 2))
-			if flag == "WITHDOCS" {
-				withDocsPrefix = cmd.Arg(end - 1)
-				end -= 2
-				continue
-			}
-			if flag == "FILTER_CONTAINS" {
-				filterContains = cmd.Arg(end - 1)
-				end -= 2
-				continue
-			}
-			break
+		end, flags, err := stripVectorFlags(cmd, vectorFlagOpts{allowSpace: true})
+		if err != nil {
+			return w.WriteError(err.Error())
 		}
-
-		key := cmd.Arg(0)
+		if end < 3 {
+			return w.WriteError(protocol.WrongNumArgsError("VSEARCH"))
+		}
 		k, err := strconv.Atoi(cmd.Arg(end - 1))
 		if err != nil {
 			return w.WriteError("ERR k is not a valid integer")
 		}
-
-		query := make([]float32, end-2)
-		for i := 1; i < end-1; i++ {
-			val, err := strconv.ParseFloat(cmd.Arg(i), 32)
-			if err != nil {
-				return w.WriteError(fmt.Sprintf("ERR query is not a valid float: '%s'", cmd.Arg(i)))
-			}
-			query[i-1] = float32(val)
+		query, err := parseFloatArgs(cmd, 1, end-1)
+		if err != nil {
+			return w.WriteError(fmt.Sprintf("ERR query is not a valid float: '%s'", err.Error()))
 		}
-
-		var filterFunc func(id string) bool
-		if filterContains != "" {
-			filterFunc = func(id string) bool {
-				// We assume metadata is stored under doc:{index}:{id}
-				docKey := fmt.Sprintf("doc:%s:%s", key, id)
-				entry, unlock := e.kv.GetForRead(docKey)
-				if entry == nil {
-					return false
-				}
-				defer unlock()
-				if entry.Type == protocol.TypeString {
-					var strVal string
-					switch v := entry.Value.(type) {
-					case string:
-						strVal = v
-					case []byte:
-						strVal = string(v)
-					}
-					return strings.Contains(strVal, filterContains)
-				}
-				return false
-			}
+		if len(query) == 0 {
+			return w.WriteError("ERR missing query vector")
 		}
-
-		results, err := e.vec.VSearch(key, query, k, filterFunc)
+		index := cmd.Arg(0)
+		opts := searchOptsFromFlags(k, flags, e.vectorContainsFilter(index, flags.filterContains))
+		results, err := e.vec.VSearchOpts(engine.VectorSpaceKey(index, flags.space), query, opts)
 		if err != nil {
 			return w.WriteError(err.Error())
 		}
+		return e.writeVectorHits(w, results, flags.withDocs)
 
-		w.WriteArray(len(results))
-		for _, res := range results {
-			if withDocsPrefix != "" {
-				w.WriteArray(3)
-				w.WriteBulkStringStr(res.ID)
-				w.WriteBulkStringStr(fmt.Sprintf("%f", res.Score))
-
-				docKey := fmt.Sprintf("%s:%s", withDocsPrefix, res.ID)
-				entry, unlock := e.kv.GetForRead(docKey)
-				if entry != nil && entry.Type == protocol.TypeString {
-					var strVal string
-					switch v := entry.Value.(type) {
-					case string:
-						strVal = v
-					case []byte:
-						strVal = string(v)
-					}
-					w.WriteBulkStringStr(strVal)
-					unlock()
-				} else {
-					if entry != nil {
-						unlock()
-					}
-					w.WriteNull()
-				}
-			} else {
-				w.WriteArray(2)
-				w.WriteBulkStringStr(res.ID)
-				w.WriteBulkStringStr(fmt.Sprintf("%f", res.Score))
-			}
+	case "VSIM":
+		if cmd.NumArgs() < 3 {
+			return w.WriteError(protocol.WrongNumArgsError("VSIM"))
 		}
-		return nil
+		end, flags, err := stripVectorFlags(cmd, vectorFlagOpts{allowSpace: true})
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		if end != 3 {
+			return w.WriteError(protocol.WrongNumArgsError("VSIM"))
+		}
+		index, id := cmd.Arg(0), cmd.Arg(1)
+		k, err := strconv.Atoi(cmd.Arg(2))
+		if err != nil {
+			return w.WriteError("ERR k is not a valid integer")
+		}
+		storageKey := engine.VectorSpaceKey(index, flags.space)
+		query, err := e.vec.GetVector(storageKey, id)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		opts := searchOptsFromFlags(k, flags, e.vectorContainsFilter(index, flags.filterContains))
+		opts.ExcludeID = id
+		results, err := e.vec.VSearchOpts(storageKey, query, opts)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		return e.writeVectorHits(w, results, flags.withDocs)
+
+	case "VFUSE":
+		if cmd.NumArgs() < 8 {
+			return w.WriteError(protocol.WrongNumArgsError("VFUSE"))
+		}
+		end, flags, err := stripVectorFlags(cmd, vectorFlagOpts{allowWeights: true})
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		index, k, queries, err := parseFuseQueries(cmd, end)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		opts := searchOptsFromFlags(k, flags, e.vectorContainsFilter(index, flags.filterContains))
+		results, err := e.vec.VFuse(index, queries, flags.weights, opts)
+		if err != nil {
+			return w.WriteError(err.Error())
+		}
+		return e.writeVectorHits(w, results, flags.withDocs)
 
 	default:
 		_ = util.ErrSyntax
