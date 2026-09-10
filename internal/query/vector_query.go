@@ -125,7 +125,7 @@ func parseFuseQueries(cmd *protocol.Command, end int) (string, int, []engine.Spa
 	i := 1
 	for i < end-1 {
 		if !strings.EqualFold(cmd.Arg(i), "SPACE") {
-			return "", 0, nil, fmt.Errorf("VFUSE expected SPACE name floats...")
+			return "", 0, nil, fmt.Errorf("VFUSE expected SPACE name then floats")
 		}
 		i++
 		if i >= end-1 {
