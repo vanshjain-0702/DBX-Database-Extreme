@@ -171,9 +171,12 @@ export default function VectorPlaygroundPage({ clusterId }: { clusterId: string 
     }
   };
 
-  const scoreHint = mode === 'multimodal'
-    ? 'Scores are a weighted sum of per-space cosine × 100. DBX stores the floats you send; embeddings stay in this browser.'
-    : 'Scores are cosine similarity × 100. Embeddings are computed in this browser with MiniLM (384-d). DBX does not run a model.';
+  const scoreHint =
+    mode === 'multimodal'
+      ? 'Scores are a weighted sum of per-space cosine × 100. DBX stores the floats you send; embeddings stay in this browser.'
+      : mode === 'similar'
+        ? 'Scores are cosine similarity × 100. VSIM reads the stored row and excludes that id. DBX does not run a model.'
+        : 'Scores are cosine similarity × 100. Embeddings are computed in this browser with MiniLM (384-d). DBX does not run a model.';
 
   const title = mode === 'similar' ? 'Similarity search' : mode === 'multimodal' ? 'Multimodal fusion' : 'Semantic search';
 
@@ -330,9 +333,11 @@ export default function VectorPlaygroundPage({ clusterId }: { clusterId: string 
                 onChange={e => setEf(e.target.value)}
               />
             </div>
-            <p className="text-[11px] text-[var(--text-muted)]">
-              Browser encoder is MiniLM at {MINILM_DIM} dimensions. 128-d benchmark indexes will reject the query — use the console with matching floats.
-            </p>
+            {mode !== 'similar' && (
+              <p className="text-[11px] text-[var(--text-muted)]">
+                Browser encoder is MiniLM at {MINILM_DIM} dimensions. 128-d benchmark indexes will reject the query — use the console with matching floats.
+              </p>
+            )}
 
             <button type="button" className="btn-primary self-start" onClick={handleSearch} disabled={loading || modelLoading}>
               {modelLoading ? (
