@@ -124,19 +124,39 @@ class DBXClient:
         return res == 1
 
     def vadd_batch(
-        self, index_name: str, dim: int, doc_ids: List[str], vectors: List[List[float]]
+        self,
+        index_name: str,
+        dim: int,
+        doc_ids: List[str],
+        vectors: List[List[float]],
+        chunk_size: int = 1000,
     ) -> int:
+        """Batch-insert vectors into a named index.
+
+        Automatically splits payloads larger than ``chunk_size`` (default 1000)
+        into multiple ``VADD_BATCH`` commands so callers never need to worry
+        about the per-command vector limit.
+        """
         if len(doc_ids) != len(vectors):
             raise ValueError("doc_ids and vectors must be the same length")
-        args: List[Union[str, int, float]] = [index_name, dim]
-        for i, doc_id in enumerate(doc_ids):
-            args.append(doc_id)
-            args.extend(vectors[i])
-        try:
-            res = self.r.execute_command("VADD_BATCH", *args)
-        except redis.RedisError as exc:
-            raise DBXError(str(exc)) from exc
-        return int(cast(Union[int, str], res or 0))
+
+        total = 0
+        for start in range(0, len(doc_ids), chunk_size):
+            chunk_ids = doc_ids[start : start + chunk_size]
+            chunk_vecs = vectors[start : start + chunk_size]
+
+            args: List[Union[str, int, float]] = [index_name, dim]
+            for i, doc_id in enumerate(chunk_ids):
+                args.append(doc_id)
+                args.extend(chunk_vecs[i])
+            try:
+                res = self.r.execute_command("VADD_BATCH", *args)
+            except redis.RedisError as exc:
+                raise DBXError(str(exc)) from exc
+            total += int(cast(Union[int, str], res or 0))
+
+        return total
+
 
     def vsearch(
         self,
