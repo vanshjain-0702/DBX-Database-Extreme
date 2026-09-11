@@ -157,7 +157,6 @@ class DBXClient:
 
         return total
 
-
     def vsearch(
         self,
         index_name: str,
