@@ -21,25 +21,25 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../sdk/python"))
 
-from dbx import ControlPlane, DBXClient
+from dbx import ControlPlane, DBXClient  # noqa: E402
 
-# ── LlamaIndex imports ───────────────────────────────────────────────────────
+# -- LlamaIndex imports ------------------------------------------------------
 try:
     from llama_index.core import VectorStoreIndex, StorageContext
-    from llama_index.core.schema import TextNode
     from llamaindex_dbx import DBXVectorStore
+    from llama_index.core.vector_stores.types import VectorStoreQuery
 except ImportError:
     print("Install: pip install -e '../../sdk/python[llamaindex]'")
     sys.exit(1)
 
-# ── Config ────────────────────────────────────────────────────────────────────
+# -- Config ------------------------------------------------------------------
 ORCHESTRATOR_URL = os.getenv("DBX_URL", "http://127.0.0.1:8000")
 ADMIN_PASSWORD = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin")
 RESP_HOST = os.getenv("DBX_HOST", "127.0.0.1")
 RESP_PORT = int(os.getenv("DBX_PORT", "6380"))
 TENANT_ID = "llamaindex-rag-demo"
 
-# ── Provision tenant ──────────────────────────────────────────────────────────
+# -- Provision tenant --------------------------------------------------------
 plane = ControlPlane(ORCHESTRATOR_URL)
 plane.login("admin", ADMIN_PASSWORD)
 try:
@@ -66,11 +66,11 @@ for _ in range(20):
     except Exception:
         time.sleep(0.5)
 
-# ── Build VectorStore ─────────────────────────────────────────────────────────
+# -- Build VectorStore -------------------------------------------------------
 vector_store = DBXVectorStore(client=client, index_name="rag_index")
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-# ── Sample documents ──────────────────────────────────────────────────────────
+# -- Sample documents --------------------------------------------------------
 DOCUMENTS = [
     "DBX is a per-tenant, OS-isolated AI memory engine built in Go.",
     "Each DBX tenant gets its own isolated process secured with Linux Landlock.",
@@ -81,27 +81,24 @@ DOCUMENTS = [
     "DBX is a drop-in replacement for running Redis + Pinecone side by side.",
 ]
 
-# ── Use fake embeddings if no OPENAI_API_KEY ──────────────────────────────────
+# -- Embedding model ---------------------------------------------------------
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 if OPENAI_KEY:
     from llama_index.embeddings.openai import OpenAIEmbedding
-    from llama_index.llms.openai import OpenAI
 
     embed_model = OpenAIEmbedding()
-    llm = OpenAI(model="gpt-4o-mini")
-    print("Using OpenAI embeddings and GPT-4o-mini LLM.")
+    print("Using OpenAI embeddings.")
 else:
-    # Fallback: MockEmbedding for demo purposes (no API key needed)
     from llama_index.core.embeddings import MockEmbedding
+
     print("No OPENAI_API_KEY found. Using MockEmbedding for demo purposes.")
     embed_model = MockEmbedding(embed_dim=64)
-    llm = None
 
-# ── Index documents ───────────────────────────────────────────────────────────
+# -- Index documents ---------------------------------------------------------
 print(f"\nIndexing {len(DOCUMENTS)} documents into DBX tenant '{TENANT_ID}'...")
 t0 = time.perf_counter()
 
-from llama_index.core import Document
+from llama_index.core import Document  # noqa: E402
 
 li_docs = [Document(text=d) for d in DOCUMENTS]
 index = VectorStoreIndex.from_documents(
@@ -113,8 +110,7 @@ index = VectorStoreIndex.from_documents(
 elapsed = time.perf_counter() - t0
 print(f"Indexed in {elapsed:.3f}s")
 
-# ── Query ─────────────────────────────────────────────────────────────────────
-from llama_index.core.vector_stores.types import VectorStoreQuery
+# -- Query -------------------------------------------------------------------
 queries = [
     "How does DBX isolate tenants?",
     "What is the memory footprint of DBX?",
@@ -132,7 +128,7 @@ for q in queries:
     for node, score in zip(result.nodes or [], result.similarities or []):
         print(f"  [{score:.4f}] {node.get_content()[:80]}")
 
-# ── Cleanup ───────────────────────────────────────────────────────────────────
+# -- Cleanup -----------------------------------------------------------------
 print("\nShredding demo tenant...")
 plane.shred(TENANT_ID)
 print("Done.")

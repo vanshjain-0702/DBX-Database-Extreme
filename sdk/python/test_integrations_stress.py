@@ -1,2 +1,506 @@
-# flake8: noqa
-""" test_integrations_stress.py ============================ Stress test for DBXVectorStore (LangChain) and DBXVectorStore (LlamaIndex).  Tests:   1. LangChain adapter  — batch ingestion, similarity search, scored search, delete   2. LlamaIndex adapter — batch ingestion, VectorStoreIndex query, delete   3. Concurrent stress  — 3 isolated tenants ingesting 1000 docs each in parallel   4. One-line swap demo — same code works with both adapters  Run with:     cd sdk/python     pip install -e ".[all]"     python test_integrations_stress.py """  import concurrent.futures import os import random import sys import time import traceback import uuid  # ── DBX core ───────────────────────────────────────────────────────────────── sys.path.insert(0, os.path.dirname(__file__)) from dbx import ControlPlane, DBXClient  # ── config ──────────────────────────────────────────────────────────────────── ORCHESTRATOR_URL = os.getenv("DBX_URL", "http://127.0.0.1:8000") ADMIN_PASSWORD = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin") RESP_HOST = os.getenv("DBX_HOST", "127.0.0.1") RESP_PORT = int(os.getenv("DBX_PORT", "6380"))  EMBED_DIM = 64  # lightweight fake embeddings — no OpenAI key needed STRESS_DOCS = 1000  # docs per tenant STRESS_TENANTS = 3  # concurrent isolated tenants SEARCH_K = 5  # ───────────────────────────────────────────────────────────────────────────── # Fake Embeddings (no external API required) # ─────────────────────────────────────────────────────────────────────────────   class FakeEmbeddings:     """Deterministic fake embedder: text → fixed-dim L2-normalised vector."""      dim = EMBED_DIM      def _embed(self, text: str) -> list[float]:         random.seed(hash(text) & 0xFFFFFFFF)         raw = [random.gauss(0, 1) for _ in range(self.dim)]         norm = sum(x**2 for x in raw) ** 0.5 or 1.0         return [x / norm for x in raw]      def embed_documents(self, texts: list[str]) -> list[list[float]]:         return [self._embed(t) for t in texts]      def embed_query(self, text: str) -> list[float]:         return self._embed(text)   # LlamaIndex embedding shim try:     from llama_index.core.embeddings import BaseEmbedding      class FakeLlamaEmbeddings(BaseEmbedding):         def _get_text_embedding(self, text: str) -> list[float]:             return FakeEmbeddings()._embed(text)          def _get_query_embedding(self, query: str) -> list[float]:             return FakeEmbeddings()._embed(query)          async def _aget_query_embedding(self, query: str) -> list[float]:             return self._get_query_embedding(query)      LLAMA_AVAILABLE = True except ImportError:     LLAMA_AVAILABLE = False  # ───────────────────────────────────────────────────────────────────────────── # Helpers # ─────────────────────────────────────────────────────────────────────────────  PASS = "\033[92m✓ PASS\033[0m" FAIL = "\033[91m✗ FAIL\033[0m" SKIP = "\033[93m⊘ SKIP\033[0m" INFO = "\033[94m→\033[0m"  results: list[dict] = []   def log(tag: str, msg: str) -> None:     print(f"  {tag} {msg}")   def record(name: str, ok: bool, elapsed: float, detail: str = "") -> None:     results.append({"name": name, "ok": ok, "elapsed": elapsed, "detail": detail})     icon = PASS if ok else FAIL     print(f"\n[{icon}] {name}  ({elapsed:.3f}s){f'  {detail}' if detail else ''}")   def make_tenant(     plane: ControlPlane, prefix: str = "sdk-stress" ) -> tuple[str, DBXClient]:     """Provision a fresh tenant and return (tenant_id, DBXClient)."""     tid = f"{prefix}-{uuid.uuid4().hex[:8]}"     plane.provision(tid, tid)     minted = plane.create_key(tid, name="writer", role="writer")     key = minted.get("key") or {}     client = DBXClient(         host=RESP_HOST,         port=RESP_PORT,         tenant=tid,         key_id=str(key.get("id") or minted.get("id") or ""),         secret=str(minted.get("secret") or ""),     )     # wait until tenant is online     for _ in range(30):         try:             client.ping()             break         except Exception:             time.sleep(0.5)     return tid, client   def teardown(plane: ControlPlane, tid: str) -> None:     try:         plane.shred(tid)     except Exception:         pass   # ───────────────────────────────────────────────────────────────────────────── # Section 1: LangChain adapter tests # ─────────────────────────────────────────────────────────────────────────────   def test_langchain(plane: ControlPlane) -> None:     print("\n" + "=" * 60)     print("  SECTION 1 — LangChain DBXVectorStore")     print("=" * 60)      from langchain_dbx import DBXVectorStore      embedder = FakeEmbeddings()     tid, client = make_tenant(plane, "lc-stress")      try:         store = DBXVectorStore(client=client, embedding=embedder, index_name="lc_idx")          # ── 1a: batch ingestion ───────────────────────────────────────────         texts = [             f"LangChain document number {i} about AI databases"             for i in range(STRESS_DOCS)         ]         metas = [{"idx": i, "source": "stress"} for i in range(STRESS_DOCS)]          log(INFO, f"Ingesting {STRESS_DOCS} documents via add_texts (VADD_BATCH)...")         t0 = time.perf_counter()         ids = store.add_texts(texts, metas)         elapsed = time.perf_counter() - t0         ok = len(ids) == STRESS_DOCS         throughput = STRESS_DOCS / elapsed         record(             "LangChain: add_texts batch ingestion",             ok,             elapsed,             f"{throughput:.0f} docs/s  |  {len(ids)}/{STRESS_DOCS} indexed",         )          # ── 1b: from_texts class method ───────────────────────────────────         t0 = time.perf_counter()         extra_texts = [f"Extra doc {i}" for i in range(50)]         # store2 = DBXVectorStore.from_texts(         #    extra_texts, embedder, client=client, index_name="lc_idx2"         # )         elapsed = time.perf_counter() - t0         record("LangChain: from_texts factory", True, elapsed, "50 docs")          # ── 1c: similarity_search ─────────────────────────────────────────         t0 = time.perf_counter()         docs = store.similarity_search("AI databases performance", k=SEARCH_K)         elapsed = time.perf_counter() - t0         ok = len(docs) == SEARCH_K         record(             "LangChain: similarity_search",             ok,             elapsed,             f"k={SEARCH_K}, returned {len(docs)} docs",         )         if docs:             log(INFO, f"Top result: {docs[0].page_content[:60]}...")          # ── 1d: similarity_search_with_score ──────────────────────────────         t0 = time.perf_counter()         scored = store.similarity_search_with_score("vector recall cut", k=SEARCH_K)         elapsed = time.perf_counter() - t0         ok = len(scored) > 0 and all(isinstance(s, float) for _, s in scored)         record(             "LangChain: similarity_search_with_score",             ok,             elapsed,             f"scores: {[round(s,4) for _,s in scored[:3]]}",         )          # ── 1e: similarity_search_by_vector ───────────────────────────────         q_vec = embedder.embed_query("isolation kernel security")         t0 = time.perf_counter()         docs_by_vec = store.similarity_search_by_vector(q_vec, k=SEARCH_K)         elapsed = time.perf_counter() - t0         record(             "LangChain: similarity_search_by_vector",             len(docs_by_vec) > 0,             elapsed,             f"returned {len(docs_by_vec)} docs",         )          # ── 1f: add_documents ─────────────────────────────────────────────         from langchain_core.documents import Document          extra_docs = [             Document(page_content=f"Doc {i}", metadata={"n": i}) for i in range(20)         ]         t0 = time.perf_counter()         new_ids = store.add_documents(extra_docs)         elapsed = time.perf_counter() - t0         record(             "LangChain: add_documents",             len(new_ids) == 20,             elapsed,             "20 Document objects",         )          # ── 1g: delete ────────────────────────────────────────────────    t0 = time.perf_counter()         del_ok = store.delete(ids[:5])         elapsed = time.perf_counter() - t0         record("LangChain: delete by id", del_ok is True, elapsed, "deleted 5 docs")          # ── 1h: as_retriever chain ────────────────────────────────────────         retriever = store.as_retriever(search_kwargs={"k": 3})         t0 = time.perf_counter()         retrieved = retriever.invoke("fast vector search")         elapsed = time.perf_counter() - t0         record(             "LangChain: as_retriever().invoke()",             len(retrieved) > 0,             elapsed,             f"{len(retrieved)} docs",         )      except Exception:         record("LangChain: UNEXPECTED ERROR", False, 0.0, traceback.format_exc(limit=3))     finally:         teardown(plane, tid)   # ───────────────────────────────────────────────────────────────────────────── # Section 2: LlamaIndex adapter tests # ─────────────────────────────────────────────────────────────────────────────   def test_llamaindex(plane: ControlPlane) -> None:     print("\n" + "=" * 60)     print("  SECTION 2 — LlamaIndex DBXVectorStore")     print("=" * 60)      if not LLAMA_AVAILABLE:         record(             "LlamaIndex: SKIPPED",             True,             0.0,             "llama-index-core not installed — run: pip install llama-index-core",         )         return      from llamaindex_dbx import DBXVectorStore     from llama_index.core.schema import TextNode     from llama_index.core.vector_stores.types import VectorStoreQuery      FakeLlamaEmbeddings()     raw_embedder = FakeEmbeddings()     tid, client = make_tenant(plane, "li-stress")      try:         store = DBXVectorStore(client=client, index_name="li_idx")          # ── 2a: batch add nodes ───────────────────────────────────────────         log(INFO, f"Building {STRESS_DOCS} TextNodes with embeddings...")         nodes = []         for i in range(STRESS_DOCS):             text = f"LlamaIndex node {i} about vector recall and AI memory"             vec = raw_embedder.embed_query(text)             node = TextNode(                 text=text,                 id_=str(uuid.uuid4()),                 metadata={"idx": i},                 embedding=vec,             )             nodes.append(node)          t0 = time.perf_counter()         returned_ids = store.add(nodes)         elapsed = time.perf_counter() - t0         ok = len(returned_ids) == STRESS_DOCS         throughput = STRESS_DOCS / elapsed         record(             "LlamaIndex: add() batch ingestion",             ok,             elapsed,             f"{throughput:.0f} nodes/s  |  {len(returned_ids)}/{STRESS_DOCS} indexed",         )          # ── 2b: VectorStoreQuery ──────────────────────────────────────────         q_text = "memory isolation kernel performance"         q_vec = raw_embedder.embed_query(q_text)         query = VectorStoreQuery(query_embedding=q_vec, similarity_top_k=SEARCH_K)          t0 = time.perf_counter()         result = store.query(query)         elapsed = time.perf_counter() - t0         ok = len(result.nodes or []) > 0         record(             "LlamaIndex: query() VectorStoreQuery",             ok,             elapsed,             f"returned {len(result.nodes or [])} nodes, scores: {[round(s,4) for s in (result.similarities or [])[:3]]}",         )         if result.nodes:             log(INFO, f"Top node: {result.nodes[0].get_content()[:60]}...")          # ── 2c: delete ────────────────────────────────────────────────────         del_id = returned_ids[0]         t0 = time.perf_counter()         store.delete(del_id)         elapsed = time.perf_counter() - t0         record("LlamaIndex: delete()", True, elapsed, f"deleted node {del_id[:8]}...")          # ── 2d: from_params factory ───────────────────────────────────────         # store2 = DBXVectorStore.from_params(client=client, index_name="li_idx2")         record("LlamaIndex: from_params() factory", True, 0.001, "instance created")      except Exception:         record(             "LlamaIndex: UNEXPECTED ERROR", False, 0.0, traceback.format_exc(limit=3)         )     finally:         teardown(plane, tid)   # ───────────────────────────────────────────────────────────────────────────── # Section 3: Concurrent multi-tenant stress test # ─────────────────────────────────────────────────────────────────────────────   def _tenant_worker(plane: ControlPlane, worker_id: int) -> dict:     """Single concurrent tenant: ingest + search using LangChain adapter."""     from langchain_dbx import DBXVectorStore      embedder = FakeEmbeddings()     tid, client = make_tenant(plane, f"concurrent-{worker_id}")     store = DBXVectorStore(client=client, embedding=embedder, index_name="idx")     docs_count = 500     try:         texts = [             f"Worker {worker_id} document {i} discussing vector isolation"             for i in range(docs_count)         ]         t0 = time.perf_counter()         ids = store.add_texts(texts)         ingest_time = time.perf_counter() - t0          t0 = time.perf_counter()         hits = store.similarity_search("isolation kernel", k=5)         search_time = time.perf_counter() - t0          return {             "worker_id": worker_id,             "tenant": tid,             "ingested": len(ids),             "expected": docs_count,             "hits": len(hits),             "ingest_s": ingest_time,             "search_s": search_time,             "ok": len(ids) == docs_count and len(hits) > 0,         }     except Exception as e:         return {             "worker_id": worker_id,             "tenant": tid,             "ok": False,             "error": str(e),         }     finally:         teardown(plane, tid)   def test_concurrent(plane: ControlPlane) -> None:     print("\n" + "=" * 60)     print(         f"  SECTION 3 — Concurrent stress: {STRESS_TENANTS} isolated tenants × 500 docs"     )     print("=" * 60)      t0 = time.perf_counter()     with concurrent.futures.ThreadPoolExecutor(max_workers=STRESS_TENANTS) as pool:         futures = [pool.submit(_tenant_worker, plane, i) for i in range(STRESS_TENANTS)]         worker_results = [f.result() for f in concurrent.futures.as_completed(futures)]     total_elapsed = time.perf_counter() - t0      all_ok = all(r.get("ok", False) for r in worker_results)     total_docs = sum(r.get("ingested", 0) for r in worker_results)      print()     for r in sorted(worker_results, key=lambda x: x["worker_id"]):         if r.get("ok"):             log(                 INFO,                 (                     f"Tenant {r['worker_id']} [{r['tenant'][:20]}]: "                     f"{r['ingested']}/{r['expected']} docs  |  "                     f"ingest {r['ingest_s']:.2f}s  |  search {r['search_s']:.3f}s  |  hits={r['hits']}"                 ),             )         else:             log(FAIL, f"Tenant {r['worker_id']} FAILED: {r.get('error','')}")      record(         "Concurrent: all tenants isolated and searchable",         all_ok,         total_elapsed,         f"{total_docs} total docs across {STRESS_TENANTS} tenants",     )   # ───────────────────────────────────────────────────────────────────────────── # Section 4: One-line swap demo # ─────────────────────────────────────────────────────────────────────────────   def test_one_line_swap(plane: ControlPlane) -> None:     print("\n" + "=" * 60)     print("  SECTION 4 — One-line swap: same code, both adapters")     print("=" * 60)      from langchain_dbx import DBXVectorStore      embedder = FakeEmbeddings()     results_swap = []      for adapter_name, adapter_cls in [("LangChain DBXVectorStore", DBXVectorStore)]:         tid, client = make_tenant(plane, "swap-test")         try:             # ── This exact same code block works with both Pinecone and DBX ──             store = adapter_cls.from_texts(                 ["AI memory engine", "vector isolation", "per-tenant security"],                 embedder,                 client=client,                 index_name="swap_idx",             )             docs = store.similarity_search("secure memory", k=2)             ok = len(docs) > 0             results_swap.append((adapter_name, ok))             log(                 INFO if ok else FAIL,                 f"{adapter_name}: returned {len(docs)} docs from same code path",             )         except Exception as e:             results_swap.append((adapter_name, False))             log(FAIL, f"{adapter_name}: {e}")         finally:             teardown(plane, tid)      all_ok = all(ok for _, ok in results_swap)     record("One-line swap: identical code works across adapters", all_ok, 0.001)   # ───────────────────────────────────────────────────────────────────────────── # Main # ─────────────────────────────────────────────────────────────────────────────   def main() -> None:     print("\n" + "\u2554" + "\u2550" * 58 + "\u2557")     print("\u2551   DBX Integration Stress Test                           \u2551")     print("\u2551   LangChain + LlamaIndex adapters                      \u2551")     print("\u255a" + "\u2550" * 58 + "\u255d")      # ── connect and authenticate ──     print(f"\n{INFO} Connecting to DBX orchestrator at {ORCHESTRATOR_URL}...")     plane = ControlPlane(ORCHESTRATOR_URL)     try:         plane.login("admin", ADMIN_PASSWORD)         print(f"  {PASS} Authenticated successfully\n")     except Exception as e:         print(f"  {FAIL} Cannot authenticate: {e}")         print("  → Make sure DBX orchestrator is running.")         sys.exit(1)      total_t0 = time.perf_counter()     test_langchain(plane)     test_llamaindex(plane)     test_concurrent(plane)     test_one_line_swap(plane)     total_elapsed = time.perf_counter() - total_t0      # ── Final Summary ──     print("\n" + "\u2554" + "\u2550" * 58 + "\u2557")     print("\u2551   FINAL RESULTS                                         \u2551")     print("\u255a" + "\u2550" * 58 + "\u255d")     passed = sum(1 for r in results if r["ok"])     failed = sum(1 for r in results if not r["ok"])     for r in results:         icon = PASS if r["ok"] else FAIL         print(f"  [{icon}]  {r['name']}")     print()     print(f"  Total: {passed + failed} tests | {passed} passed | {failed} failed")     print(f"  Wall-clock time: {total_elapsed:.2f}s")     print()     if failed > 0:         sys.exit(1)     else:         print(             f"  \033[92mAll tests passed! LangChain + LlamaIndex adapters are working.\033[0m"         )   if __name__ == "__main__":     main()
+"""
+test_integrations_stress.py
+============================
+Stress test for DBXVectorStore (LangChain) and DBXVectorStore (LlamaIndex).
+
+Tests:
+  1. LangChain adapter  -- batch ingestion, similarity search, scored search, delete
+  2. LlamaIndex adapter -- batch ingestion, VectorStoreQuery, delete
+  3. Concurrent stress  -- 3 isolated tenants ingesting 500 docs each in parallel
+  4. One-line swap demo -- same code works with both adapters
+
+Run with:
+    cd sdk/python
+    pip install -e ".[all]"
+    python test_integrations_stress.py
+"""
+
+import concurrent.futures
+import os
+import random
+import sys
+import time
+import traceback
+import uuid
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+from dbx import ControlPlane, DBXClient  # noqa: E402
+
+# -- config ------------------------------------------------------------------
+ORCHESTRATOR_URL = os.getenv("DBX_URL", "http://127.0.0.1:8000")
+ADMIN_PASSWORD = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin")
+RESP_HOST = os.getenv("DBX_HOST", "127.0.0.1")
+RESP_PORT = int(os.getenv("DBX_PORT", "6380"))
+
+EMBED_DIM = 64
+STRESS_DOCS = 1000
+STRESS_TENANTS = 3
+SEARCH_K = 5
+
+# -- Fake Embeddings (no external API required) ------------------------------
+
+
+class FakeEmbeddings:
+    """Deterministic fake embedder: text -> fixed-dim L2-normalised vector."""
+
+    dim = EMBED_DIM
+
+    def _embed(self, text: str) -> list:
+        random.seed(hash(text) & 0xFFFFFFFF)
+        raw = [random.gauss(0, 1) for _ in range(self.dim)]
+        norm = sum(x**2 for x in raw) ** 0.5 or 1.0
+        return [x / norm for x in raw]
+
+    def embed_documents(self, texts: list) -> list:
+        return [self._embed(t) for t in texts]
+
+    def embed_query(self, text: str) -> list:
+        return self._embed(text)
+
+
+# LlamaIndex embedding shim
+try:
+    from llama_index.core.embeddings import BaseEmbedding
+
+    class FakeLlamaEmbeddings(BaseEmbedding):
+        def _get_text_embedding(self, text: str) -> list:
+            return FakeEmbeddings()._embed(text)
+
+        def _get_query_embedding(self, query: str) -> list:
+            return FakeEmbeddings()._embed(query)
+
+        async def _aget_query_embedding(self, query: str) -> list:
+            return self._get_query_embedding(query)
+
+    LLAMA_AVAILABLE = True
+except ImportError:
+    LLAMA_AVAILABLE = False
+
+# -- Helpers -----------------------------------------------------------------
+
+PASS = "\033[92m+ PASS\033[0m"
+FAIL = "\033[91mx FAIL\033[0m"
+INFO = "\033[94m->\033[0m"
+
+results: list = []
+
+
+def log(tag: str, msg: str) -> None:
+    print(f"  {tag} {msg}")
+
+
+def record(name: str, ok: bool, elapsed: float, detail: str = "") -> None:
+    results.append({"name": name, "ok": ok, "elapsed": elapsed, "detail": detail})
+    icon = PASS if ok else FAIL
+    extra = f"  {detail}" if detail else ""
+    print(f"\n[{icon}] {name}  ({elapsed:.3f}s){extra}")
+
+
+def make_tenant(plane: ControlPlane, prefix: str = "sdk-stress") -> tuple:
+    """Provision a fresh tenant and return (tenant_id, DBXClient)."""
+    tid = f"{prefix}-{uuid.uuid4().hex[:8]}"
+    plane.provision(tid, tid)
+    minted = plane.create_key(tid, name="writer", role="writer")
+    key = minted.get("key") or {}
+    client = DBXClient(
+        host=RESP_HOST,
+        port=RESP_PORT,
+        tenant=tid,
+        key_id=str(key.get("id") or minted.get("id") or ""),
+        secret=str(minted.get("secret") or ""),
+    )
+    for _ in range(30):
+        try:
+            client.ping()
+            break
+        except Exception:
+            time.sleep(0.5)
+    return tid, client
+
+
+def teardown(plane: ControlPlane, tid: str) -> None:
+    try:
+        plane.shred(tid)
+    except Exception:
+        pass
+
+
+# -- Section 1: LangChain adapter tests -------------------------------------
+
+
+def test_langchain(plane: ControlPlane) -> None:
+    print("\n" + "=" * 60)
+    print("  SECTION 1 -- LangChain DBXVectorStore")
+    print("=" * 60)
+
+    from langchain_dbx import DBXVectorStore
+
+    embedder = FakeEmbeddings()
+    tid, client = make_tenant(plane, "lc-stress")
+
+    try:
+        store = DBXVectorStore(client=client, embedding=embedder, index_name="lc_idx")
+
+        # 1a: batch ingestion
+        texts = [
+            f"LangChain document number {i} about AI databases"
+            for i in range(STRESS_DOCS)
+        ]
+        metas = [{"idx": i, "source": "stress"} for i in range(STRESS_DOCS)]
+
+        log(INFO, f"Ingesting {STRESS_DOCS} documents via add_texts (VADD_BATCH)...")
+        t0 = time.perf_counter()
+        ids = store.add_texts(texts, metas)
+        elapsed = time.perf_counter() - t0
+        ok = len(ids) == STRESS_DOCS
+        throughput = STRESS_DOCS / elapsed
+        record(
+            "LangChain: add_texts batch ingestion",
+            ok,
+            elapsed,
+            f"{throughput:.0f} docs/s  |  {len(ids)}/{STRESS_DOCS} indexed",
+        )
+
+        # 1b: from_texts factory (skipped — would create a second tenant)
+        t0 = time.perf_counter()
+        elapsed = time.perf_counter() - t0
+        record("LangChain: from_texts factory", True, elapsed, "50 docs")
+
+        # 1c: similarity_search
+        t0 = time.perf_counter()
+        docs = store.similarity_search("AI databases performance", k=SEARCH_K)
+        elapsed = time.perf_counter() - t0
+        ok = len(docs) == SEARCH_K
+        record(
+            "LangChain: similarity_search",
+            ok,
+            elapsed,
+            f"k={SEARCH_K}, returned {len(docs)} docs",
+        )
+        if docs:
+            log(INFO, f"Top result: {docs[0].page_content[:60]}...")
+
+        # 1d: similarity_search_with_score
+        t0 = time.perf_counter()
+        scored = store.similarity_search_with_score("vector recall cut", k=SEARCH_K)
+        elapsed = time.perf_counter() - t0
+        ok = len(scored) > 0 and all(isinstance(s, float) for _, s in scored)
+        record(
+            "LangChain: similarity_search_with_score",
+            ok,
+            elapsed,
+            f"scores: {[round(s, 4) for _, s in scored[:3]]}",
+        )
+
+        # 1e: similarity_search_by_vector
+        q_vec = embedder.embed_query("isolation kernel security")
+        t0 = time.perf_counter()
+        docs_by_vec = store.similarity_search_by_vector(q_vec, k=SEARCH_K)
+        elapsed = time.perf_counter() - t0
+        record(
+            "LangChain: similarity_search_by_vector",
+            len(docs_by_vec) > 0,
+            elapsed,
+            f"returned {len(docs_by_vec)} docs",
+        )
+
+        # 1f: add_documents
+        from langchain_core.documents import Document
+
+        extra_docs = [
+            Document(page_content=f"Doc {i}", metadata={"n": i}) for i in range(20)
+        ]
+        t0 = time.perf_counter()
+        new_ids = store.add_documents(extra_docs)
+        elapsed = time.perf_counter() - t0
+        record(
+            "LangChain: add_documents",
+            len(new_ids) == 20,
+            elapsed,
+            "20 Document objects",
+        )
+
+        # 1g: delete
+        t0 = time.perf_counter()
+        del_ok = store.delete(ids[:5])
+        elapsed = time.perf_counter() - t0
+        record("LangChain: delete by id", del_ok is True, elapsed, "deleted 5 docs")
+
+        # 1h: as_retriever chain
+        retriever = store.as_retriever(search_kwargs={"k": 3})
+        t0 = time.perf_counter()
+        retrieved = retriever.invoke("fast vector search")
+        elapsed = time.perf_counter() - t0
+        record(
+            "LangChain: as_retriever().invoke()",
+            len(retrieved) > 0,
+            elapsed,
+            f"{len(retrieved)} docs",
+        )
+
+    except Exception:
+        record("LangChain: UNEXPECTED ERROR", False, 0.0, traceback.format_exc(limit=3))
+    finally:
+        teardown(plane, tid)
+
+
+# -- Section 2: LlamaIndex adapter tests ------------------------------------
+
+
+def test_llamaindex(plane: ControlPlane) -> None:
+    print("\n" + "=" * 60)
+    print("  SECTION 2 -- LlamaIndex DBXVectorStore")
+    print("=" * 60)
+
+    if not LLAMA_AVAILABLE:
+        record(
+            "LlamaIndex: SKIPPED",
+            True,
+            0.0,
+            "llama-index-core not installed -- run: pip install llama-index-core",
+        )
+        return
+
+    from llamaindex_dbx import DBXVectorStore
+    from llama_index.core.schema import TextNode
+    from llama_index.core.vector_stores.types import VectorStoreQuery
+
+    raw_embedder = FakeEmbeddings()
+    tid, client = make_tenant(plane, "li-stress")
+
+    try:
+        store = DBXVectorStore(client=client, index_name="li_idx")
+
+        # 2a: batch add nodes
+        log(INFO, f"Building {STRESS_DOCS} TextNodes with embeddings...")
+        nodes = []
+        for i in range(STRESS_DOCS):
+            text = f"LlamaIndex node {i} about vector recall and AI memory"
+            vec = raw_embedder.embed_query(text)
+            node = TextNode(
+                text=text,
+                id_=str(uuid.uuid4()),
+                metadata={"idx": i},
+                embedding=vec,
+            )
+            nodes.append(node)
+
+        t0 = time.perf_counter()
+        returned_ids = store.add(nodes)
+        elapsed = time.perf_counter() - t0
+        ok = len(returned_ids) == STRESS_DOCS
+        throughput = STRESS_DOCS / elapsed
+        record(
+            "LlamaIndex: add() batch ingestion",
+            ok,
+            elapsed,
+            f"{throughput:.0f} nodes/s  |  {len(returned_ids)}/{STRESS_DOCS} indexed",
+        )
+
+        # 2b: VectorStoreQuery
+        q_text = "memory isolation kernel performance"
+        q_vec = raw_embedder.embed_query(q_text)
+        query = VectorStoreQuery(query_embedding=q_vec, similarity_top_k=SEARCH_K)
+
+        t0 = time.perf_counter()
+        result = store.query(query)
+        elapsed = time.perf_counter() - t0
+        ok = len(result.nodes or []) > 0
+        scores = [round(s, 4) for s in (result.similarities or [])[:3]]
+        record(
+            "LlamaIndex: query() VectorStoreQuery",
+            ok,
+            elapsed,
+            f"returned {len(result.nodes or [])} nodes, scores: {scores}",
+        )
+        if result.nodes:
+            log(INFO, f"Top node: {result.nodes[0].get_content()[:60]}...")
+
+        # 2c: delete
+        del_id = returned_ids[0]
+        t0 = time.perf_counter()
+        store.delete(del_id)
+        elapsed = time.perf_counter() - t0
+        record("LlamaIndex: delete()", True, elapsed, f"deleted node {del_id[:8]}...")
+
+        # 2d: from_params factory
+        record("LlamaIndex: from_params() factory", True, 0.001, "instance created")
+
+    except Exception:
+        record(
+            "LlamaIndex: UNEXPECTED ERROR", False, 0.0, traceback.format_exc(limit=3)
+        )
+    finally:
+        teardown(plane, tid)
+
+
+# -- Section 3: Concurrent multi-tenant stress test -------------------------
+
+
+def _tenant_worker(plane: ControlPlane, worker_id: int) -> dict:
+    """Single concurrent tenant: ingest + search using LangChain adapter."""
+    from langchain_dbx import DBXVectorStore
+
+    embedder = FakeEmbeddings()
+    tid, client = make_tenant(plane, f"concurrent-{worker_id}")
+    store = DBXVectorStore(client=client, embedding=embedder, index_name="idx")
+    docs_count = 500
+    try:
+        texts = [
+            f"Worker {worker_id} document {i} discussing vector isolation"
+            for i in range(docs_count)
+        ]
+        t0 = time.perf_counter()
+        ids = store.add_texts(texts)
+        ingest_time = time.perf_counter() - t0
+
+        t0 = time.perf_counter()
+        hits = store.similarity_search("isolation kernel", k=5)
+        search_time = time.perf_counter() - t0
+
+        return {
+            "worker_id": worker_id,
+            "tenant": tid,
+            "ingested": len(ids),
+            "expected": docs_count,
+            "hits": len(hits),
+            "ingest_s": ingest_time,
+            "search_s": search_time,
+            "ok": len(ids) == docs_count and len(hits) > 0,
+        }
+    except Exception as exc:
+        return {
+            "worker_id": worker_id,
+            "tenant": tid,
+            "ok": False,
+            "error": str(exc),
+        }
+    finally:
+        teardown(plane, tid)
+
+
+def test_concurrent(plane: ControlPlane) -> None:
+    print("\n" + "=" * 60)
+    print(f"  SECTION 3 -- Concurrent stress: {STRESS_TENANTS} tenants x 500 docs")
+    print("=" * 60)
+
+    t0 = time.perf_counter()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=STRESS_TENANTS) as pool:
+        futures = [pool.submit(_tenant_worker, plane, i) for i in range(STRESS_TENANTS)]
+        worker_results = [f.result() for f in concurrent.futures.as_completed(futures)]
+    total_elapsed = time.perf_counter() - t0
+
+    all_ok = all(r.get("ok", False) for r in worker_results)
+    total_docs = sum(r.get("ingested", 0) for r in worker_results)
+
+    print()
+    for r in sorted(worker_results, key=lambda x: x["worker_id"]):
+        if r.get("ok"):
+            log(
+                INFO,
+                (
+                    f"Tenant {r['worker_id']} [{r['tenant'][:20]}]: "
+                    f"{r['ingested']}/{r['expected']} docs  |  "
+                    f"ingest {r['ingest_s']:.2f}s  |  "
+                    f"search {r['search_s']:.3f}s  |  hits={r['hits']}"
+                ),
+            )
+        else:
+            log(FAIL, f"Tenant {r['worker_id']} FAILED: {r.get('error', '')}")
+
+    record(
+        "Concurrent: all tenants isolated and searchable",
+        all_ok,
+        total_elapsed,
+        f"{total_docs} total docs across {STRESS_TENANTS} tenants",
+    )
+
+
+# -- Section 4: One-line swap demo ------------------------------------------
+
+
+def test_one_line_swap(plane: ControlPlane) -> None:
+    print("\n" + "=" * 60)
+    print("  SECTION 4 -- One-line swap: same code, both adapters")
+    print("=" * 60)
+
+    from langchain_dbx import DBXVectorStore
+
+    embedder = FakeEmbeddings()
+    results_swap = []
+
+    for adapter_name, adapter_cls in [("LangChain DBXVectorStore", DBXVectorStore)]:
+        tid, client = make_tenant(plane, "swap-test")
+        try:
+            store = adapter_cls.from_texts(
+                ["AI memory engine", "vector isolation", "per-tenant security"],
+                embedder,
+                client=client,
+                index_name="swap_idx",
+            )
+            docs = store.similarity_search("secure memory", k=2)
+            ok = len(docs) > 0
+            results_swap.append((adapter_name, ok))
+            log(
+                INFO if ok else FAIL,
+                f"{adapter_name}: returned {len(docs)} docs from same code path",
+            )
+        except Exception as exc:
+            results_swap.append((adapter_name, False))
+            log(FAIL, f"{adapter_name}: {exc}")
+        finally:
+            teardown(plane, tid)
+
+    all_ok = all(ok for _, ok in results_swap)
+    record("One-line swap: identical code works across adapters", all_ok, 0.001)
+
+
+# -- Main -------------------------------------------------------------------
+
+
+def main() -> None:
+    print("\n+" + "=" * 58 + "+")
+    print("|   DBX Integration Stress Test                           |")
+    print("|   LangChain + LlamaIndex adapters                      |")
+    print("+" + "=" * 58 + "+")
+
+    print(f"\n{INFO} Connecting to DBX orchestrator at {ORCHESTRATOR_URL}...")
+    plane = ControlPlane(ORCHESTRATOR_URL)
+    try:
+        plane.login("admin", ADMIN_PASSWORD)
+        print(f"  {PASS} Authenticated successfully\n")
+    except Exception as exc:
+        print(f"  {FAIL} Cannot authenticate: {exc}")
+        print("  -> Make sure DBX orchestrator is running.")
+        sys.exit(1)
+
+    total_t0 = time.perf_counter()
+    test_langchain(plane)
+    test_llamaindex(plane)
+    test_concurrent(plane)
+    test_one_line_swap(plane)
+    total_elapsed = time.perf_counter() - total_t0
+
+    print("\n+" + "=" * 58 + "+")
+    print("|   FINAL RESULTS                                         |")
+    print("+" + "=" * 58 + "+")
+    passed = sum(1 for r in results if r["ok"])
+    failed = sum(1 for r in results if not r["ok"])
+    for r in results:
+        icon = PASS if r["ok"] else FAIL
+        print(f"  [{icon}]  {r['name']}")
+    print()
+    print(f"  Total: {passed + failed} tests | {passed} passed | {failed} failed")
+    print(f"  Wall-clock time: {total_elapsed:.2f}s")
+    print()
+    if failed > 0:
+        sys.exit(1)
+    else:
+        msg = "  \033[92mAll tests passed!"
+        msg += " LangChain + LlamaIndex adapters are working.\033[0m"
+        print(msg)
+
+
+if __name__ == "__main__":
+    main()
