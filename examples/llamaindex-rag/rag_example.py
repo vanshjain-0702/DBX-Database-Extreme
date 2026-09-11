@@ -91,43 +91,24 @@ if OPENAI_KEY:
     llm = OpenAI(model="gpt-4o-mini")
     print("Using OpenAI embeddings and GPT-4o-mini LLM.")
 else:
-    # Fallback: manual node construction with random embeddings (no API key needed)
-    print("No OPENAI_API_KEY found. Using random embeddings for demo purposes.")
-    import random
-
-    def fake_embed(text):
-        random.seed(hash(text) & 0xFFFFFFFF)
-        raw = [random.gauss(0, 1) for _ in range(64)]
-        norm = sum(x**2 for x in raw) ** 0.5 or 1.0
-        return [x / norm for x in raw]
-
-    embed_model = None
+    # Fallback: MockEmbedding for demo purposes (no API key needed)
+    from llama_index.core.embeddings import MockEmbedding
+    print("No OPENAI_API_KEY found. Using MockEmbedding for demo purposes.")
+    embed_model = MockEmbedding(embed_dim=64)
     llm = None
 
 # ── Index documents ───────────────────────────────────────────────────────────
 print(f"\nIndexing {len(DOCUMENTS)} documents into DBX tenant '{TENANT_ID}'...")
 t0 = time.perf_counter()
 
-if embed_model:
-    from llama_index.core import Document
+from llama_index.core import Document
 
-    li_docs = [Document(text=d) for d in DOCUMENTS]
-    index = VectorStoreIndex.from_documents(
-        li_docs,
-        storage_context=storage_context,
-        embed_model=embed_model,
-    )
-else:
-    # Manual node insertion with fake embeddings
-    nodes = [
-        TextNode(text=doc, id_=f"doc-{i}", embedding=fake_embed(doc))
-        for i, doc in enumerate(DOCUMENTS)
-    ]
-    vector_store.add(nodes)
-    index = VectorStoreIndex(
-        nodes=[],
-        storage_context=storage_context,
-    )
+li_docs = [Document(text=d) for d in DOCUMENTS]
+index = VectorStoreIndex.from_documents(
+    li_docs,
+    storage_context=storage_context,
+    embed_model=embed_model,
+)
 
 elapsed = time.perf_counter() - t0
 print(f"Indexed in {elapsed:.3f}s")
@@ -142,10 +123,7 @@ queries = [
 
 print("\n--- Vector Recall Results ---")
 for q in queries:
-    if embed_model:
-        q_vec = embed_model.get_query_embedding(q)
-    else:
-        q_vec = fake_embed(q)
+    q_vec = embed_model.get_query_embedding(q)
 
     result = vector_store.query(
         VectorStoreQuery(query_embedding=q_vec, similarity_top_k=2)
