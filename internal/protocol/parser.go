@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	maxRESPArrayItems = 4096
+	maxRESPArrayItems =  4194304
 	maxRESPBulkBytes  = 8 << 20
 	maxRESPLineBytes  = 64 << 10
 )
