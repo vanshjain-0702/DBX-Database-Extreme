@@ -40,10 +40,10 @@ ADMIN_PASSWORD = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin")
 RESP_HOST = os.getenv("DBX_HOST", "127.0.0.1")
 RESP_PORT = int(os.getenv("DBX_PORT", "6380"))
 
-DIM = 128            # vector dimensions (matches benchmark default)
-DOCS_PER_TENANT = 5000   # vectors per tenant
-N_TENANTS = 8        # concurrent isolated tenants
-N_SEARCH_QUERIES = 200   # search queries per latency bench
+DIM = 128  # vector dimensions (matches benchmark default)
+DOCS_PER_TENANT = 5000  # vectors per tenant
+N_TENANTS = 8  # concurrent isolated tenants
+N_SEARCH_QUERIES = 200  # search queries per latency bench
 KV_OPS_PER_TENANT = 500  # SET/GET ops per tenant
 
 PASS = "\033[92mPASS\033[0m"
@@ -58,18 +58,18 @@ results = []
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def rand_vec(seed=None):
     """Deterministic L2-normalised random vector of DIM dimensions."""
     if seed is not None:
         random.seed(seed)
     raw = [random.gauss(0, 1) for _ in range(DIM)]
-    norm = sum(x ** 2 for x in raw) ** 0.5 or 1.0
+    norm = sum(x**2 for x in raw) ** 0.5 or 1.0
     return [x / norm for x in raw]
 
 
 def record(name, ok, detail="", warn=False):
     results.append({"name": name, "ok": ok, "warn": warn, "detail": detail})
-    icon = WARN if warn else (PASS if ok else FAIL)
     status = "WARN" if warn else ("PASS" if ok else "FAIL")
     print(f"  [{status}] {name}")
     if detail:
@@ -82,7 +82,8 @@ def provision(plane, prefix="stress"):
     minted = plane.create_key(tid, name="writer", role="writer")
     key = minted.get("key") or {}
     client = DBXClient(
-        host=RESP_HOST, port=RESP_PORT,
+        host=RESP_HOST,
+        port=RESP_PORT,
         tenant=tid,
         key_id=str(key.get("id") or minted.get("id") or ""),
         secret=str(minted.get("secret") or ""),
@@ -106,6 +107,7 @@ def shred(plane, tid):
 # ---------------------------------------------------------------------------
 # Claim 1: Tenant isolation -- no cross-tenant vector leakage
 # ---------------------------------------------------------------------------
+
 
 def test_isolation(plane):
     print(f"\n{INFO} CLAIM 1: Tenant isolation (no cross-tenant data leakage)")
@@ -153,6 +155,7 @@ def test_isolation(plane):
 # Claim 2 & 3: Throughput + ANN latency under load
 # ---------------------------------------------------------------------------
 
+
 def test_throughput_and_latency(plane):
     print(f"\n{INFO} CLAIM 2+3: Throughput + ANN p50/p95/p99 latency")
     tid, client = provision(plane, "lat-bench")
@@ -198,11 +201,13 @@ def test_throughput_and_latency(plane):
         )
 
         if p50 <= 5:
-            print(f"         -> Production-grade latency confirmed (p50 <= 5ms)")
+            print("         -> Production-grade latency confirmed (p50 <= 5ms)")
         elif p50 <= 20:
-            print(f"         -> Good latency for local dev (p50 <= 20ms)")
+            print("         -> Good latency for local dev (p50 <= 20ms)")
         else:
-            print(f"         -> High latency -- expected on Windows/local (no mmap lock)")
+            print(
+                "         -> High latency -- expected on Windows/local (no mmap lock)"
+            )
 
     except Exception:
         record("Latency bench: UNEXPECTED ERROR", False, traceback.format_exc(limit=2))
@@ -213,6 +218,7 @@ def test_throughput_and_latency(plane):
 # ---------------------------------------------------------------------------
 # Claim 4: Concurrent multi-tenant writes don't corrupt each other
 # ---------------------------------------------------------------------------
+
 
 def _concurrent_worker(plane, worker_id, doc_count, dim):
     """Each worker provisions its own tenant, writes docs, searches, verifies."""
@@ -250,9 +256,13 @@ def _concurrent_worker(plane, worker_id, doc_count, dim):
         }
     except Exception as exc:
         return {
-            "worker_id": worker_id, "tid": tid,
-            "ok": False, "errors": [str(exc)],
-            "write_s": 0, "throughput": 0, "hits": 0,
+            "worker_id": worker_id,
+            "tid": tid,
+            "ok": False,
+            "errors": [str(exc)],
+            "write_s": 0,
+            "throughput": 0,
+            "hits": 0,
         }
     finally:
         shred(plane, tid)
@@ -294,6 +304,7 @@ def test_concurrent_isolation(plane):
 # Claim 5: VSIM returns the correct nearest neighbour
 # ---------------------------------------------------------------------------
 
+
 def test_vsim_correctness(plane):
     print(f"\n{INFO} CLAIM 5: VSIM correctness (similar-to-id)")
     tid, client = provision(plane, "vsim-test")
@@ -318,7 +329,9 @@ def test_vsim_correctness(plane):
             f"Top hit: {top_hit!r} (expected 'doc-B') | all hits: {hits}",
         )
     except Exception:
-        record("VSIM correctness: UNEXPECTED ERROR", False, traceback.format_exc(limit=2))
+        record(
+            "VSIM correctness: UNEXPECTED ERROR", False, traceback.format_exc(limit=2)
+        )
     finally:
         shred(plane, tid)
 
@@ -326,6 +339,7 @@ def test_vsim_correctness(plane):
 # ---------------------------------------------------------------------------
 # Claim 6: KV + Vector simultaneously on the same connection
 # ---------------------------------------------------------------------------
+
 
 def test_kv_and_vector_combined(plane):
     print(f"\n{INFO} CLAIM 6: KV + Vector on the same connection simultaneously")
@@ -379,6 +393,7 @@ def test_kv_and_vector_combined(plane):
 # Claim 7: Shred wipes all data (no ghost data remains)
 # ---------------------------------------------------------------------------
 
+
 def test_shred_completeness(plane):
     print(f"\n{INFO} CLAIM 7: Tenant shred wipes ALL data (no ghost vectors)")
     tid, client = provision(plane, "shred-test")
@@ -402,7 +417,8 @@ def test_shred_completeness(plane):
         minted = plane.create_key(tid, name="writer", role="writer")
         key = minted.get("key") or {}
         fresh_client = DBXClient(
-            host=RESP_HOST, port=RESP_PORT,
+            host=RESP_HOST,
+            port=RESP_PORT,
             tenant=tid,
             key_id=str(key.get("id") or minted.get("id") or ""),
             secret=str(minted.get("secret") or ""),
@@ -437,6 +453,7 @@ def test_shred_completeness(plane):
 # ---------------------------------------------------------------------------
 # Bonus: Recall accuracy test
 # ---------------------------------------------------------------------------
+
 
 def test_recall_accuracy(plane):
     print(f"\n{INFO} BONUS: Recall@10 accuracy on known ground truth")
@@ -480,7 +497,9 @@ def test_recall_accuracy(plane):
         )
 
     except Exception:
-        record("Recall accuracy: UNEXPECTED ERROR", False, traceback.format_exc(limit=2))
+        record(
+            "Recall accuracy: UNEXPECTED ERROR", False, traceback.format_exc(limit=2)
+        )
     finally:
         shred(plane, tid)
 
@@ -488,6 +507,7 @@ def test_recall_accuracy(plane):
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     print("\n" + "=" * 65)
@@ -525,7 +545,6 @@ def main():
     failed = sum(1 for r in results if not r["ok"])
 
     for r in results:
-        icon = WARN if r["warn"] else (PASS if r["ok"] else FAIL)
         status = "WARN" if r["warn"] else ("PASS" if r["ok"] else "FAIL")
         print(f"  [{status}] {r['name']}")
         if r["detail"]:
