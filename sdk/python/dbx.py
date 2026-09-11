@@ -42,6 +42,21 @@ def _parse_vector_hits(res: Any) -> List[Tuple[str, float]]:
     return results
 
 
+def _vadd_batch_chunk_size(dim: int) -> int:
+    """Max vectors per VADD_BATCH that fit the RESP array cap and engine cap.
+
+    The wire array is VADD_BATCH + index + dim + n*(id + dim floats), capped at
+    4096 items. The engine also rejects n > 1000.
+    """
+    if dim <= 0:
+        raise ValueError("dim must be a positive integer")
+    per_vec = dim + 1
+    fit = (4096 - 3) // per_vec
+    if fit < 1:
+        raise ValueError("dimension too large for VADD_BATCH")
+    return min(1000, fit)
+
+
 class DBXClient:
     """RESP client for the public DBX ingress.
 
@@ -128,15 +143,21 @@ class DBXClient:
     ) -> int:
         if len(doc_ids) != len(vectors):
             raise ValueError("doc_ids and vectors must be the same length")
-        args: List[Union[str, int, float]] = [index_name, dim]
-        for i, doc_id in enumerate(doc_ids):
-            args.append(doc_id)
-            args.extend(vectors[i])
-        try:
-            res = self.r.execute_command("VADD_BATCH", *args)
-        except redis.RedisError as exc:
-            raise DBXError(str(exc)) from exc
-        return int(cast(Union[int, str], res or 0))
+        chunk = _vadd_batch_chunk_size(dim)
+        inserted = 0
+        for start in range(0, len(doc_ids), chunk):
+            part_ids = doc_ids[start : start + chunk]
+            part_vecs = vectors[start : start + chunk]
+            args: List[Union[str, int, float]] = [index_name, dim]
+            for i, doc_id in enumerate(part_ids):
+                args.append(doc_id)
+                args.extend(part_vecs[i])
+            try:
+                res = self.r.execute_command("VADD_BATCH", *args)
+            except redis.RedisError as exc:
+                raise DBXError(str(exc)) from exc
+            inserted += int(cast(Union[int, str], res or 0))
+        return inserted
 
     def vsearch(
         self,

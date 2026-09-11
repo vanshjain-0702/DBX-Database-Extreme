@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 
 import pytest
 
-from dbx import DBXError, TenantMemory
+from dbx import DBXClient, DBXError, TenantMemory, _vadd_batch_chunk_size
 
 
 class FakeClient:
@@ -84,7 +84,34 @@ def test_similar_and_fuse() -> None:
     assert fused[0][0] in {"a", "b"}
 
 
-def test_set_failure_surfaces() -> None:
+def test_vadd_batch_chunk_fits_resp_array_cap() -> None:
+    assert _vadd_batch_chunk_size(32) == min(1000, (4096 - 3) // 33)
+    assert _vadd_batch_chunk_size(128) == min(1000, (4096 - 3) // 129)
+    assert _vadd_batch_chunk_size(32) * (32 + 1) + 3 <= 4096
+
+
+def test_vadd_batch_splits_oversized_payloads() -> None:
+    class FakeRedis:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def execute_command(self, cmd, *args):
+            self.calls.append((cmd, args))
+            n = (len(args) - 2) // (int(args[1]) + 1)
+            return n
+
+    client = DBXClient.__new__(DBXClient)
+    client.r = FakeRedis()
+    dim = 32
+    n = _vadd_batch_chunk_size(dim) + 40
+    ids = [f"v{i}" for i in range(n)]
+    vecs = [[0.0] * dim for _ in range(n)]
+    inserted = client.vadd_batch("memory", dim, ids, vecs)
+    assert inserted == n
+    assert len(client.r.calls) == 2
+    first_n = (len(client.r.calls[0][1]) - 2) // (dim + 1)
+    assert first_n == _vadd_batch_chunk_size(dim)
+
     class Boom(FakeClient):
         def set(self, key: str, val: str, ex: Optional[int] = None) -> bool:
             return False
