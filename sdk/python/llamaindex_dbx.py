@@ -1,5 +1,5 @@
 """
-llamaindex_dbx.py — LlamaIndex VectorStore adapter for DBX
+llamaindex_dbx.py -- LlamaIndex VectorStore adapter for DBX
 ===========================================================
 Drop-in replacement for PineconeVectorStore / ChromaVectorStore / QdrantVectorStore.
 
@@ -18,34 +18,48 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, List, Optional
 
 from dbx import DBXClient
 
-# LlamaIndex core imports ─ graceful error if not installed
+# ---------------------------------------------------------------------------
+# Optional LlamaIndex imports -- file stays importable without llama-index-core
+# (CI lint runs without the package; the class simply raises a clear error
+#  at instantiation time if it is missing)
+# ---------------------------------------------------------------------------
 try:
-    from llama_index.core.schema import (
-        BaseNode,
-        NodeWithScore,
-        TextNode,
-    )
+    from llama_index.core.bridge.pydantic import Field, PrivateAttr
+    from llama_index.core.schema import BaseNode, NodeWithScore, TextNode
     from llama_index.core.vector_stores.types import (
         BasePydanticVectorStore,
-        MetadataFilters,
         VectorStoreQuery,
         VectorStoreQueryResult,
-        VectorStoreQueryMode,
     )
-    from llama_index.core.bridge.pydantic import Field, PrivateAttr
-except ImportError as e:
-    raise ImportError(
-        "LlamaIndex is required. Install it with:\n"
-        "  pip install llama-index-core\n"
-        f"Original error: {e}"
-    ) from e
+
+    _LLAMA_AVAILABLE = True
+except ImportError:
+    _LLAMA_AVAILABLE = False
+    # Provide stubs so the class body can be parsed even without the package
+    BasePydanticVectorStore = object  # type: ignore[misc,assignment]
+    Field = lambda *a, **kw: None  # type: ignore[assignment]  # noqa: E731
+    PrivateAttr = lambda *a, **kw: None  # type: ignore[assignment]  # noqa: E731
+    BaseNode = object  # type: ignore[assignment,misc]
+    NodeWithScore = object  # type: ignore[assignment,misc]
+    TextNode = object  # type: ignore[assignment,misc]
+    VectorStoreQuery = object  # type: ignore[assignment,misc]
+    VectorStoreQueryResult = object  # type: ignore[assignment,misc]
 
 
-class DBXVectorStore(BasePydanticVectorStore):
+def _require_llama() -> None:
+    if not _LLAMA_AVAILABLE:
+        raise ImportError(
+            "LlamaIndex is required to use DBXVectorStore.\n"
+            "Install it with:  pip install llama-index-core\n"
+            "Or install the full DBX extras:  pip install -e 'sdk/python[llamaindex]'"
+        )
+
+
+class DBXVectorStore(BasePydanticVectorStore):  # type: ignore[misc]
     """LlamaIndex VectorStore backed by an isolated DBX tenant.
 
     This adapter is API-compatible with PineconeVectorStore, ChromaVectorStore,
@@ -73,7 +87,7 @@ class DBXVectorStore(BasePydanticVectorStore):
 
     index_name: str = Field(default="li_index", description="DBX vector index name")
 
-    _client: DBXClient = PrivateAttr()
+    _client: Any = PrivateAttr()
 
     def __init__(
         self,
@@ -81,6 +95,7 @@ class DBXVectorStore(BasePydanticVectorStore):
         index_name: str = "li_index",
         **kwargs: Any,
     ) -> None:
+        _require_llama()
         super().__init__(index_name=index_name, **kwargs)
         self._client = client
 
@@ -96,17 +111,20 @@ class DBXVectorStore(BasePydanticVectorStore):
     def _node_key(self, node_id: str) -> str:
         return f"li:{self.index_name}:{node_id}"
 
-    def _serialize_node(self, node: BaseNode) -> str:
-        return json.dumps({
-            "text": node.get_content(metadata_mode="all"),
-            "metadata": node.metadata,
-            "node_id": node.node_id,
-            "relationships": {
-                str(k): str(v) for k, v in node.relationships.items()
-            },
-        })
+    def _serialize_node(self, node: Any) -> str:
+        return json.dumps(
+            {
+                "text": node.get_content(metadata_mode="all"),
+                "metadata": node.metadata,
+                "node_id": node.node_id,
+                "relationships": {
+                    str(k): str(v) for k, v in node.relationships.items()
+                },
+            }
+        )
 
-    def _deserialize_node(self, raw: str, score: float = 1.0) -> NodeWithScore:
+    def _deserialize_node(self, raw: str, score: float = 1.0) -> Any:
+        _require_llama()
         data = json.loads(raw)
         node = TextNode(
             text=data.get("text", ""),
@@ -121,14 +139,14 @@ class DBXVectorStore(BasePydanticVectorStore):
 
     def add(
         self,
-        nodes: List[BaseNode],
+        nodes: List[Any],
         **add_kwargs: Any,
     ) -> List[str]:
         """Add nodes into the DBX vector store using batch ingestion."""
+        _require_llama()
         if not nodes:
             return []
 
-        # Collect IDs, vectors, and serialized payloads
         node_ids: List[str] = []
         vectors: List[List[float]] = []
         payloads: List[str] = []
@@ -144,11 +162,9 @@ class DBXVectorStore(BasePydanticVectorStore):
             vectors.append([float(v) for v in embedding])
             payloads.append(self._serialize_node(node))
 
-        # ── batch-write vectors in a single VADD_BATCH command ──
         dim = len(vectors[0])
         self._client.vadd_batch(self.index_name, dim, node_ids, vectors)
 
-        # ── store text + metadata via pipeline ──
         pipeline = self._client.r.pipeline(transaction=False)
         for node_id, payload in zip(node_ids, payloads):
             pipeline.set(self._node_key(node_id), payload)
@@ -167,19 +183,19 @@ class DBXVectorStore(BasePydanticVectorStore):
 
     def query(
         self,
-        query: VectorStoreQuery,
+        query: Any,
         **kwargs: Any,
-    ) -> VectorStoreQueryResult:
+    ) -> Any:
         """Execute a vector similarity query against DBX.
 
         Supports:
-          - DEFAULT mode  → VSEARCH (dense ANN)
-          - SPARSE mode   → VSEARCH (falls back to dense)
-          - HYBRID mode   → VFUSE   (multi-space fusion)
+          - DEFAULT mode  -> VSEARCH (dense ANN)
+          - SPARSE mode   -> VSEARCH (falls back to dense)
+          - HYBRID mode   -> VFUSE   (multi-space fusion)
         """
+        _require_llama()
         top_k = query.similarity_top_k or 4
 
-        # ── resolve query vector ──
         q_vec: Optional[List[float]] = None
         if query.query_embedding is not None:
             q_vec = [float(v) for v in query.query_embedding]
@@ -190,15 +206,13 @@ class DBXVectorStore(BasePydanticVectorStore):
                 "Ensure your embed_model is set on the VectorStoreIndex."
             )
 
-        # ── execute against DBX ──
         hits = self._client.vsearch(
             self.index_name,
             q_vec,
             top_k=top_k,
         )
 
-        # ── hydrate results ──
-        nodes: List[NodeWithScore] = []
+        nodes: List[Any] = []
         ids: List[str] = []
         similarities: List[float] = []
 
