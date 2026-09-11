@@ -16,9 +16,9 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from dbx import DBXClient, ControlPlane
+from dbx import DBXClient
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.vectorstores import VectorStore
@@ -54,7 +54,7 @@ class DBXVectorStore(VectorStore):
         embedding: Embeddings,
         index_name: str = "lc_index",
         *,
-        namespace: str = "",          # Pinecone compat — ignored but accepted
+        namespace: str = "",  # Pinecone compat — ignored but accepted
         text_key: str = "page_content",
     ) -> None:
         self._client = client
@@ -157,7 +157,9 @@ class DBXVectorStore(VectorStore):
         filter: Optional[Dict[str, Any]] = None,  # Pinecone compat, reserved
         **kwargs: Any,
     ) -> List[Document]:
-        return [doc for doc, _ in self.similarity_search_with_score(query, k=k, **kwargs)]
+        return [
+            doc for doc, _ in self.similarity_search_with_score(query, k=k, **kwargs)
+        ]
 
     def similarity_search_with_score(
         self,
@@ -203,14 +205,24 @@ class DBXVectorStore(VectorStore):
 
     async def aadd_texts(self, texts: Iterable[str], **kwargs: Any) -> List[str]:
         # DBX uses a synchronous Redis client; run in executor for async compat
-        import asyncio, functools
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, functools.partial(self.add_texts, list(texts), **kwargs))
+        import asyncio
+        import functools
 
-    async def asimilarity_search(self, query: str, k: int = 4, **kwargs: Any) -> List[Document]:
-        import asyncio, functools
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, functools.partial(self.similarity_search, query, k=k, **kwargs))
+        return await loop.run_in_executor(
+            None, functools.partial(self.add_texts, list(texts), **kwargs)
+        )
+
+    async def asimilarity_search(
+        self, query: str, k: int = 4, **kwargs: Any
+    ) -> List[Document]:
+        import asyncio
+        import functools
+
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(
+            None, functools.partial(self.similarity_search, query, k=k, **kwargs)
+        )
 
     # ------------------------------------------------------------------ #
     # Class-method constructors (Pinecone / Chroma style)                 #
@@ -275,4 +287,5 @@ class DBXVectorStore(VectorStore):
     def as_retriever(self, **kwargs: Any):  # type: ignore[override]
         """Return a LangChain retriever (works with LCEL | chains)."""
         from langchain_core.vectorstores import VectorStoreRetriever
+
         return VectorStoreRetriever(vectorstore=self, **kwargs)

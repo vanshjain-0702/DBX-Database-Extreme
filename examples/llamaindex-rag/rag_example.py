@@ -33,11 +33,11 @@ except ImportError:
     sys.exit(1)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-ORCHESTRATOR_URL = os.getenv("DBX_URL",           "http://127.0.0.1:8000")
-ADMIN_PASSWORD   = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin")
-RESP_HOST        = os.getenv("DBX_HOST",           "127.0.0.1")
-RESP_PORT        = int(os.getenv("DBX_PORT",       "6380"))
-TENANT_ID        = "llamaindex-rag-demo"
+ORCHESTRATOR_URL = os.getenv("DBX_URL", "http://127.0.0.1:8000")
+ADMIN_PASSWORD = os.getenv("DBX_ADMIN_PASSWORD", "adminadminadmin")
+RESP_HOST = os.getenv("DBX_HOST", "127.0.0.1")
+RESP_PORT = int(os.getenv("DBX_PORT", "6380"))
+TENANT_ID = "llamaindex-rag-demo"
 
 # ── Provision tenant ──────────────────────────────────────────────────────────
 plane = ControlPlane(ORCHESTRATOR_URL)
@@ -49,9 +49,10 @@ except Exception as e:
         raise
 
 minted = plane.create_key(TENANT_ID, name="writer", role="writer")
-key    = minted.get("key") or {}
+key = minted.get("key") or {}
 client = DBXClient(
-    host=RESP_HOST, port=RESP_PORT,
+    host=RESP_HOST,
+    port=RESP_PORT,
     tenant=TENANT_ID,
     key_id=str(key.get("id") or minted.get("id") or ""),
     secret=str(minted.get("secret") or ""),
@@ -66,7 +67,7 @@ for _ in range(20):
         time.sleep(0.5)
 
 # ── Build VectorStore ─────────────────────────────────────────────────────────
-vector_store    = DBXVectorStore(client=client, index_name="rag_index")
+vector_store = DBXVectorStore(client=client, index_name="rag_index")
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
 # ── Sample documents ──────────────────────────────────────────────────────────
@@ -85,6 +86,7 @@ OPENAI_KEY = os.getenv("OPENAI_API_KEY")
 if OPENAI_KEY:
     from llama_index.embeddings.openai import OpenAIEmbedding
     from llama_index.llms.openai import OpenAI
+
     embed_model = OpenAIEmbedding()
     llm = OpenAI(model="gpt-4o-mini")
     print("Using OpenAI embeddings and GPT-4o-mini LLM.")
@@ -92,6 +94,7 @@ else:
     # Fallback: manual node construction with random embeddings (no API key needed)
     print("No OPENAI_API_KEY found. Using random embeddings for demo purposes.")
     import random
+
     def fake_embed(text):
         random.seed(hash(text) & 0xFFFFFFFF)
         raw = [random.gauss(0, 1) for _ in range(64)]
@@ -107,6 +110,7 @@ t0 = time.perf_counter()
 
 if embed_model:
     from llama_index.core import Document
+
     li_docs = [Document(text=d) for d in DOCUMENTS]
     index = VectorStoreIndex.from_documents(
         li_docs,
@@ -130,8 +134,6 @@ print(f"Indexed in {elapsed:.3f}s")
 
 # ── Query ─────────────────────────────────────────────────────────────────────
 from llama_index.core.vector_stores.types import VectorStoreQuery
-import random
-
 queries = [
     "How does DBX isolate tenants?",
     "What is the memory footprint of DBX?",
