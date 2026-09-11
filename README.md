@@ -418,6 +418,7 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | Updates | [posts.html](https://dbxdb.co.in/posts.html) — latest engine notes; header badge until you open the page. RSS: [posts.xml](https://dbxdb.co.in/posts.xml). |
 | Incubation pitch | [pitch.html](https://dbxdb.co.in/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
+| DEV.to paste kits | [`docs/blog/`](docs/blog/) — product post + Isolation Kernel walkthrough |
 | Changelog | [`website/changelog.html`](website/changelog.html) |
 | LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
 | Operator UI | [`dashboard/`](dashboard/) — Tenant keys, console, explorer, vector playground. Embedded in the orchestrator binary. |
