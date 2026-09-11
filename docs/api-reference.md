@@ -218,3 +218,115 @@ Returns real-time performance metrics for the given tenant.
   "active_conns": 12
 }
 ```
+
+---
+
+## Framework Integrations
+
+### LangChain — `DBXVectorStore`
+
+`sdk/python/langchain_dbx.py` is a full `VectorStore` implementation that is
+API-compatible with `PineconeVectorStore`, `Chroma`, and `QdrantVectorStore`.
+
+**Installation:**
+```bash
+pip install -e "sdk/python[langchain]"
+```
+
+**One-line swap from Pinecone:**
+```python
+# Before
+from langchain_pinecone import PineconeVectorStore as VectorStore
+# After — everything else stays identical
+from langchain_dbx import DBXVectorStore as VectorStore
+```
+
+**Full example:**
+```python
+from dbx import DBXClient
+from langchain_dbx import DBXVectorStore
+from langchain_openai import OpenAIEmbeddings
+
+client = DBXClient(host="localhost", port=6380,
+                   tenant="acme-corp", key_id="k1", secret="s1")
+
+# Build from texts (Pinecone-compatible factory)
+store = DBXVectorStore.from_texts(
+    ["AI memory engine", "vector isolation", "per-tenant security"],
+    OpenAIEmbeddings(),
+    client=client,
+    index_name="my_index",
+)
+
+# Search
+docs  = store.similarity_search("secure memory", k=4)
+scored = store.similarity_search_with_score("isolation kernel", k=4)
+
+# Use with LCEL chains
+retriever = store.as_retriever(search_kwargs={"k": 3})
+```
+
+**Supported methods:** `add_texts`, `add_documents`, `from_texts`, `from_documents`,
+`from_existing_index`, `similarity_search`, `similarity_search_with_score`,
+`similarity_search_by_vector`, `delete`, `as_retriever`, async stubs
+(`aadd_texts`, `asimilarity_search`).
+
+Ingestion uses `VADD_BATCH` internally — a single RESP round-trip for an entire
+document batch, which is significantly faster than N individual `VADD` calls.
+
+---
+
+### LlamaIndex — `DBXVectorStore`
+
+`sdk/python/llamaindex_dbx.py` implements `BasePydanticVectorStore` and is
+API-compatible with `PineconeVectorStore`, `ChromaVectorStore`, and
+`QdrantVectorStore` for LlamaIndex >= 0.10 (`llama-index-core`).
+
+**Installation:**
+```bash
+pip install -e "sdk/python[llamaindex]"
+```
+
+**One-line swap from Pinecone:**
+```python
+# Before
+from llama_index.vector_stores.pinecone import PineconeVectorStore as VectorStore
+# After — everything else stays identical
+from llamaindex_dbx import DBXVectorStore as VectorStore
+```
+
+**Full example:**
+```python
+from dbx import DBXClient
+from llamaindex_dbx import DBXVectorStore
+from llama_index.core import VectorStoreIndex, StorageContext, SimpleDirectoryReader
+from llama_index.embeddings.openai import OpenAIEmbedding
+
+client = DBXClient(host="localhost", port=6380,
+                   tenant="acme-corp", key_id="k1", secret="s1")
+
+vector_store     = DBXVectorStore(client=client, index_name="li_index")
+storage_context  = StorageContext.from_defaults(vector_store=vector_store)
+
+docs  = SimpleDirectoryReader("./data").load_data()
+index = VectorStoreIndex.from_documents(
+    docs,
+    storage_context=storage_context,
+    embed_model=OpenAIEmbedding(),
+)
+
+query_engine = index.as_query_engine()
+response     = query_engine.query("What is DBX isolation?")
+print(response)
+```
+
+**Supported methods:** `add` (batch via `VADD_BATCH`), `query` (dense ANN via
+`VSEARCH`, multi-space fusion via `VFUSE`), `delete`, `from_params`.
+
+All tenant data remains physically isolated by the DBX Isolation Kernel — the
+LlamaIndex layer never touches another tenant's index files.
+
+**Install both at once:**
+```bash
+pip install -e "sdk/python[all]"
+```

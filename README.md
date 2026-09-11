@@ -338,7 +338,7 @@ Worked examples: [`examples/quickstart.py`](examples/quickstart.py) (15-minute p
 [`examples/langchain-rag`](examples/langchain-rag) (session KV + vectors, no OpenAI key),
 [`examples/nextjs-cache`](examples/nextjs-cache) (`SETEX` / node-redis `setEx`).
 
-### Python (AI / LangChain)
+### Python (AI / LangChain / LlamaIndex)
 
 ```python
 from dbx import DBXClient
@@ -359,11 +359,40 @@ db.vadd("memories", "doc:1", [0.1, 0.2, 0.9])
 results = db.vsearch("memories", [0.1, 0.2, 0.8], top_k=5)
 ```
 
-Install the SDK from this tree: `pip install -e sdk/python` (optional extras:
-`pip install -e "sdk/python[langchain]"`). Control-plane helpers live on
-`ControlPlane`. Per-tenant cost is `GET /api/v1/tenants/{id}/usage`. Prometheus is
-`GET /metrics` on the orchestrator (Bearer JWT or `DBX_INTERNAL_API_TOKEN` unless
-you passed `-insecure-http`).
+**LangChain — one-line swap from Pinecone:**
+```python
+# Before:  from langchain_pinecone import PineconeVectorStore as VectorStore
+from langchain_dbx import DBXVectorStore as VectorStore   # ← only change
+
+store = VectorStore.from_texts(texts, embeddings, client=db, index_name="idx")
+docs  = store.similarity_search("query", k=4)
+chain = store.as_retriever() | llm   # works in LCEL chains
+```
+
+**LlamaIndex — one-line swap from Pinecone:**
+```python
+# Before:  from llama_index.vector_stores.pinecone import PineconeVectorStore as VectorStore
+from llamaindex_dbx import DBXVectorStore as VectorStore   # ← only change
+
+vector_store = VectorStore(client=db)
+storage_ctx  = StorageContext.from_defaults(vector_store=vector_store)
+index        = VectorStoreIndex.from_documents(docs, storage_context=storage_ctx)
+response     = index.as_query_engine().query("What is DBX?")
+```
+
+Install the SDK from this tree:
+```bash
+pip install -e "sdk/python"                  # core only
+pip install -e "sdk/python[langchain]"       # + LangChain adapter
+pip install -e "sdk/python[llamaindex]"      # + LlamaIndex adapter
+pip install -e "sdk/python[all]"             # everything
+```
+
+Control-plane helpers live on `ControlPlane`. Per-tenant cost is
+`GET /api/v1/tenants/{id}/usage`. Prometheus is `GET /metrics` on the
+orchestrator (Bearer JWT or `DBX_INTERNAL_API_TOKEN` unless you passed
+`-insecure-http`). Full integration docs in
+[docs/api-reference.md](docs/api-reference.md#framework-integrations).
 
 Python unit tests do not need a running node:
 
