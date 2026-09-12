@@ -1,66 +1,109 @@
+
 title: DBX Tenant Memory Platform
 summary: Isolated tenant memory on EKS
 
 group "DBX Clients and Interfaces" [color: blue] {
-  Python SDK [icon: server]
+  Python SDK [icon: python]
   LangChain RAG Example [icon: server]
   LlamaIndex RAG Example [icon: server]
   NextJS Cache Example [icon: server]
-  DBX Operator Dashboard [icon: server]
+  DBX Operator Dashboard [icon: react]
   Public Website [icon: internet]
 }
 
 group "GitHub Repository Delivery" [color: orange] {
-  GitHub Actions Build and Test [icon: server]
-  GitHub Actions Docker Publish [icon: server]
-  GitHub Actions Pages Deploy [icon: server]
+  GitHub Actions Build and Test [icon: github]
+  GitHub Actions Docker Publish [icon: github]
+  GitHub Actions Pages Deploy [icon: github]
   GHCR DBX Orchestrator Image [icon: containerd]
   GitHub Pages Website [icon: internet]
+
+  group "DBX CLI Commands" [color: orange] {
+    Orchestrator Command [icon: terminal]
+    Engine Server Command [icon: terminal]
+    Vector Benchmark Command [icon: terminal]
+    Legacy Server Command [icon: terminal]
+    Legacy Orchestrator Command [icon: terminal]
+  }
+}
+
+group "DBX Core Configuration" [color: yellow] {
+  Configuration Module [icon: settings]
+  Runtime Configuration [icon: settings]
+  JWT Authentication Interface [icon: lock]
+  Internal API Interface [icon: api]
+  Backup Archive Store [icon: database]
 }
 
 group "AWS us-east-1" [color: green] {
-  DBX Orchestrator S3 IAM Role [icon: iam]
-  DBX Backups S3 Bucket [icon: s3]
+  DBX Orchestrator S3 IAM Role [icon: aws-iam]
+  DBX Backups S3 Bucket [icon: aws-s3]
 
   group "DBX Global Cluster VPC" [color: green] {
-    DBX Global EKS Cluster [icon: eks]
-    EKS Orchestrator Node Group [icon: ec2]
-    EKS Data Plane Node Group [icon: ec2]
+    DBX Global EKS Cluster [icon: aws-eks]
+    EKS Orchestrator Node Group [icon: aws-ec2]
+    EKS Data Plane Node Group [icon: aws-ec2]
 
     group "DBX Kubernetes Workload" [color: purple] {
       DBX Public LoadBalancer Service [icon: load-balancer]
       DBX Internal Headless Service [icon: load-balancer]
       DBX Orchestrator StatefulSet [icon: server]
-      DBX Orchestrator Service Account [icon: iam]
-      DBX Control Plane Secret [icon: secrets-manager]
-      DBX TLS Secret [icon: secrets-manager]
+      DBX Orchestrator Service Account [icon: aws-iam]
+      DBX Control Plane Secret [icon: aws-secrets-manager]
+      DBX TLS Secret [icon: aws-secrets-manager]
       DBX Persistent Volume Claim [icon: database]
       DBX Orchestrator [icon: server]
-      Embedded Dashboard Bundle [icon: server]
+      Embedded Dashboard Bundle [icon: react]
       Tenant DBX Server Process [icon: server]
-      Tenant KV and Vector Engine [icon: dynamodb]
+      Tenant KV and Vector Engine [icon: aws-dynamodb]
       Tenant Data Volume [icon: database]
     }
   }
 }
 
+// --- Client to Ingress ---
 Python SDK > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
 LangChain RAG Example > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
 LlamaIndex RAG Example > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
 NextJS Cache Example > DBX Public LoadBalancer Service [conduit: RESP:6380]
 DBX Operator Dashboard > DBX Public LoadBalancer Service [conduit: HTTP:8000]
 Public Website > GitHub Pages Website [conduit: HTTPS]
+
+// --- GitHub Actions CI/CD Pipeline ---
+GitHub Actions Build and Test > Orchestrator Command [conduit: go build]
+GitHub Actions Build and Test > Engine Server Command [conduit: go build]
+GitHub Actions Build and Test > Vector Benchmark Command [conduit: go build]
+GitHub Actions Build and Test > Legacy Server Command [conduit: go build]
+GitHub Actions Build and Test > Legacy Orchestrator Command [conduit: go build]
 GitHub Actions Build and Test > DBX Operator Dashboard [conduit: npm build]
-GitHub Actions Build and Test > DBX Orchestrator [conduit: Go build]
 GitHub Actions Docker Publish > GHCR DBX Orchestrator Image [conduit: Docker registry push]
 GitHub Actions Pages Deploy > GitHub Pages Website [conduit: GitHub Pages deployment]
 GHCR DBX Orchestrator Image > DBX Orchestrator StatefulSet [conduit: container image pull]
 
+// --- CLI Commands wire to Core ---
+Orchestrator Command > Configuration Module [conduit: loads config]
+Engine Server Command > Configuration Module [conduit: loads config]
+Legacy Server Command > Configuration Module [conduit: loads config]
+Legacy Orchestrator Command > Configuration Module [conduit: loads config]
+Vector Benchmark Command > Engine Server Command [conduit: benchmarks via]
+
+// --- Core Configuration ---
+Configuration Module > Runtime Configuration [conduit: resolves env vars]
+Runtime Configuration > DBX Orchestrator [conduit: injected at boot]
+Configuration Module > JWT Authentication Interface [conduit: JWT secret]
+Configuration Module > Internal API Interface [conduit: API token]
+JWT Authentication Interface > DBX Orchestrator [conduit: control plane auth]
+Internal API Interface > DBX Orchestrator [conduit: metrics and internal token]
+Backup Archive Store > DBX Backups S3 Bucket [conduit: S3 upload]
+DBX Orchestrator > Backup Archive Store [conduit: SHA-256 manifest]
+
+// --- Kubernetes Scheduling ---
 DBX Global EKS Cluster > EKS Orchestrator Node Group [conduit: Kubernetes scheduling]
 DBX Global EKS Cluster > EKS Data Plane Node Group [conduit: Kubernetes scheduling]
 EKS Orchestrator Node Group > DBX Orchestrator StatefulSet [conduit: Kubernetes scheduling]
 EKS Data Plane Node Group > Tenant DBX Server Process [conduit: Kubernetes scheduling]
 
+// --- Kubernetes Workload Internals ---
 DBX Public LoadBalancer Service > DBX Orchestrator StatefulSet [conduit: HTTP:8000 and RESP:6380]
 DBX Internal Headless Service > DBX Orchestrator StatefulSet [conduit: HTTP:8000]
 DBX Orchestrator Service Account > DBX Orchestrator StatefulSet [conduit: Kubernetes service account]
@@ -73,5 +116,7 @@ DBX Orchestrator > Tenant DBX Server Process [conduit: isolated process and RESP
 DBX Orchestrator > Tenant Data Volume [conduit: tenant state files]
 Tenant DBX Server Process > Tenant KV and Vector Engine [conduit: internal]
 Tenant KV and Vector Engine > Tenant Data Volume [conduit: WAL and checkpoints]
+
+// --- AWS IAM and S3 ---
 DBX Orchestrator > DBX Orchestrator S3 IAM Role [conduit: IAM web identity]
 DBX Orchestrator S3 IAM Role > DBX Backups S3 Bucket [conduit: S3 API]

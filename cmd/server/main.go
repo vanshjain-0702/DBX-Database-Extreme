@@ -15,6 +15,11 @@ import (
 var version = "1.2.0"
 
 func main() {
+	fmt.Fprintln(os.Stderr, "DEPRECATED: cmd/server is superseded by cmd/dbx-server.")
+	fmt.Fprintln(os.Stderr, "This binary is missing Isolation Kernel (Landlock/cgroups v2).")
+	fmt.Fprintln(os.Stderr, "Use cmd/dbx-server instead.")
+	fmt.Fprintln(os.Stderr, "")
+
 	cfgPath := flag.String("config", "configs/local.yaml", "config file path")
 	printVersion := flag.Bool("version", false, "print version and exit")
 	flag.Parse()

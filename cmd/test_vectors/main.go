@@ -8,6 +8,10 @@ import (
 )
 
 func main() {
+	fmt.Println("DEPRECATED: cmd/test_vectors is a raw TCP smoke test.")
+	fmt.Println("Use cmd/dbx-vector-benchmark for proper recall and performance testing.")
+	fmt.Println("")
+
 	conn, err := net.Dial("tcp", "localhost:6399")
 	if err != nil {
 		fmt.Printf("Failed to connect to DBX: %v\n", err)

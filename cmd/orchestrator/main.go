@@ -17,6 +17,11 @@ import (
 )
 
 func main() {
+	log.Println("DEPRECATED: cmd/orchestrator is superseded by cmd/dbx-orchestrator.")
+	log.Println("This binary is missing Isolation Kernel (Landlock/cgroups), RESP ingress,")
+	log.Println("graceful shutdown, and the v1.2 API surface. Use cmd/dbx-orchestrator instead.")
+	log.Println("")
+
 	nodeID := flag.String("id", "node1", "Node ID")
 	bindAddr := flag.String("bind", "127.0.0.1:8001", "Raft bind address")
 	raftDir := flag.String("raftdir", "./data/raft", "Raft data dir")

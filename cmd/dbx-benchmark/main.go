@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -11,7 +12,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/dbx/dbx/internal/protocol"
 )
+
+// Ensure protocol is referenced — the RESP writer is available for future
+// use but the hand-rolled pipeline is kept for backwards compatibility
+// with the certified benchmark numbers.
+var _ = protocol.TypeString
+
 
 func auth(conn net.Conn, reader *bufio.Reader, password string) error {
 	if password == "" {
@@ -125,21 +134,28 @@ func percentile(values []time.Duration, p float64) time.Duration {
 }
 
 func main() {
-	addr := os.Getenv("DBX_BENCH_ADDR")
-	if addr == "" {
-		addr = "127.0.0.1:6401"
+	addr := flag.String("addr", "127.0.0.1:6401", "DBX RESP address (or set DBX_BENCH_ADDR)")
+	password := flag.String("password", "", "AUTH password (or set DBX_DEFAULT_PASSWORD)")
+	workers := flag.Int("workers", 64, "concurrent connections")
+	perWorker := flag.Int("per-worker", 2000, "operations per worker")
+	flag.Parse()
+
+	if env := os.Getenv("DBX_BENCH_ADDR"); env != "" && *addr == "127.0.0.1:6401" {
+		*addr = env
 	}
-	password := os.Getenv("DBX_DEFAULT_PASSWORD")
-	concurrency := 64
-	perWorker := 2000 // 128,000 ops — enough to stabilize vs README 50k sample
-	fmt.Printf("DBX RESP benchmark %s  workers=%d  per=%d\n", addr, concurrency, perWorker)
-	runPhase("SET", addr, password, concurrency, perWorker, func(w, i int) string {
+	if env := os.Getenv("DBX_DEFAULT_PASSWORD"); env != "" && *password == "" {
+		*password = env
+	}
+
+	fmt.Printf("DBX RESP benchmark %s  workers=%d  per=%d\n", *addr, *workers, *perWorker)
+	runPhase("SET", *addr, *password, *workers, *perWorker, func(w, i int) string {
 		key := fmt.Sprintf("b:%d:%d", w, i)
 		val := "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 		return fmt.Sprintf("*3\r\n$3\r\nSET\r\n$%d\r\n%s\r\n$%d\r\n%s\r\n", len(key), key, len(val), val)
 	})
-	runPhase("GET", addr, password, concurrency, perWorker, func(w, i int) string {
+	runPhase("GET", *addr, *password, *workers, *perWorker, func(w, i int) string {
 		key := fmt.Sprintf("b:%d:%d", w, i)
 		return fmt.Sprintf("*2\r\n$3\r\nGET\r\n$%d\r\n%s\r\n", len(key), key)
 	})
 }
+
