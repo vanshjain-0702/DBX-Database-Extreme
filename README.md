@@ -415,19 +415,33 @@ await client.set('session:abc', JSON.stringify({ userId: 42 }));
 
 ## Architecture
 
+[**View the full Interactive Architecture Diagram**](https://basaltarch.io/view/7d07f83a-fa03-4c06-8204-19068c71687f)
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│  HTTP control plane :8000     Authenticated RESP ingress :6380  │
-│      tenant lifecycle, scoped credentials, routing, backups     │
-│─────────────────────────────────────────────────────────────────│
-│  Tenant A               │  Tenant B               │  Tenant N…  │
-│  ┌──────────────────┐   │  ┌──────────────────┐   │             │
-│  │  KV Engine       │   │  │  KV Engine       │   │             │
-│  │  HNSW Vectors    │   │  │  HNSW Vectors    │   │             │
-│  │  (SQ8, mmap)     │   │  │  (SQ8, mmap)     │   │             │
-│  │  Own WAL         │   │  │  Own WAL         │   │             │
-│  │  Own snapshots   │   │  │  Own snapshots   │   │             │
-│  └──────────────────┘   │  └──────────────────┘   │             │
+│                      AWS EKS / Kubernetes                       │
+│ ┌─────────────────────────────────────────────────────────────┐ │
+│ │                    DBX Orchestrator (Go)                    │ │
+│ │                                                             │ │
+│ │  [Embedded UI]         [HTTP :8000]           [RESP :6380]  │ │
+│ │  React Dashboard       Control Plane          Data Ingress  │ │
+│ │                                                             │ │
+│ ├─────────────────────────────────────────────────────────────┤ │
+│ │   Isolated Tenant Processes (Linux Landlock & cgroups v2)   │ │
+│ │                                                             │ │
+│ │  Tenant A               │  Tenant B               │  ...    │ │
+│ │  ┌──────────────────┐   │  ┌──────────────────┐   │         │ │
+│ │  │  KV Engine       │   │  │  KV Engine       │   │         │ │
+│ │  │  HNSW Vectors    │   │  │  HNSW Vectors    │   │         │ │
+│ │  │  (SQ8, mmap)     │   │  │  (SQ8, mmap)     │   │         │ │
+│ │  │  Own WAL         │   │  │  Own WAL         │   │         │ │
+│ │  │  Own snapshots   │   │  │  Own snapshots   │   │         │ │
+│ │  └──────────────────┘   │  └──────────────────┘   │         │ │
+│ └─────────────────────────────────────────────────────────────┘ │
+│                                                                 │
+│ ┌───────────────────────┐             ┌───────────────────────┐ │
+│ │  PVC (Tenant Data)    │             │  S3 (Tenant Backups)  │ │
+│ └───────────────────────┘             └───────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
