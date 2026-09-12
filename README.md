@@ -417,6 +417,14 @@ await client.set('session:abc', JSON.stringify({ userId: 42 }));
 
 [**View the full Interactive Architecture Diagram**](https://basaltarch.io/view/7d07f83a-fa03-4c06-8204-19068c71687f)
 
+<a href="https://basaltarch.io/view/7d07f83a-fa03-4c06-8204-19068c71687f">
+  <picture>
+    <img src="website/assets/architecture.png" alt="DBX Architecture Diagram" width="100%" />
+  </picture>
+</a>
+
+*Click the image to view the interactive architecture diagram on BasaltArch.*
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                      AWS EKS / Kubernetes                       │
