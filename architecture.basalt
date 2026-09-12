@@ -1,0 +1,77 @@
+title: DBX Tenant Memory Platform
+summary: Isolated tenant memory on EKS
+
+group "DBX Clients and Interfaces" [color: blue] {
+  Python SDK [icon: server]
+  LangChain RAG Example [icon: server]
+  LlamaIndex RAG Example [icon: server]
+  NextJS Cache Example [icon: server]
+  DBX Operator Dashboard [icon: server]
+  Public Website [icon: internet]
+}
+
+group "GitHub Repository Delivery" [color: orange] {
+  GitHub Actions Build and Test [icon: server]
+  GitHub Actions Docker Publish [icon: server]
+  GitHub Actions Pages Deploy [icon: server]
+  GHCR DBX Orchestrator Image [icon: containerd]
+  GitHub Pages Website [icon: internet]
+}
+
+group "AWS us-east-1" [color: green] {
+  DBX Orchestrator S3 IAM Role [icon: iam]
+  DBX Backups S3 Bucket [icon: s3]
+
+  group "DBX Global Cluster VPC" [color: green] {
+    DBX Global EKS Cluster [icon: eks]
+    EKS Orchestrator Node Group [icon: ec2]
+    EKS Data Plane Node Group [icon: ec2]
+
+    group "DBX Kubernetes Workload" [color: purple] {
+      DBX Public LoadBalancer Service [icon: load-balancer]
+      DBX Internal Headless Service [icon: load-balancer]
+      DBX Orchestrator StatefulSet [icon: server]
+      DBX Orchestrator Service Account [icon: iam]
+      DBX Control Plane Secret [icon: secrets-manager]
+      DBX TLS Secret [icon: secrets-manager]
+      DBX Persistent Volume Claim [icon: database]
+      DBX Orchestrator [icon: server]
+      Embedded Dashboard Bundle [icon: server]
+      Tenant DBX Server Process [icon: server]
+      Tenant KV and Vector Engine [icon: dynamodb]
+      Tenant Data Volume [icon: database]
+    }
+  }
+}
+
+Python SDK > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
+LangChain RAG Example > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
+LlamaIndex RAG Example > DBX Public LoadBalancer Service [conduit: HTTP:8000 and RESP:6380]
+NextJS Cache Example > DBX Public LoadBalancer Service [conduit: RESP:6380]
+DBX Operator Dashboard > DBX Public LoadBalancer Service [conduit: HTTP:8000]
+Public Website > GitHub Pages Website [conduit: HTTPS]
+GitHub Actions Build and Test > DBX Operator Dashboard [conduit: npm build]
+GitHub Actions Build and Test > DBX Orchestrator [conduit: Go build]
+GitHub Actions Docker Publish > GHCR DBX Orchestrator Image [conduit: Docker registry push]
+GitHub Actions Pages Deploy > GitHub Pages Website [conduit: GitHub Pages deployment]
+GHCR DBX Orchestrator Image > DBX Orchestrator StatefulSet [conduit: container image pull]
+
+DBX Global EKS Cluster > EKS Orchestrator Node Group [conduit: Kubernetes scheduling]
+DBX Global EKS Cluster > EKS Data Plane Node Group [conduit: Kubernetes scheduling]
+EKS Orchestrator Node Group > DBX Orchestrator StatefulSet [conduit: Kubernetes scheduling]
+EKS Data Plane Node Group > Tenant DBX Server Process [conduit: Kubernetes scheduling]
+
+DBX Public LoadBalancer Service > DBX Orchestrator StatefulSet [conduit: HTTP:8000 and RESP:6380]
+DBX Internal Headless Service > DBX Orchestrator StatefulSet [conduit: HTTP:8000]
+DBX Orchestrator Service Account > DBX Orchestrator StatefulSet [conduit: Kubernetes service account]
+DBX Orchestrator StatefulSet > DBX Orchestrator [conduit: container process]
+DBX Control Plane Secret > DBX Orchestrator [conduit: environment variables]
+DBX TLS Secret > DBX Orchestrator [conduit: mounted certificate volume]
+DBX Persistent Volume Claim > Tenant Data Volume [conduit: persistent storage]
+DBX Orchestrator > Embedded Dashboard Bundle [conduit: Go embed]
+DBX Orchestrator > Tenant DBX Server Process [conduit: isolated process and RESP proxy]
+DBX Orchestrator > Tenant Data Volume [conduit: tenant state files]
+Tenant DBX Server Process > Tenant KV and Vector Engine [conduit: internal]
+Tenant KV and Vector Engine > Tenant Data Volume [conduit: WAL and checkpoints]
+DBX Orchestrator > DBX Orchestrator S3 IAM Role [conduit: IAM web identity]
+DBX Orchestrator S3 IAM Role > DBX Backups S3 Bucket [conduit: S3 API]
