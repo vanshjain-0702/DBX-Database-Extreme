@@ -5,7 +5,14 @@
     <link>https://dbxdb.co.in/posts.html</link>
     <description>What shipped in DBX — v1.2.0 recall, Isolation Kernel, walkthrough. Not a mail list.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 10 Sep 2026 18:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Sun, 13 Sep 2026 18:00:00 GMT</lastBuildDate>
+    <item>
+      <title>Vector upgrades: migrate live, inspect history</title>
+      <link>https://dbxdb.co.in/posts.html#vector-upgrades-2026-09-13</link>
+      <guid isPermaLink="true">https://dbxdb.co.in/posts.html#vector-upgrades-2026-09-13</guid>
+      <pubDate>Sun, 13 Sep 2026 00:00:00 GMT</pubDate>
+      <description>VMIGRATE builds and promotes a shadow vector index while current search remains available. VSEARCH AS_OF replays retained vector WAL history for audit and RAG incident reproduction. Migration requires caller-side re-embedding and temporary storage; historical search is slower and bounded by WAL retention.</description>
+    </item>
     <item>
       <title>v1.2.0 — recall an agent can actually call</title>
       <link>https://dbxdb.co.in/posts.html#v1-2-0-2026-09-10</link>

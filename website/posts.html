@@ -36,6 +36,20 @@
 
     <section class="section">
       <div class="wrap post-feed">
+        <article class="post-card" id="vector-upgrades-2026-09-13">
+          <time datetime="2026-09-13">13 Sep 2026</time>
+          <div>
+            <h2>Vector upgrades: migrate live, inspect history <span class="new-tag">New</span></h2>
+            <p>DBX now connects two operational needs for per-tenant AI memory: changing embeddings without taking current search offline, and reproducing what a tenant’s vector index looked like at an earlier point in time.</p>
+            <ul>
+              <li><code>VMIGRATE</code> builds a complete shadow index while the current index remains searchable. Stream caller-generated vectors with <code>VMIGRATE ADD</code>, promote a non-empty target with <code>VMIGRATE SWAP</code>, or cancel without changing the live index.</li>
+              <li><code>VSEARCH ... AS_OF &lt;unix-nanoseconds&gt;</code> replays retained vector WAL history into a temporary index for audit trails, RAG incident reproduction, and compliance investigations.</li>
+            </ul>
+            <p>These workflows are tested for overwrite, delete, cancellation, concurrent workloads, and load. Honest limits: migration requires caller-side re-embedding and temporary storage; its lifecycle is not yet a replicated WAL protocol. Historical search is slower than current search and is bounded by WAL retention.</p>
+            <p><a href="features.html#upgrades">See the upgrade details</a> · <a href="docs/api.html">Read the API reference</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme">Source on GitHub</a></p>
+          </div>
+        </article>
+
         <article class="post-card" id="v1-2-0-2026-09-10">
           <time datetime="2026-09-10">10 Sep 2026</time>
           <div>
