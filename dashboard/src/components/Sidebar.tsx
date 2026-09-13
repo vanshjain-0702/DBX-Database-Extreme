@@ -5,7 +5,7 @@ import {
   Activity, Database, Settings, Terminal, Network,
   ChevronDown, ChevronRight, BarChart2, Cpu,
   Shield, LogOut, User, MonitorDot, Gauge, Globe, HardDrive,
-  Layers, Menu, PanelLeft, Key
+  Layers, Menu, PanelLeft, Key, Zap
 } from 'lucide-react';
 import logo from '../assets/logo.jpg';
 import { openCommandPalette } from '../api';
@@ -92,12 +92,12 @@ export default function Sidebar({ clusterId }: SidebarProps) {
   };
 
   const linkClass = ({ isActive }: { isActive: boolean }) =>
-    `flex items-center gap-3 px-3 py-[7px] text-[13px] font-medium transition-colors duration-150 border-l-2 ${
-      collapsed ? 'justify-center border-l-0 px-0' : ''
+    `flex items-center gap-3 px-3 py-[7px] text-[13px] font-medium transition-all duration-200 border-l-2 rounded-r-md ${
+      collapsed ? 'justify-center border-l-0 px-0 rounded-md' : ''
     } ${
       isActive
         ? 'border-[var(--accent-primary)] text-[var(--accent-primary)] bg-[var(--accent-soft)]'
-        : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--border-highlight)]'
+        : 'border-transparent text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)] hover:border-[var(--border-highlight)]'
     }`;
 
   return (
@@ -113,31 +113,50 @@ export default function Sidebar({ clusterId }: SidebarProps) {
         ref={sidebarRef}
         className={`
           flex flex-col z-20 flex-shrink-0 h-full overflow-hidden
-          bg-[var(--bg-sidebar)] border-r border-[var(--border-color)]
-          transition-[width] duration-150 ease-linear
-          ${collapsed ? 'w-[56px]' : 'w-[240px]'}
+          border-r border-[var(--border-color)]
+          transition-[width] duration-200 ease-in-out
+          ${collapsed ? 'w-[58px]' : 'w-[248px]'}
         `}
+        style={{
+          background: 'var(--bg-sidebar)',
+          boxShadow: '1px 0 0 var(--border-color)',
+        }}
       >
-        <div className={`flex items-center border-b border-[var(--border-color)] h-12 ${collapsed ? 'justify-center px-1' : 'justify-between px-3'}`}>
+        {/* Top edge accent line */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[2px] z-10 pointer-events-none"
+          style={{
+            background: 'linear-gradient(90deg, var(--accent-primary) 0%, var(--accent-secondary) 60%, transparent 100%)',
+            opacity: 0.7,
+          }}
+        />
+
+        {/* Logo / Brand */}
+        <div className={`flex items-center border-b border-[var(--border-color)] h-[52px] mt-[2px] ${collapsed ? 'justify-center px-1' : 'justify-between px-3'}`}>
           {!collapsed && (
             <button
               type="button"
-              className="flex items-center gap-2.5 min-w-0"
+              className="flex items-center gap-2.5 min-w-0 group"
               onClick={() => navigate('/')}
             >
-              <div className="w-7 h-7 rounded overflow-hidden border border-[var(--border-color)] flex-shrink-0">
+              <div className="sidebar-logo-glow w-7 h-7 rounded-md overflow-hidden border border-[var(--border-color)] flex-shrink-0 shadow-sm transition-all duration-200 group-hover:border-[var(--accent-glow)] group-hover:shadow-[0_0_8px_var(--accent-glow)]">
                 <img src={logo} alt="" className="w-full h-full object-cover" />
               </div>
               <div className="text-left min-w-0">
-                <div className="font-semibold text-[13px] tracking-tight leading-none text-[var(--text-primary)]">DBX</div>
-                <div className="text-[10px] text-[var(--accent-primary)] font-semibold tracking-[0.14em] uppercase mt-0.5">Control plane</div>
+                <div className="font-bold text-[14px] tracking-tight leading-none text-[var(--text-primary)] flex items-center gap-1.5">
+                  DBX
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-[var(--accent-soft)] border border-[var(--accent-glow)] rounded text-[9px] font-bold text-[var(--accent-primary)] tracking-widest uppercase">
+                    v1.2
+                  </span>
+                </div>
+                <div className="text-[10px] text-[var(--text-muted)] font-medium tracking-[0.1em] uppercase mt-0.5">Control plane</div>
               </div>
             </button>
           )}
           {collapsed && (
             <button
               type="button"
-              className="w-7 h-7 rounded overflow-hidden border border-[var(--border-color)]"
+              className="sidebar-logo-glow w-7 h-7 rounded-md overflow-hidden border border-[var(--border-color)] transition-all duration-200 hover:border-[var(--accent-glow)] hover:shadow-[0_0_8px_var(--accent-glow)]"
               onClick={() => navigate('/')}
             >
               <img src={logo} alt="DBX" className="w-full h-full object-cover" />
@@ -146,14 +165,15 @@ export default function Sidebar({ clusterId }: SidebarProps) {
           <button
             type="button"
             onClick={() => setCollapsed(v => !v)}
-            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded hover:bg-[var(--bg-tertiary)] flex-shrink-0"
+            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] flex-shrink-0 transition-all duration-200"
             title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {collapsed ? <Menu size={15} /> : <PanelLeft size={15} />}
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-3 space-y-5">
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 space-y-4 overflow-x-hidden">
           {groups.map((group, gi) => {
             const key = groupKeys[gi];
             const isOpen = openGroups[key];
@@ -163,8 +183,8 @@ export default function Sidebar({ clusterId }: SidebarProps) {
                   type="button"
                   onClick={() => toggleGroup(key)}
                   className={`
-                    w-full flex items-center gap-2 px-3 mb-1 text-[11px] font-semibold uppercase tracking-[0.08em]
-                    text-[var(--text-muted)] hover:text-[var(--text-secondary)]
+                    w-full flex items-center gap-2 px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.1em]
+                    text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors duration-150
                     ${collapsed ? 'justify-center px-0' : 'justify-between'}
                   `}
                   title={collapsed ? group.label : undefined}
@@ -173,14 +193,15 @@ export default function Sidebar({ clusterId }: SidebarProps) {
                     {group.icon}
                     {!collapsed && group.label}
                   </span>
-                  {!collapsed && (isOpen
-                    ? <ChevronDown size={12} />
-                    : <ChevronRight size={12} />
+                  {!collapsed && (
+                    <span className="opacity-60">
+                      {isOpen ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
+                    </span>
                   )}
                 </button>
 
                 {(!collapsed && isOpen) && (
-                  <div>
+                  <div className="space-y-0.5 pr-2">
                     {group.items.map(item => (
                       <NavLink key={item.path} to={item.path} className={linkClass}>
                         {item.icon}
@@ -191,7 +212,7 @@ export default function Sidebar({ clusterId }: SidebarProps) {
                 )}
 
                 {collapsed && (
-                  <div className="mt-1 space-y-0.5">
+                  <div className="mt-1 space-y-0.5 px-1">
                     {group.items.map(item => (
                       <NavLink
                         key={item.path}
@@ -204,16 +225,22 @@ export default function Sidebar({ clusterId }: SidebarProps) {
                     ))}
                   </div>
                 )}
+
+                {gi < groups.length - 1 && <div className="divider mt-4" />}
               </div>
             );
           })}
         </nav>
 
-        <div className="border-t border-[var(--border-color)] p-2">
+        {/* Bottom user section */}
+        <div className="border-t border-[var(--border-color)] p-2 bg-[var(--bg-sidebar)]">
           {!collapsed && clusterId && tenant && (
             <div className="px-2 py-2 mb-1 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-mono text-[var(--text-secondary)] truncate" title={clusterId}>
-                {clusterId}
+              <span className="flex items-center gap-1.5">
+                <Zap size={10} className="text-[var(--accent-primary)]" />
+                <span className="text-[11px] font-mono text-[var(--text-secondary)] truncate" title={clusterId}>
+                  {clusterId}
+                </span>
               </span>
               <StatusBadge tenant={tenant} />
             </div>
@@ -223,48 +250,55 @@ export default function Sidebar({ clusterId }: SidebarProps) {
             <button
               type="button"
               onClick={() => setShowUserMenu(!showUserMenu)}
-              className="w-full flex items-center gap-2.5 p-2 rounded hover:bg-[var(--bg-tertiary)]"
+              className="w-full flex items-center gap-2.5 p-2 rounded-md hover:bg-[var(--bg-tertiary)] transition-all duration-150 group"
             >
-              <div className="w-7 h-7 rounded-full bg-zinc-800 dark:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center font-semibold text-xs flex-shrink-0">
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] flex-shrink-0 text-white transition-all duration-200"
+                style={{
+                  background: 'linear-gradient(135deg, #c2410c, #ea580c)',
+                  boxShadow: '0 0 0 2px var(--bg-sidebar), 0 0 0 3px rgba(194,65,12,0.3)',
+                }}
+              >
                 A
               </div>
               {!collapsed && (
                 <>
                   <div className="text-left flex-1 min-w-0">
-                    <div className="text-[13px] font-medium text-[var(--text-primary)] leading-tight">Admin</div>
+                    <div className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight">Admin</div>
                     <div className="text-[11px] text-[var(--text-muted)] font-mono truncate">operator</div>
                   </div>
-                  <ChevronDown size={12} className="text-[var(--text-muted)]" />
+                  <ChevronDown size={12} className="text-[var(--text-muted)] opacity-70" />
                 </>
               )}
             </button>
 
             {showUserMenu && !collapsed && (
-              <div className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-md overflow-hidden z-30">
-                <div className="px-3 py-2.5 border-b border-[var(--border-color)]">
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-[var(--bg-panel)] border border-[var(--border-color)] rounded-xl overflow-hidden z-30 shadow-[var(--shadow-lg)] animate-[scale-in_0.15s_ease_both]">
+                <div className="px-3 py-2.5 border-b border-[var(--border-color)] bg-[var(--bg-tertiary)]">
                   <div className="text-[13px] font-semibold text-[var(--text-primary)]">Admin</div>
-                  <div className="text-[11px] text-[var(--text-muted)]">control plane</div>
+                  <div className="text-[11px] text-[var(--text-muted)]">control plane · operator</div>
                 </div>
-                <div className="p-1">
+                <div className="p-1.5 space-y-0.5">
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)]"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                     onClick={() => { navigate('/settings'); setShowUserMenu(false); }}
                   >
                     <User size={13} /> Settings
                   </button>
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)]"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-[var(--text-secondary)] hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-colors"
                     onClick={() => { openCommandPalette(); setShowUserMenu(false); }}
                   >
                     Command palette
-                    <kbd className="ml-auto font-mono text-[10px] border border-[var(--border-color)] px-1 rounded">⌘K</kbd>
+                    <kbd className="ml-auto font-mono text-[10px] border border-[var(--border-color)] px-1.5 py-0.5 rounded-md bg-[var(--bg-primary)]">⌘K</kbd>
                   </button>
+                  <div className="divider" />
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded text-[13px] text-[var(--error)] hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-[13px] text-[var(--error)] hover:bg-[var(--error-soft)] transition-colors"
                   >
                     <LogOut size={13} /> Sign out
                   </button>

@@ -2,10 +2,12 @@ package query
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dbx/dbx/internal/engine"
 	"github.com/dbx/dbx/internal/events"
@@ -197,6 +199,42 @@ func TestCheckpointFlushesVectorsAndCURRENT(t *testing.T) {
 	results, err := restoredVec.VSearch("mem", []float32{1, 0}, 1, nil)
 	if err != nil || len(results) == 0 || results[0].ID != "a" {
 		t.Fatalf("search after checkpoint recover = %#v, %v", results, err)
+	}
+}
+
+func TestTimeTravelSearchReplaysOverwriteAndDelete(t *testing.T) {
+	executor, wal := newDurableTestExecutor(t)
+	defer wal.Close()
+
+	if got := executeForTest(t, executor, "VADD", "mem", "doc", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("initial vadd = %q", got)
+	}
+	time.Sleep(time.Millisecond)
+	historicalOverwrite := time.Now().UnixNano()
+	time.Sleep(time.Millisecond)
+	if got := executeForTest(t, executor, "VADD", "mem", "doc", "0", "1"); got != ":1\r\n" {
+		t.Fatalf("overwrite vadd = %q", got)
+	}
+	if got := executeForTest(t, executor, "VSEARCH", "mem", "0", "1", "1"); !strings.Contains(got, "doc") {
+		t.Fatalf("current search = %q", got)
+	}
+	past := executeForTest(t, executor, "VSEARCH", "mem", "1", "0", "1", "AS_OF", fmt.Sprint(historicalOverwrite))
+	if !strings.Contains(past, "doc") {
+		t.Fatalf("historical overwrite search = %q", past)
+	}
+	time.Sleep(time.Millisecond)
+	beforeDelete := time.Now().UnixNano()
+	time.Sleep(time.Millisecond)
+	if got := executeForTest(t, executor, "VDEL", "mem", "doc"); got != ":1\r\n" {
+		t.Fatalf("delete = %q", got)
+	}
+	current := executeForTest(t, executor, "VSEARCH", "mem", "1", "0", "1")
+	if strings.Contains(current, "doc") {
+		t.Fatalf("deleted vector remains current = %q", current)
+	}
+	pastDelete := executeForTest(t, executor, "VSEARCH", "mem", "0", "1", "1", "AS_OF", fmt.Sprint(beforeDelete))
+	if !strings.Contains(pastDelete, "doc") {
+		t.Fatalf("historical deleted vector missing = %q", pastDelete)
 	}
 }
 

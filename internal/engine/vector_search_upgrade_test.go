@@ -61,6 +61,76 @@ func TestVSearchMinScoreAndExclude(t *testing.T) {
 	}
 }
 
+func TestShadowMigrationPromotesVectors(t *testing.T) {
+	store := NewVectorStore(New(16), t.TempDir(), 0)
+	defer store.CloseAll()
+	if err := store.VAdd("idx", "live", []float32{1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StartMigration("idx", 2, EncodingFloat32); err != nil {
+		t.Fatal(err)
+	}
+	liveHits, err := store.VSearch("idx", []float32{1, 0}, 1, nil)
+	if err != nil || len(liveHits) != 1 || liveHits[0].ID != "live" {
+		t.Fatalf("live search during migration = %#v, %v", liveHits, err)
+	}
+	if err := store.InsertShadowVector("idx", "migrated", []float32{0, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SwapMigration("idx"); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := store.VSearch("idx", []float32{0, 1}, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].ID != "migrated" {
+		t.Fatalf("migrated hits = %#v", hits)
+	}
+}
+
+func TestShadowMigrationCancelKeepsLiveIndex(t *testing.T) {
+	store := NewVectorStore(New(16), t.TempDir(), 0)
+	defer store.CloseAll()
+	if err := store.VAdd("idx", "live", []float32{1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StartMigration("idx", 2, EncodingFloat32); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.InsertShadowVector("idx", "discarded", []float32{0, 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CancelMigration("idx"); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := store.VSearch("idx", []float32{1, 0}, 2, nil)
+	if err != nil || len(hits) != 1 || hits[0].ID != "live" {
+		t.Fatalf("live index after cancel = %#v, %v", hits, err)
+	}
+}
+
+func TestShadowMigrationRejectsEmptySwap(t *testing.T) {
+	store := NewVectorStore(New(16), t.TempDir(), 0)
+	defer store.CloseAll()
+	if err := store.VAdd("idx", "live", []float32{1, 0}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.StartMigration("idx", 2, EncodingFloat32); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SwapMigration("idx"); err == nil {
+		t.Fatal("empty migration swap unexpectedly succeeded")
+	}
+	if err := store.CancelMigration("idx"); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := store.VSearch("idx", []float32{1, 0}, 1, nil)
+	if err != nil || len(hits) != 1 || hits[0].ID != "live" {
+		t.Fatalf("live index after rejected swap = %#v, %v", hits, err)
+	}
+}
+
 func TestNamedSpacesAreIsolated(t *testing.T) {
 	store := NewVectorStore(New(16), t.TempDir(), 0)
 	defer store.CloseAll()

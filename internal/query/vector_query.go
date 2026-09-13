@@ -17,6 +17,7 @@ type vectorFlags struct {
 	ef             int
 	space          string
 	weights        []float32
+	asOf           int64
 }
 
 type vectorFlagOpts struct {
@@ -78,6 +79,13 @@ func stripVectorFlags(cmd *protocol.Command, opts vectorFlagOpts) (int, vectorFl
 				weights[i] = float32(parsed)
 			}
 			flags.weights = weights
+			end -= 2
+		case "AS_OF":
+			parsed, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || parsed <= 0 {
+				return 0, flags, fmt.Errorf("AS_OF is not a valid positive unix timestamp")
+			}
+			flags.asOf = parsed
 			end -= 2
 		default:
 			return end, flags, nil

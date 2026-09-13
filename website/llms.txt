@@ -20,6 +20,11 @@ Operator HTTP (JWT on :8000): provision, keys, backup/restore, export/import,
 hibernate/wake, GET /api/v1/tenants/{id}/usage, GET /api/usage.
 Recall (RESP): VSEARCH, VSIM (neighbors of a stored id), VFUSE (late-fusion across named SPACE graphs).
 Embeddings stay with the caller. DBX does not run a model.
+Operational vector upgrades: VMIGRATE builds and promotes a non-empty shadow index while
+the current index remains searchable; VSEARCH AS_OF <unix-nanoseconds> replays retained
+vector WAL history into a temporary index for audit and incident reproduction. Migration
+requires caller-side re-embedding, uses temporary storage, and is not yet a replicated WAL
+protocol. AS_OF is slower than current search and bounded by WAL retention.
 Dashboard Tenant keys: /cluster/{id}/keys (secret shown once).
 Prometheus: GET /metrics (Bearer JWT or internal token in production). JSON: GET /t/{id}/metrics.
 

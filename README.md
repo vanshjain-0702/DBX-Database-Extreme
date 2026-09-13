@@ -80,6 +80,23 @@ The WAL/checkpoint format is intentionally incompatible with pre-hardening data.
 offline reset that preserves the old directory, run
 `go run ./cmd/dbx-v1-reset -data-dir <tenant-dir> -confirm-reset`.
 
+### Operational upgrades: migrate live, inspect history
+
+DBX includes two vector-memory upgrades for teams whose embeddings change over time:
+
+- **Shadow migration:** `VMIGRATE START <index> <dimension> [encoding]`, repeated
+  `VMIGRATE ADD <index> <id> <values...>`, then `VMIGRATE SWAP <index>` builds and
+  promotes a complete shadow index while the existing index remains searchable. An empty
+  migration is rejected; `VMIGRATE CANCEL <index>` leaves the live index untouched.
+- **Time-travel search:** `VSEARCH <index> <query...> <k> AS_OF <unix-nanoseconds>`
+  replays retained vector WAL history into a temporary index, allowing an audit or RAG
+  incident to reproduce an earlier retrieval state.
+
+These features are per-tenant and tested under overwrite, delete, cancellation, concurrent
+workloads, and load. Shadow migration still requires the caller to re-embed and stream the
+target corpus. Migration lifecycle events are not yet a replicated WAL protocol, and
+time-travel is bounded by WAL retention and is slower than current-state search.
+
 ---
 
 ## The problem DBX exists to solve

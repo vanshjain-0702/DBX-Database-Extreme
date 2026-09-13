@@ -169,6 +169,21 @@ tenant can hold several independent indexes.
 | `VSIM` | `["VSIM", "memories", "doc:1", "5"]` | Similarity search from a stored id. Loads that row, excludes self, same flags as `VSEARCH`. |
 | `VFUSE` | `["VFUSE", "memories", "SPACE", "text", "0.1", "0.2", "SPACE", "image", "0.3", "0.4", "5", "WEIGHTS", "0.6,0.4"]` | Late-fuses cosine hits across named spaces. Weighted sum; missing ids score 0. DBX does not run an embedding model — send the floats your model produced. Same trailing flags as `VSEARCH` except `SPACE` (spaces are query segments) plus `WEIGHTS w1,w2`. |
 
+### Upgrade commands
+
+| Command | Example | Notes |
+|---|---|---|
+| `VMIGRATE START` | `["VMIGRATE", "START", "memories", "1536", "sq8"]` | Creates an on-disk shadow index for a new embedding dimension/encoding while current search remains available. |
+| `VMIGRATE ADD` | `["VMIGRATE", "ADD", "memories", "doc:1", "0.1", "0.2", ...]` | Adds one re-embedded vector to the active shadow index. The caller must stream the target corpus. |
+| `VMIGRATE SWAP` | `["VMIGRATE", "SWAP", "memories"]` | Promotes a non-empty shadow index. An empty swap is rejected. |
+| `VMIGRATE CANCEL` | `["VMIGRATE", "CANCEL", "memories"]` | Removes the shadow index and keeps the current index. |
+
+Append `AS_OF <unix-nanoseconds>` to `VSEARCH` to replay retained vector WAL history, for
+example `["VSEARCH", "memories", "0.1", "0.2", "5", "AS_OF", "1789298759441521920"]`.
+Historical search requires WAL and uses a temporary index, so it is slower than current
+search and is limited by WAL retention. Migration lifecycle events are not currently a
+replicated WAL protocol.
+
 There is no `VGET` or `VSET`. The 100k-vector recall@10, ingest, and search-latency
 gates pass on the certified profile. See the
 [certification matrix](../scripts/benchmarks/performance_analysis.md) before selecting

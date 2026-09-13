@@ -34,11 +34,20 @@ type MMapVectorIndex struct {
 	searchJobs  chan shardSearchJob
 	searchWG    sync.WaitGroup
 	mu          sync.RWMutex
+	migrationMu sync.RWMutex // serializes migration promotion with live mutations
 	mmapHold    sync.RWMutex // exclusive only while remapping; search and graph insert share it
 	atRest      *security.Encryptor
 	metaDirty   int
 	lastMeta    time.Time
 	encoding    string
+
+	// Shadow Migration fields
+	shadowGraphs   []*MMapHNSWGraph
+	shadowDim      int
+	shadowEncoding string
+	shadowIndex    *MMapVectorIndex
+	path           string
+	isMigrating    bool
 }
 
 type shardSearchJob struct {
@@ -118,6 +127,7 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor,
 		graphs:      newHNSWShards(),
 		atRest:      enc,
 		encoding:    encoding,
+		path:        path,
 	}
 	idx.startSearchWorkers()
 	metaPath := path + ".meta"
@@ -320,7 +330,7 @@ func (idx *MMapVectorIndex) startSearchWorkers() {
 	}
 }
 
-func (idx *MMapVectorIndex) Close() {
+func (idx *MMapVectorIndex) stopSearchWorkers() {
 	idx.mu.Lock()
 	jobs := idx.searchJobs
 	idx.searchJobs = nil
@@ -331,6 +341,10 @@ func (idx *MMapVectorIndex) Close() {
 	if jobs != nil {
 		idx.searchWG.Wait()
 	}
+}
+
+func (idx *MMapVectorIndex) Close() {
+	idx.stopSearchWorkers()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	idx.mmapHold.Lock()
@@ -428,6 +442,55 @@ func (s *VectorStore) SetAtRest(enc *security.Encryptor) { s.atRest = enc }
 
 // SetMemoryLimit applies the tenant's shared no-eviction memory limit.
 func (s *VectorStore) SetMemoryLimit(bytes int64) { s.maxMemory = bytes }
+
+// StartMigration begins building a shadow vector graph on disk.
+func (s *VectorStore) StartMigration(key string, dim int, encoding string) error {
+	idx, unlock, err := s.getOrCreate(key, 0)
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	return idx.startMigration(dim, encoding, s.dataDir, key)
+}
+
+// InsertShadowVector adds a vector exclusively to the shadow graph.
+func (s *VectorStore) InsertShadowVector(key, id string, vec []float32) error {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if idx == nil {
+		return fmt.Errorf("vector space not found")
+	}
+	return idx.insertShadowVector(id, vec)
+}
+
+// SwapMigration atomically promotes the shadow graph to live.
+func (s *VectorStore) SwapMigration(key string) error {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if idx == nil {
+		return fmt.Errorf("vector space not found")
+	}
+	return idx.swapMigration()
+}
+
+// CancelMigration drops the active shadow graph.
+func (s *VectorStore) CancelMigration(key string) error {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if idx == nil {
+		return fmt.Errorf("vector space not found")
+	}
+	return idx.cancelMigration()
+}
 
 // ValidateAdd performs all deterministic checks before a vector mutation is
 // appended to the WAL.
@@ -732,6 +795,8 @@ func (s *VectorStore) VAdd(key string, id string, vec []float32) error {
 		return err
 	}
 	unlock()
+	idx.migrationMu.RLock()
+	defer idx.migrationMu.RUnlock()
 
 	idx.mu.Lock()
 	if idx.dim != dim {
@@ -824,6 +889,8 @@ func (s *VectorStore) VAddBatch(key string, dim int, ids []string, vecs [][]floa
 		return err
 	}
 	unlock()
+	idx.migrationMu.RLock()
+	defer idx.migrationMu.RUnlock()
 
 	idx.mu.Lock()
 	if idx.dim != dim {
@@ -987,6 +1054,8 @@ func (s *VectorStore) VDel(key, id string) (bool, error) {
 	if err != nil || idx == nil {
 		return false, err
 	}
+	idx.migrationMu.RLock()
+	defer idx.migrationMu.RUnlock()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	row, exists := idx.idMap[id]
@@ -1045,6 +1114,8 @@ func (s *VectorStore) VCompact(key string) (int, error) {
 	if err != nil || idx == nil {
 		return 0, err
 	}
+	idx.migrationMu.RLock()
+	defer idx.migrationMu.RUnlock()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	rowSize := idx.rowBytes()

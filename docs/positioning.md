@@ -108,6 +108,22 @@ claim that `.rdb` embeds vectors.
 `internal/persistence/recovery.go` (seal verification),
 `internal/query/executor.go` (`saveTenantCheckpoint`).
 
+### Operational differentiators — live migration and historical recall
+
+These are supporting differentiators for the per-tenant memory thesis, not claims that DBX
+is a general-purpose vector cluster:
+
+- **Shadow migration:** `VMIGRATE` builds a target vector index on disk while the current
+   index remains searchable, then promotes it after vectors are streamed in. Empty swaps are
+   rejected and cancellation preserves the current index.
+- **Time-traveling vectors:** `VSEARCH ... AS_OF <unix-nanoseconds>` replays retained WAL
+   vector mutations into a temporary index. This supports audit, incident reproduction, and
+   historical RAG debugging.
+
+*Honest limits:* migration requires a caller-side re-embedding pass and temporary storage;
+its lifecycle is not yet a replicated WAL protocol. Historical search consumes CPU and
+temporary disk, and cannot see data older than retained WAL history.
+
 ### USP 3 — Cost scales with active tenants, not signed tenants
 Vectors are stored as 8-bit scalar-quantized rows in an mmap'd file, with asymmetric distance
 computation at query time. Payload is roughly a quarter of float32, and an idle tenant lives in

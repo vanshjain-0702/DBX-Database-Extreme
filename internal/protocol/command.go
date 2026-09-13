@@ -157,6 +157,7 @@ var Registry = map[string]CommandInfo{
 	"VADD":       {Name: "VADD", Arity: -4, KeyIndex: 1, DurableV1: true},
 	"VADD_BATCH": {Name: "VADD_BATCH", Arity: -4, KeyIndex: 1, DurableV1: true},
 	"VADDBIN":    {Name: "VADDBIN", Arity: 4, KeyIndex: 1, DurableV1: true},
+	"VMIGRATE":   {Name: "VMIGRATE", Arity: -3, KeyIndex: 2, DurableV1: true},
 	"VDEL":       {Name: "VDEL", Arity: -3, KeyIndex: 1, DurableV1: true},
 	"VCOMPACT":   {Name: "VCOMPACT", Arity: -2, KeyIndex: 1, DurableV1: true, Admin: true},
 	"VSEARCH":    {Name: "VSEARCH", Arity: -4, ReadOnly: true, KeyIndex: 1},

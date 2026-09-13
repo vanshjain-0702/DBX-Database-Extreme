@@ -4,6 +4,8 @@ package query
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -1762,6 +1764,61 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		}
 		return w.WriteInteger(int64(len(ids)))
 
+	case "VMIGRATE":
+		if cmd.NumArgs() < 2 {
+			return w.WriteError(protocol.WrongNumArgsError("VMIGRATE"))
+		}
+		subcmd := strings.ToUpper(cmd.Arg(0))
+		key := cmd.Arg(1)
+
+		switch subcmd {
+		case "START":
+			if cmd.NumArgs() < 3 {
+				return w.WriteError("ERR wrong number of arguments for VMIGRATE START")
+			}
+			dim, err := strconv.Atoi(cmd.Arg(2))
+			if err != nil || dim <= 0 {
+				return w.WriteError("ERR invalid dimension")
+			}
+			enc := engine.EncodingSQ8
+			if cmd.NumArgs() >= 4 {
+				enc = cmd.Arg(3)
+			}
+			if err := e.vec.StartMigration(key, dim, enc); err != nil {
+				return w.WriteError(err.Error())
+			}
+			return w.WriteSimpleString("OK")
+
+		case "ADD":
+			if cmd.NumArgs() < 4 {
+				return w.WriteError("ERR wrong number of arguments for VMIGRATE ADD")
+			}
+			id := cmd.Arg(2)
+			vec, err := parseFloatArgs(cmd, 3, cmd.NumArgs())
+			if err != nil {
+				return w.WriteError(err.Error())
+			}
+			if err := e.vec.InsertShadowVector(key, id, vec); err != nil {
+				return w.WriteError(err.Error())
+			}
+			return w.WriteInteger(1)
+
+		case "SWAP":
+			if err := e.vec.SwapMigration(key); err != nil {
+				return w.WriteError(err.Error())
+			}
+			return w.WriteSimpleString("OK")
+
+		case "CANCEL":
+			if err := e.vec.CancelMigration(key); err != nil {
+				return w.WriteError(err.Error())
+			}
+			return w.WriteSimpleString("OK")
+
+		default:
+			return w.WriteError("ERR unknown VMIGRATE subcommand")
+		}
+
 	case "VDEL":
 		if cmd.NumArgs() < 2 {
 			return w.WriteError(protocol.WrongNumArgsError("VDEL"))
@@ -1844,10 +1901,18 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 		}
 		index := cmd.Arg(0)
 		opts := searchOptsFromFlags(k, flags, e.vectorContainsFilter(index, flags.filterContains))
-		results, err := e.vec.VSearchOpts(engine.VectorSpaceKey(index, flags.space), query, opts)
+
+		var results []engine.SearchResult
+		if flags.asOf > 0 {
+			results, err = e.executeTimeTravelSearch(engine.VectorSpaceKey(index, flags.space), flags.asOf, query, opts)
+		} else {
+			results, err = e.vec.VSearchOpts(engine.VectorSpaceKey(index, flags.space), query, opts)
+		}
+
 		if err != nil {
 			return w.WriteError(err.Error())
 		}
+
 		return e.writeVectorHits(w, results, flags.withDocs)
 
 	case "VSIM":
@@ -1910,4 +1975,118 @@ func (e *Executor) buildInfo() string {
 		"# Server\r\ndbx_version:1.2.0\r\n\r\n# Stats\r\ntotal_commands:%d\r\ntotal_reads:%d\r\ntotal_writes:%d\r\nactive_connections:%d\r\navg_latency_ns:%d\r\n",
 		m["total_commands"], m["total_reads"], m["total_writes"], m["active_conns"], m["avg_latency_ns"],
 	)
+}
+
+func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query []float32, opts engine.SearchOpts) ([]engine.SearchResult, error) {
+	if e.wal == nil {
+		return nil, fmt.Errorf("Time-Travel search requires WAL to be enabled")
+	}
+
+	tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("dbx-timetravel-%d", time.Now().UnixNano()))
+	if err := os.MkdirAll(tempDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create temp dir for time-travel: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	tempKV := engine.New(64)
+	tempVec := engine.NewVectorStore(tempKV, tempDir, 0)
+	defer tempVec.CloseAll()
+
+	records, err := e.wal.ReadAll()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read WAL for time-travel: %w", err)
+	}
+
+	for _, rec := range records {
+		if rec.Timestamp > asOf {
+			break // WAL is ordered by time, we can stop here
+		}
+
+		for _, effect := range rec.Effects {
+			if effect.Key != storageKey {
+				continue
+			}
+
+			switch effect.Type {
+			case persistence.RecordVAdd:
+				id, vector, decodeErr := decodeVAdd(effect.Value)
+				if decodeErr != nil {
+					return nil, decodeErr
+				}
+				if err := tempVec.VAdd(storageKey, id, vector); err != nil {
+					return nil, fmt.Errorf("replay VADD: %w", err)
+				}
+			case persistence.RecordVAddBatch:
+				dim, ids, vectors, decodeErr := decodeVAddBatch(effect.Value)
+				if decodeErr != nil {
+					return nil, decodeErr
+				}
+				if err := tempVec.VAddBatch(storageKey, dim, ids, vectors); err != nil {
+					return nil, fmt.Errorf("replay VADD_BATCH: %w", err)
+				}
+			case persistence.RecordVTombstone:
+				if _, err := tempVec.VDel(storageKey, string(effect.Value)); err != nil {
+					return nil, fmt.Errorf("replay VDEL: %w", err)
+				}
+			}
+		}
+
+		if len(rec.Effects) == 0 && rec.Key == storageKey {
+			switch rec.Type {
+			case persistence.RecordVAdd:
+				id, vector, decodeErr := decodeVAdd(rec.Value)
+				if decodeErr != nil {
+					return nil, decodeErr
+				}
+				if err := tempVec.VAdd(storageKey, id, vector); err != nil {
+					return nil, fmt.Errorf("replay VADD: %w", err)
+				}
+			case persistence.RecordVAddBatch:
+				dim, ids, vectors, decodeErr := decodeVAddBatch(rec.Value)
+				if decodeErr != nil {
+					return nil, decodeErr
+				}
+				if err := tempVec.VAddBatch(storageKey, dim, ids, vectors); err != nil {
+					return nil, fmt.Errorf("replay VADD_BATCH: %w", err)
+				}
+			case persistence.RecordVTombstone:
+				if _, err := tempVec.VDel(storageKey, string(rec.Value)); err != nil {
+					return nil, fmt.Errorf("replay VDEL: %w", err)
+				}
+			}
+		}
+	}
+
+	return tempVec.VSearchOpts(storageKey, query, opts)
+}
+
+func decodeVAdd(data []byte) (id string, vector []float32, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("invalid VADD WAL payload: %v", recovered)
+		}
+	}()
+	id, vector = persistence.DecodeVAddPayload(data)
+	if id == "" || len(vector) == 0 {
+		return "", nil, fmt.Errorf("invalid VADD WAL payload")
+	}
+	return id, vector, nil
+}
+
+func decodeVAddBatch(data []byte) (dim int, ids []string, vectors [][]float32, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("invalid VADD_BATCH WAL payload: %v", recovered)
+		}
+	}()
+	dim, ids, vectors = persistence.DecodeVAddBatchPayload(data)
+	if dim <= 0 || len(ids) == 0 || len(ids) != len(vectors) {
+		return 0, nil, nil, fmt.Errorf("invalid VADD_BATCH WAL payload")
+	}
+	for i, vector := range vectors {
+		if len(vector) != dim || ids[i] == "" {
+			return 0, nil, nil, fmt.Errorf("invalid VADD_BATCH WAL payload")
+		}
+	}
+	return dim, ids, vectors, nil
 }

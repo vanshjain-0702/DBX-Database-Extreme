@@ -78,6 +78,31 @@
       </div>
     </section>
 
+    <section class="section-tight" id="upgrades">
+      <div class="wrap">
+        <p class="kicker">Operational upgrades</p>
+        <h2>Change embeddings without losing the trail.</h2>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">A</div>
+            <div>
+              <h3>Shadow migration</h3>
+              <p><code>VMIGRATE</code> builds a target index on disk while the current index keeps serving reads. Stream caller-generated vectors, then promote the non-empty shadow index with an atomic lifecycle boundary. Cancel keeps the current index.</p>
+              <p class="note">Re-embedding and transfer remain the caller’s work. The migration lifecycle is not yet a replicated WAL protocol.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">B</div>
+            <div>
+              <h3>Historical vector search</h3>
+              <p><code>VSEARCH ... AS_OF</code> reconstructs retained vector WAL state for audit trails, RAG incident reproduction, and compliance investigations.</p>
+              <p class="note">Historical search uses a temporary index, costs more than current search, and is limited by WAL retention.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="section-tight">
       <div class="wrap">
         <p class="kicker">On-ramp, not a USP</p>

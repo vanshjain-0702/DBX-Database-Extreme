@@ -1,3 +1,5 @@
+
+
 import multiprocessing
 import os
 import random
@@ -96,7 +98,7 @@ if __name__ == '__main__':
     processes = []
     
     for i in range(num_clients):
-        p = multiprocessing.Process(target=load_test_client, args=(i, 100000, 50000, 256))
+        p = multiprocessing.Process(target=load_test_client, args=(i, 100000, 25000, 256))
         processes.append(p)
         p.start()
         

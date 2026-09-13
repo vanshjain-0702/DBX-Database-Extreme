@@ -231,13 +231,24 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
           <div className="modal-content max-w-lg" onClick={e => e.stopPropagation()}>
-            <div className="px-5 py-3 border-b border-[var(--border-color)] flex items-center justify-between">
-              <h3 className="font-semibold text-[14px]">Create key</h3>
-              <button type="button" onClick={() => setIsModalOpen(false)} className="text-[var(--text-muted)]">
+            {/* Accent top strip */}
+            <div className="h-[2px]" style={{ background: 'linear-gradient(90deg, #c2410c, #ea580c)' }} />
+
+            <div className="px-6 py-4 border-b border-[var(--border-color)] flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-[15px] tracking-tight">Create key</h3>
+                <p className="text-[12px] text-[var(--text-muted)] mt-0.5">Store a new string value in the database.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-[var(--text-muted)] p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] hover:text-[var(--text-primary)] transition-all duration-150"
+              >
                 <Plus size={18} className="rotate-45" />
               </button>
             </div>
-            <div className="p-5 space-y-4">
+            
+            <div className="p-6 space-y-5">
               <div>
                 <label className="block mb-1.5">Key name</label>
                 <input
@@ -252,14 +263,16 @@ export default function DataExplorerPage({ clusterId }: { clusterId: string }) {
               <div>
                 <label className="block mb-1.5">Value (string)</label>
                 <textarea
-                  className="input-field font-mono h-28 resize-none"
+                  className="input-field font-mono h-32 resize-none"
                   placeholder='e.g. {"name": "Alice"}'
                   value={newKeyValue}
                   onChange={e => setNewKeyValue(e.target.value)}
                 />
               </div>
-              <div className="flex justify-end gap-2">
-                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Cancel</button>
+              <div className="pt-1 flex items-center justify-end gap-2.5">
+                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>
+                  Cancel
+                </button>
                 <button type="button" className="btn-primary" onClick={handleNewKey} disabled={saving}>
                   {saving ? 'Saving…' : 'Save key'}
                 </button>

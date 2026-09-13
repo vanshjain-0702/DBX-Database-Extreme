@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Zap, HardDrive, Users, Activity, BarChart2, CloudUpload } from 'lucide-react';
+import { Zap, HardDrive, Users, Activity, BarChart2, CloudUpload, TrendingUp, Database } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell
@@ -21,19 +21,34 @@ const initMetrics = () => Array.from({ length: 15 }).map(() => ({
 }));
 
 const TYPE_COLORS: Record<string, string> = {
-  String: '#2563eb', Hash: '#4f46e5', List: '#7c3aed',
-  ZSet: '#0284c7', Set: '#059669', JSON: '#d97706',
-  Geo: '#0d9488', Stream: '#ea580c', Bitmap: '#65a30d',
-  Vector: '#be185d', Snapshot: '#9333ea'
+  String: '#3b82f6', Hash: '#8b5cf6', List: '#a855f7',
+  ZSet: '#06b6d4', Set: '#10b981', JSON: '#f59e0b',
+  Geo: '#14b8a6', Stream: '#ea580c', Bitmap: '#84cc16',
+  Vector: '#ec4899', Snapshot: '#9333ea'
 };
+
+// Stat card color configs — icon bg & glow
+const STAT_STYLES = [
+  { iconBg: 'rgba(234,88,12,0.12)', iconColor: '#ea580c', glow: 'rgba(234,88,12,0.15)' },
+  { iconBg: 'rgba(59,130,246,0.12)', iconColor: '#3b82f6', glow: 'rgba(59,130,246,0.12)' },
+  { iconBg: 'rgba(16,185,129,0.12)', iconColor: '#10b981', glow: 'rgba(16,185,129,0.12)' },
+  { iconBg: 'rgba(168,85,247,0.12)', iconColor: '#a855f7', glow: 'rgba(168,85,247,0.12)' },
+];
 
 const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color?: string; stroke?: string }[]; label?: string }) => {
   if (active && payload && payload.length) {
     return (
-      <div style={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 6, padding: '10px 12px' }}>
+      <div style={{
+        background: 'var(--bg-panel)',
+        border: '1px solid var(--border-color)',
+        borderRadius: 10,
+        padding: '10px 14px',
+        boxShadow: 'var(--shadow-lg)',
+        backdropFilter: 'blur(12px)',
+      }}>
         <p style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 6, fontFamily: 'var(--font-mono)' }}>{label}</p>
         {payload.map((p, i) => (
-          <p key={i} style={{ color: p.color || p.stroke, fontSize: 12, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
+          <p key={i} style={{ color: p.color || p.stroke, fontSize: 13, fontWeight: 600, fontFamily: 'var(--font-mono)' }}>
             {p.name}: {p.value.toLocaleString()}{p.name === 'latency' ? 'ms' : p.name === 'memory' ? 'MB' : ''}
           </p>
         ))}
@@ -50,8 +65,8 @@ function TweenedNumber({ value, prefix = '', suffix = '' }: { value: number; pre
   useEffect(() => {
     gsap.to(valRef.current, {
       val: value,
-      duration: 0.35,
-      ease: 'power1.out',
+      duration: 0.45,
+      ease: 'power2.out',
       onUpdate: () => {
         if (nodeRef.current) {
           const n = valRef.current.val;
@@ -166,6 +181,41 @@ export default function OverviewPage({ clusterId }: { clusterId: string }) {
     }
   };
 
+  const stats = [
+    {
+      label: 'Operations/sec',
+      raw: latestMetric.ops,
+      suffix: '',
+      icon: <Zap size={16} />,
+      change: `${latestMetric.totalCommands.toLocaleString()} total commands`,
+      ...STAT_STYLES[0],
+    },
+    {
+      label: 'Memory used',
+      raw: mem.value,
+      suffix: ` ${mem.unit}`,
+      icon: <HardDrive size={16} />,
+      change: 'runtime allocation',
+      ...STAT_STYLES[1],
+    },
+    {
+      label: 'Active clients',
+      raw: latestMetric.connections,
+      suffix: '',
+      icon: <Users size={16} />,
+      change: 'current connections',
+      ...STAT_STYLES[2],
+    },
+    {
+      label: 'Avg latency',
+      raw: latestMetric.latency,
+      suffix: 'ms',
+      icon: <Activity size={16} />,
+      change: 'command average',
+      ...STAT_STYLES[3],
+    },
+  ];
+
   return (
     <div className="content-area">
       <PageChrome
@@ -181,81 +231,137 @@ export default function OverviewPage({ clusterId }: { clusterId: string }) {
       />
 
       {unreachable && !down && (
-        <div className="banner-down">Engine unreachable. Metrics could not be sampled.</div>
+        <div className="banner-down">Engine unreachable — metrics could not be sampled.</div>
       )}
 
+      {/* Stat cards */}
       <div className="stat-grid">
-        {[
-          { label: 'Operations/sec', raw: latestMetric.ops, suffix: '', icon: <Zap size={15} />, change: `total ${latestMetric.totalCommands.toLocaleString()}` },
-          { label: 'Memory used', raw: mem.value, suffix: ` ${mem.unit}`, icon: <HardDrive size={15} />, change: 'runtime allocation' },
-          { label: 'Active clients', raw: latestMetric.connections, suffix: '', icon: <Users size={15} />, change: 'current connections' },
-          { label: 'Avg latency', raw: latestMetric.latency, suffix: 'ms', icon: <Activity size={15} />, change: 'command average' },
-        ].map(stat => (
-          <div className="stat-card" key={stat.label}>
+        {stats.map((stat, i) => (
+          <div
+            className="stat-card"
+            key={stat.label}
+            style={{ animationDelay: `${(i + 1) * 0.07}s` }}
+          >
             <div className="stat-header">
               {stat.label}
-              <div className="stat-icon" style={{ color: 'var(--accent-primary)' }}>
+              <div
+                className="stat-icon"
+                style={{
+                  background: stat.iconBg,
+                  border: `1px solid ${stat.glow}`,
+                  color: stat.iconColor,
+                }}
+              >
                 {stat.icon}
               </div>
             </div>
-            <div className="stat-value"><TweenedNumber value={stat.raw} suffix={stat.suffix} /></div>
-            <div className="stat-change neutral">{stat.change}</div>
+            <div className="stat-value">
+              <TweenedNumber value={stat.raw} suffix={stat.suffix} />
+            </div>
+            <div className="stat-change neutral flex items-center gap-1.5">
+              <TrendingUp size={11} className="opacity-60" />
+              {stat.change}
+            </div>
           </div>
         ))}
       </div>
 
+      {/* Charts */}
       <div className="chart-section">
-        <div className="panel relative">
+        {/* Throughput */}
+        <div className="panel relative" style={{ overflow: 'visible' }}>
           <div className="panel-header">
-            <div className="panel-title"><BarChart2 size={15} /> Throughput (ops/s)</div>
+            <div className="panel-title">
+              <BarChart2 size={15} style={{ color: 'var(--accent-primary)' }} />
+              Throughput
+              <span className="text-[11px] font-mono text-[var(--text-muted)] font-normal ml-1">ops/s · live</span>
+            </div>
+            <div className="text-[11px] font-mono text-[var(--text-muted)]">
+              {latestMetric.ops > 0 ? (
+                <span style={{ color: 'var(--success)' }}>● {latestMetric.ops.toLocaleString()} ops/s</span>
+              ) : (
+                <span className="opacity-60">● idle</span>
+              )}
+            </div>
           </div>
           <div style={{ height: 220, position: 'relative' }}>
             <ResponsiveContainer>
-              <AreaChart data={metrics}>
+              <AreaChart data={metrics} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gOps" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#c2410c" stopOpacity={0.28} />
+                    <stop offset="5%" stopColor="#c2410c" stopOpacity={0.35} />
                     <stop offset="95%" stopColor="#c2410c" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid stroke="var(--border-color)" vertical={false} />
+                <CartesianGrid stroke="var(--border-color)" vertical={false} strokeDasharray="3 0" />
                 <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} interval={4} />
                 <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatAxis} allowDecimals={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Area type="monotone" dataKey="ops" name="ops" stroke="#c2410c" strokeWidth={1.5} fill="url(#gOps)" />
+                <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'var(--accent-primary)', strokeWidth: 1, strokeDasharray: '4 2' }} />
+                <Area type="monotone" dataKey="ops" name="ops" stroke="#c2410c" strokeWidth={2} fill="url(#gOps)" dot={false} />
               </AreaChart>
             </ResponsiveContainer>
             {idleOps && (
-              <div className="chart-idle">No commands in the sampling window.</div>
+              <div className="chart-idle">
+                <span className="text-[13px] font-medium" style={{ color: 'var(--text-muted)' }}>
+                  No commands in sampling window
+                </span>
+              </div>
             )}
           </div>
         </div>
 
+        {/* Key distribution */}
         <div className="panel">
           <div className="panel-header">
             <div className="panel-title">Key distribution</div>
+            {keyspaceData.length > 0 && (
+              <span className="text-[11px] font-mono text-[var(--text-muted)]">
+                {keyspaceData.reduce((s, d) => s + d.value, 0).toLocaleString()} keys
+              </span>
+            )}
           </div>
           <div style={{ height: 220, display: 'flex', alignItems: 'center' }}>
             {keyspaceData.length === 0 ? (
-              <div className="empty-state" style={{ width: '100%' }}>No keys in this tenant.</div>
+              <div className="empty-state" style={{ width: '100%' }}>
+                <Database size={28} style={{ opacity: 0.25 }} />
+                No keys in this tenant.
+              </div>
             ) : (
               <>
                 <ResponsiveContainer>
                   <PieChart>
-                    <Pie data={keyspaceData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={2} dataKey="value">
+                    <Pie
+                      data={keyspaceData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={76}
+                      paddingAngle={3}
+                      dataKey="value"
+                      strokeWidth={0}
+                    >
                       {keyspaceData.map((entry, i) => (
                         <Cell key={i} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip contentStyle={{ background: 'var(--bg-panel)', border: '1px solid var(--border-color)', borderRadius: 6, color: 'var(--text-primary)' }} />
+                    <Tooltip
+                      contentStyle={{
+                        background: 'var(--bg-panel)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 10,
+                        color: 'var(--text-primary)',
+                        boxShadow: 'var(--shadow-lg)',
+                        fontSize: 13,
+                      }}
+                    />
                   </PieChart>
                 </ResponsiveContainer>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 108, paddingRight: 12 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 110, paddingRight: 14 }}>
                   {keyspaceData.map(d => (
                     <div key={d.name} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: 1, background: d.color, flexShrink: 0 }} />
-                      <span style={{ color: 'var(--text-secondary)' }}>{d.name}</span>
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, marginLeft: 'auto', fontFamily: 'var(--font-mono)' }}>{d.value}</span>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: d.color, flexShrink: 0 }} />
+                      <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{d.name}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'var(--font-mono)', fontSize: 12 }}>{d.value}</span>
                     </div>
                   ))}
                 </div>

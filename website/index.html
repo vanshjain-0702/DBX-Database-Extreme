@@ -285,6 +285,20 @@
       </div>
     </section>
 
+    <section class="section-tight" id="upgrades">
+      <div class="wrap catalog" data-in>
+        <p class="catalog-index">Operational upgrades</p>
+        <div>
+          <h2>Keep serving while memory changes.</h2>
+          <p class="lede">DBX gives a per-tenant memory system two practical escape hatches: build a replacement vector index while the current one serves, and inspect the retained state behind an earlier retrieval.</p>
+          <div class="usp-list">
+            <article class="usp"><div class="usp-num">A</div><div><h3><code>VMIGRATE</code> — shadow index promotion</h3><p>Stream caller-generated vectors into a non-empty shadow index, then swap it into service. Current reads continue during the build; cancellation keeps the live index.</p></div></article>
+            <article class="usp"><div class="usp-num">B</div><div><h3><code>AS_OF</code> — historical vector search</h3><p>Replay retained vector WAL history into a temporary index to reproduce an audit or RAG incident. It is slower than current search and bounded by retention.</p></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="section" id="recall-bench">
       <div class="wrap" data-in>
         <p class="kicker">Recall · in-browser</p>
