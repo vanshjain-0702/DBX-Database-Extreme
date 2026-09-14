@@ -1977,12 +1977,14 @@ func (e *Executor) buildInfo() string {
 	)
 }
 
+var timeTravelCounter atomic.Int64
+
 func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query []float32, opts engine.SearchOpts) ([]engine.SearchResult, error) {
 	if e.wal == nil {
 		return nil, fmt.Errorf("Time-Travel search requires WAL to be enabled")
 	}
 
-	tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("dbx-timetravel-%d", time.Now().UnixNano()))
+	tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("dbx-timetravel-%d-%d", time.Now().UnixNano(), timeTravelCounter.Add(1)))
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create temp dir for time-travel: %w", err)
 	}

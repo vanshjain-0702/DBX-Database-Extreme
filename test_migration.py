@@ -50,6 +50,11 @@ def main():
     res = client.r.execute_command("VMIGRATE", "START", "my-index", "512", "sq8")
     print("VMIGRATE START result:", res)
 
+    # 7.5 Test VMIGRATE ADD again
+    print("Adding shadow vector again...")
+    res = client.r.execute_command("VMIGRATE", "ADD", "my-index", "doc:1", *vector)
+    print("VMIGRATE ADD result:", res)
+
     # 8. Test VMIGRATE SWAP
     print("Swapping migration...")
     res = client.r.execute_command("VMIGRATE", "SWAP", "my-index")
