@@ -1,10 +1,10 @@
 # Isolation Kernel
 
 This is the source of truth for DBX tenant isolation. Claims here must remain
-literally true in the code. See [positioning.md](positioning.md). The public
-engineering walkthrough for DEV.to is the paste kit in
-[docs/blog/](blog/README.md); editor metadata is
-[docs/blog/DEVTO_PUBLISH.md](blog/DEVTO_PUBLISH.md).
+literally true in the code. See [positioning.md](positioning.md). DEV.to paste
+kits live in [docs/blog/](blog/README.md). The Isolation Kernel engineering
+post is [blog/building-secure-multi-tenant-ai-memory.md](blog/building-secure-multi-tenant-ai-memory.md);
+editor metadata for that post is [blog/DEVTO_PUBLISH.md](blog/DEVTO_PUBLISH.md).
 
 ## The claim
 
