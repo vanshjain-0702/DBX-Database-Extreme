@@ -144,7 +144,6 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor,
 		}
 		// Existing indexes keep their on-disk encoding (e.g. after VMIGRATE SWAP
 		// to float32 while the tenant default remains sq8).
-		encoding = fileEnc
 		idx.encoding = fileEnc
 		rowSize = idx.rowBytes()
 		if len(meta.IDs) > len(idx.mmap)/rowSize {
