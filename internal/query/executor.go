@@ -148,6 +148,23 @@ func (e *Executor) ApplyWALRecord(rec *persistence.WALRecord) error {
 		if err := e.vec.VAddBatch(rec.Key, dim, ids, vectors); err != nil {
 			return err
 		}
+	case persistence.RecordVTombstone:
+		if _, err := e.vec.VDel(rec.Key, string(rec.Value)); err != nil {
+			return err
+		}
+	case persistence.RecordVMigrateStart:
+		dim, enc, err := persistence.DecodeVMigrateStartPayload(rec.Value)
+		if err != nil {
+			return err
+		}
+		return e.vec.StartMigration(rec.Key, dim, enc)
+	case persistence.RecordVMigrateAdd:
+		id, vector := persistence.DecodeVAddPayload(rec.Value)
+		return e.vec.InsertShadowVector(rec.Key, id, vector)
+	case persistence.RecordVMigrateSwap:
+		return e.vec.SwapMigration(rec.Key)
+	case persistence.RecordVMigrateCancel:
+		return e.vec.CancelMigration(rec.Key)
 	default:
 		return fmt.Errorf("replication: unsupported WAL record type %d", rec.Type)
 	}
@@ -191,6 +208,19 @@ func (e *Executor) applyReplicatedEffect(effect persistence.WALEffect) error {
 	case persistence.RecordVTombstone:
 		_, err := e.vec.VDel(effect.Key, string(effect.Value))
 		return err
+	case persistence.RecordVMigrateStart:
+		dim, enc, err := persistence.DecodeVMigrateStartPayload(effect.Value)
+		if err != nil {
+			return err
+		}
+		return e.vec.StartMigration(effect.Key, dim, enc)
+	case persistence.RecordVMigrateAdd:
+		id, vector := persistence.DecodeVAddPayload(effect.Value)
+		return e.vec.InsertShadowVector(effect.Key, id, vector)
+	case persistence.RecordVMigrateSwap:
+		return e.vec.SwapMigration(effect.Key)
+	case persistence.RecordVMigrateCancel:
+		return e.vec.CancelMigration(effect.Key)
 	default:
 		return fmt.Errorf("replication: unsupported WAL effect type %d", effect.Type)
 	}
@@ -1784,8 +1814,20 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			if cmd.NumArgs() >= 4 {
 				enc = cmd.Arg(3)
 			}
-			if err := e.vec.StartMigration(key, dim, enc); err != nil {
+			enc, err = engine.NormalizeVectorEncoding(enc)
+			if err != nil {
 				return w.WriteError(err.Error())
+			}
+			if err := e.writeWAL(&persistence.WALRecord{
+				Type:  persistence.RecordVMigrateStart,
+				Key:   key,
+				Value: persistence.EncodeVMigrateStartPayload(dim, enc),
+			}); err != nil {
+				return w.WriteError("ERR WAL write failed: " + err.Error())
+			}
+			if err := e.vec.StartMigration(key, dim, enc); err != nil {
+				e.metrics.TenantReady.Store(0)
+				return w.WriteError("ERR migrate start failed after WAL append: " + err.Error())
 			}
 			return w.WriteSimpleString("OK")
 
@@ -1798,20 +1840,48 @@ func (e *Executor) Dispatch(clientID uint64, cmd *protocol.Command, w *protocol.
 			if err != nil {
 				return w.WriteError(err.Error())
 			}
+			if !e.vec.MigrationActive(key) {
+				return w.WriteError("ERR no migration in progress")
+			}
+			if err := e.writeWAL(&persistence.WALRecord{
+				Type:  persistence.RecordVMigrateAdd,
+				Key:   key,
+				Value: persistence.EncodeVAddPayload(id, vec),
+			}); err != nil {
+				return w.WriteError("ERR WAL write failed: " + err.Error())
+			}
 			if err := e.vec.InsertShadowVector(key, id, vec); err != nil {
-				return w.WriteError(err.Error())
+				e.metrics.TenantReady.Store(0)
+				return w.WriteError("ERR migrate add failed after WAL append: " + err.Error())
 			}
 			return w.WriteInteger(1)
 
 		case "SWAP":
-			if err := e.vec.SwapMigration(key); err != nil {
+			if err := e.vec.ValidateSwapMigration(key); err != nil {
 				return w.WriteError(err.Error())
+			}
+			if err := e.writeWAL(&persistence.WALRecord{
+				Type: persistence.RecordVMigrateSwap,
+				Key:  key,
+			}); err != nil {
+				return w.WriteError("ERR WAL write failed: " + err.Error())
+			}
+			if err := e.vec.SwapMigration(key); err != nil {
+				e.metrics.TenantReady.Store(0)
+				return w.WriteError("ERR migrate swap failed after WAL append: " + err.Error())
 			}
 			return w.WriteSimpleString("OK")
 
 		case "CANCEL":
+			if err := e.writeWAL(&persistence.WALRecord{
+				Type: persistence.RecordVMigrateCancel,
+				Key:  key,
+			}); err != nil {
+				return w.WriteError("ERR WAL write failed: " + err.Error())
+			}
 			if err := e.vec.CancelMigration(key); err != nil {
-				return w.WriteError(err.Error())
+				e.metrics.TenantReady.Store(0)
+				return w.WriteError("ERR migrate cancel failed after WAL append: " + err.Error())
 			}
 			return w.WriteSimpleString("OK")
 
@@ -2030,6 +2100,9 @@ func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query 
 				if _, err := tempVec.VDel(storageKey, string(effect.Value)); err != nil {
 					return nil, fmt.Errorf("replay VDEL: %w", err)
 				}
+			case persistence.RecordVMigrateStart, persistence.RecordVMigrateAdd,
+				persistence.RecordVMigrateSwap, persistence.RecordVMigrateCancel:
+				// Migration lifecycle is not part of historical vector search.
 			}
 		}
 
@@ -2055,6 +2128,9 @@ func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query 
 				if _, err := tempVec.VDel(storageKey, string(rec.Value)); err != nil {
 					return nil, fmt.Errorf("replay VDEL: %w", err)
 				}
+			case persistence.RecordVMigrateStart, persistence.RecordVMigrateAdd,
+				persistence.RecordVMigrateSwap, persistence.RecordVMigrateCancel:
+				// Migration lifecycle is not part of historical vector search.
 			}
 		}
 	}

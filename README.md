@@ -94,8 +94,9 @@ DBX includes two vector-memory upgrades for teams whose embeddings change over t
 
 These features are per-tenant and tested under overwrite, delete, cancellation, concurrent
 workloads, and load. Shadow migration still requires the caller to re-embed and stream the
-target corpus. Migration lifecycle events are not yet a replicated WAL protocol, and
-time-travel is bounded by WAL retention and is slower than current-state search.
+target corpus. `VMIGRATE` START/ADD/SWAP/CANCEL are written to the tenant WAL and replayed
+on crash recovery (and on async WAL replicas). Time-travel is bounded by WAL retention and
+is slower than current-state search.
 
 ---
 

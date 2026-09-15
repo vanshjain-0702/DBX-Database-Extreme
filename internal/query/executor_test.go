@@ -286,3 +286,150 @@ func TestRecoveryRejectsMismatchedVectorSeals(t *testing.T) {
 		t.Fatal("expected torn vector metadata to fail recovery")
 	}
 }
+
+func TestVMIGRATEDurablePromotesAcrossRecovery(t *testing.T) {
+	dir := t.TempDir()
+	kv := engine.New(8)
+	wal, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vec := engine.NewVectorStore(kv, dir, 0)
+	executor := NewExecutor(
+		kv, vec,
+		transaction.NewMultiManager(), transaction.NewWatchSet(), transaction.NewMVCCStore(8),
+		events.NewPubSub(10, 10), &observability.Metrics{}, wal,
+	)
+	executor.SetMemoryLimit(16 << 20)
+	t.Cleanup(func() { vec.CloseAll() })
+
+	if got := executeForTest(t, executor, "VADD", "mem", "live", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("seed vadd = %q", got)
+	}
+	snap := persistence.NewSnapshotter(filepath.Join(dir, "snapshots"))
+	if _, err := executor.Checkpoint(snap); err != nil {
+		t.Fatal(err)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "START", "mem", "2", "float32"); got != "+OK\r\n" {
+		t.Fatalf("start = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "ADD", "mem", "migrated", "0", "1"); got != ":1\r\n" {
+		t.Fatalf("add = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "SWAP", "mem"); got != "+OK\r\n" {
+		t.Fatalf("swap = %q", got)
+	}
+
+	vec.CloseAll()
+	if err := wal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored := engine.New(8)
+	restoredVec := engine.NewVectorStore(restored, dir, 0)
+	defer restoredVec.CloseAll()
+	if err := persistence.NewRecovery(reopened, snap).Recover(restored, restoredVec); err != nil {
+		t.Fatal(err)
+	}
+	results, err := restoredVec.VSearch("mem", []float32{0, 1}, 1, nil)
+	if err != nil || len(results) == 0 || results[0].ID != "migrated" {
+		t.Fatalf("search after migrate recover = %#v, %v", results, err)
+	}
+}
+
+func TestVMIGRATEDurableRestoresInProgressShadow(t *testing.T) {
+	dir := t.TempDir()
+	kv := engine.New(8)
+	wal, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vec := engine.NewVectorStore(kv, dir, 0)
+	executor := NewExecutor(
+		kv, vec,
+		transaction.NewMultiManager(), transaction.NewWatchSet(), transaction.NewMVCCStore(8),
+		events.NewPubSub(10, 10), &observability.Metrics{}, wal,
+	)
+	executor.SetMemoryLimit(16 << 20)
+	t.Cleanup(func() { vec.CloseAll() })
+
+	if got := executeForTest(t, executor, "VADD", "mem", "live", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("seed = %q", got)
+	}
+	snap := persistence.NewSnapshotter(filepath.Join(dir, "snapshots"))
+	if _, err := executor.Checkpoint(snap); err != nil {
+		t.Fatal(err)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "START", "mem", "2", "float32"); got != "+OK\r\n" {
+		t.Fatalf("start = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "ADD", "mem", "shadow", "0", "1"); got != ":1\r\n" {
+		t.Fatalf("add = %q", got)
+	}
+
+	vec.CloseAll()
+	if err := wal.Close(); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := persistence.OpenWAL(filepath.Join(dir, "wal"), "always", 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	restored := engine.New(8)
+	restoredVec := engine.NewVectorStore(restored, dir, 0)
+	defer restoredVec.CloseAll()
+	if err := persistence.NewRecovery(reopened, snap).Recover(restored, restoredVec); err != nil {
+		t.Fatal(err)
+	}
+	if !restoredVec.MigrationActive("mem") {
+		t.Fatal("expected in-progress migration after recovery")
+	}
+	restoredExec := NewExecutor(
+		restored, restoredVec,
+		transaction.NewMultiManager(), transaction.NewWatchSet(), transaction.NewMVCCStore(8),
+		events.NewPubSub(10, 10), &observability.Metrics{}, reopened,
+	)
+	restoredExec.SetMemoryLimit(16 << 20)
+	if got := executeForTest(t, restoredExec, "VMIGRATE", "SWAP", "mem"); got != "+OK\r\n" {
+		t.Fatalf("swap after recover = %q", got)
+	}
+	results, err := restoredVec.VSearch("mem", []float32{0, 1}, 1, nil)
+	if err != nil || len(results) == 0 || results[0].ID != "shadow" {
+		t.Fatalf("promoted after recover = %#v, %v", results, err)
+	}
+}
+
+func TestVMIGRATEDurableCancelAcrossRecovery(t *testing.T) {
+	executor, wal := newDurableTestExecutor(t)
+	defer wal.Close()
+	if got := executeForTest(t, executor, "VADD", "mem", "live", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("seed = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "START", "mem", "2", "float32"); got != "+OK\r\n" {
+		t.Fatalf("start = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "ADD", "mem", "gone", "0", "1"); got != ":1\r\n" {
+		t.Fatalf("add = %q", got)
+	}
+	if got := executeForTest(t, executor, "VMIGRATE", "CANCEL", "mem"); got != "+OK\r\n" {
+		t.Fatalf("cancel = %q", got)
+	}
+	if executor.vec.MigrationActive("mem") {
+		t.Fatal("migration still active after cancel")
+	}
+	if err := executor.ApplyWALRecord(&persistence.WALRecord{
+		Type: persistence.RecordVMigrateCancel,
+		Key:  "mem",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	hits, err := executor.vec.VSearch("mem", []float32{1, 0}, 1, nil)
+	if err != nil || len(hits) == 0 || hits[0].ID != "live" {
+		t.Fatalf("live after cancel = %#v, %v", hits, err)
+	}
+}

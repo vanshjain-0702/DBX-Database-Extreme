@@ -120,9 +120,10 @@ is a general-purpose vector cluster:
    vector mutations into a temporary index. This supports audit, incident reproduction, and
    historical RAG debugging.
 
-*Honest limits:* migration requires a caller-side re-embedding pass and temporary storage;
-its lifecycle is not yet a replicated WAL protocol. Historical search consumes CPU and
-temporary disk, and cannot see data older than retained WAL history.
+*Honest limits:* migration requires a caller-side re-embedding pass and temporary storage.
+`VMIGRATE` lifecycle records are durable on the single-node WAL and are applied by crash
+recovery and async WAL replicas. Historical search consumes CPU and temporary disk, and
+cannot see data older than retained WAL history.
 
 ### USP 3 — Cost scales with active tenants, not signed tenants
 Vectors are stored as 8-bit scalar-quantized rows in an mmap'd file, with asymmetric distance

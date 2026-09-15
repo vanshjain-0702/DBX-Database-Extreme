@@ -181,8 +181,8 @@ tenant can hold several independent indexes.
 Append `AS_OF <unix-nanoseconds>` to `VSEARCH` to replay retained vector WAL history, for
 example `["VSEARCH", "memories", "0.1", "0.2", "5", "AS_OF", "1789298759441521920"]`.
 Historical search requires WAL and uses a temporary index, so it is slower than current
-search and is limited by WAL retention. Migration lifecycle events are not currently a
-replicated WAL protocol.
+search and is limited by WAL retention. `VMIGRATE` START/ADD/SWAP/CANCEL append to the
+tenant WAL and are replayed on crash recovery and async WAL replicas.
 
 There is no `VGET` or `VSET`. The 100k-vector recall@10, ingest, and search-latency
 gates pass on the certified profile. See the

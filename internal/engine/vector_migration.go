@@ -9,23 +9,39 @@ import (
 
 // ── Zero-Heap Shadow Migration ──────────────────────────────────────────
 
+func removeShadowFiles(shadowPath string) error {
+	for _, suffix := range []string{"", ".meta", ".hnsw"} {
+		if err := os.Remove(shadowPath + suffix); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+	return nil
+}
+
 func (idx *MMapVectorIndex) startMigration(dim int, encoding, dataDir, key string) error {
 	idx.migrationMu.Lock()
 	defer idx.migrationMu.Unlock()
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
-	if idx.isMigrating {
-		return fmt.Errorf("migration already in progress")
-	}
 	encoding, err := NormalizeVectorEncoding(encoding)
 	if err != nil {
 		return err
 	}
-	shadowPath := filepath.Join(dataDir, key+".shadow")
-	for _, suffix := range []string{"", ".meta", ".hnsw"} {
-		if err := os.Remove(shadowPath + suffix); err != nil && !os.IsNotExist(err) {
-			return err
+	if idx.isMigrating {
+		if idx.shadowDim == dim && idx.shadowEncoding == encoding && idx.shadowIndex != nil {
+			return nil // idempotent WAL / replica replay
 		}
+		if idx.shadowIndex != nil {
+			shadowPath := idx.shadowIndex.path
+			idx.shadowIndex.Close()
+			idx.shadowIndex = nil
+			_ = removeShadowFiles(shadowPath)
+		}
+		idx.isMigrating = false
+	}
+	shadowPath := filepath.Join(dataDir, key+".shadow")
+	if err := removeShadowFiles(shadowPath); err != nil {
+		return err
 	}
 	shadow, err := newMMapVectorIndex(shadowPath, dim, 1000, idx.atRest, encoding)
 	if err != nil {
@@ -69,6 +85,8 @@ func (idx *MMapVectorIndex) insertShadowVector(id string, vec []float32) error {
 		shadow.tombstones = append(shadow.tombstones, false)
 		shadow.generations = append(shadow.generations, 1)
 		shadow.count++
+	} else {
+		shadow.generations[row]++
 	}
 	shadow.writeRow(row, vec)
 	shadow.setRowInv(row)
@@ -82,10 +100,13 @@ func (idx *MMapVectorIndex) insertShadowVector(id string, vec []float32) error {
 	rowInv := shadow.rowInv
 	encoding := shadow.encoding
 	dim := shadow.dim
+	isNew := !exists
 	shadow.mu.Unlock()
-	shadow.mmapHold.RLock()
-	graph.Insert(row, mmap, dim, rowInv, encoding)
-	shadow.mmapHold.RUnlock()
+	if isNew {
+		shadow.mmapHold.RLock()
+		graph.Insert(row, mmap, dim, rowInv, encoding)
+		shadow.mmapHold.RUnlock()
+	}
 	return nil
 }
 
@@ -95,7 +116,9 @@ func (idx *MMapVectorIndex) swapMigration() error {
 	idx.mu.Lock()
 	if !idx.isMigrating || idx.shadowIndex == nil {
 		idx.mu.Unlock()
-		return fmt.Errorf("no migration in progress")
+		// Already promoted or never started — safe for WAL replay after a
+		// crash that applied the rename before acknowledging recovery.
+		return nil
 	}
 	shadow := idx.shadowIndex
 	shadow.mu.RLock()
@@ -154,14 +177,59 @@ func (idx *MMapVectorIndex) cancelMigration() error {
 	idx.mu.Lock()
 	defer idx.mu.Unlock()
 	if !idx.isMigrating {
-		return fmt.Errorf("no migration in progress")
+		return nil // idempotent WAL / replica replay
 	}
 
+	shadowPath := ""
 	if idx.shadowIndex != nil {
+		shadowPath = idx.shadowIndex.path
 		idx.shadowIndex.Close()
 		idx.shadowIndex = nil
 	}
 	idx.shadowGraphs = nil
 	idx.isMigrating = false
+	idx.shadowDim = 0
+	idx.shadowEncoding = ""
+	if shadowPath != "" {
+		if err := removeShadowFiles(shadowPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MigrationActive reports whether a shadow migration is in progress for tests.
+func (s *VectorStore) MigrationActive(key string) bool {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil || idx == nil {
+		return false
+	}
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	return idx.isMigrating
+}
+
+// ValidateSwapMigration checks that a non-empty shadow is ready to promote.
+func (s *VectorStore) ValidateSwapMigration(key string) error {
+	idx, unlock, err := s.getReadOnly(key)
+	defer unlock()
+	if err != nil {
+		return err
+	}
+	if idx == nil {
+		return fmt.Errorf("vector space not found")
+	}
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+	if !idx.isMigrating || idx.shadowIndex == nil {
+		return fmt.Errorf("no migration in progress")
+	}
+	idx.shadowIndex.mu.RLock()
+	count := idx.shadowIndex.count
+	idx.shadowIndex.mu.RUnlock()
+	if count == 0 {
+		return fmt.Errorf("cannot swap empty migration")
+	}
 	return nil
 }

@@ -53,4 +53,9 @@ func TestVAddPayloadCodec(t *testing.T) {
 	if dim != 2 || len(ids) != 2 || len(vecs[1]) != 2 {
 		t.Fatalf("%d %#v %#v", dim, ids, vecs)
 	}
+	start := EncodeVMigrateStartPayload(128, "sq8")
+	gotDim, gotEnc, err := DecodeVMigrateStartPayload(start)
+	if err != nil || gotDim != 128 || gotEnc != "sq8" {
+		t.Fatalf("migrate start = %d %q %v", gotDim, gotEnc, err)
+	}
 }

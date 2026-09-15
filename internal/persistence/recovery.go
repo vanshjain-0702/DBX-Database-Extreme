@@ -36,7 +36,36 @@ func (r *Recovery) Recover(kv *engine.KVStore, vecStore *engine.VectorStore) err
 			})
 		}
 	}
-	// Step 2: Reopen mmap indexes and verify they match the checkpoint seals
+
+	// Step 2: Read WAL once. Indexes promoted by VMIGRATE SWAP after the
+	// checkpoint already have new on-disk seals, so skip verifying those keys.
+	records, err := r.wal.ReadAll()
+	if err != nil {
+		return fmt.Errorf("recovery: read wal: %w", err)
+	}
+	swappedAfterCheckpoint := map[string]struct{}{}
+	for _, rec := range records {
+		if rec.Sequence <= checkpointSequence {
+			continue
+		}
+		for _, effect := range expandEffects(rec) {
+			if effect.Type == RecordVMigrateSwap {
+				swappedAfterCheckpoint[effect.Key] = struct{}{}
+			}
+		}
+	}
+	if len(swappedAfterCheckpoint) > 0 && len(seals) > 0 {
+		filtered := seals[:0]
+		for _, seal := range seals {
+			if _, skip := swappedAfterCheckpoint[seal.Key]; skip {
+				continue
+			}
+			filtered = append(filtered, seal)
+		}
+		seals = filtered
+	}
+
+	// Step 3: Reopen mmap indexes and verify they match the checkpoint seals
 	// before WAL replay mutates them. Empty seals are legacy checkpoints.
 	if vecStore != nil {
 		if err := vecStore.ReopenPersisted(); err != nil {
@@ -46,26 +75,26 @@ func (r *Recovery) Recover(kv *engine.KVStore, vecStore *engine.VectorStore) err
 			return fmt.Errorf("recovery: vector seal mismatch: %w", err)
 		}
 	}
-	// Step 3: Replay WAL
-	records, err := r.wal.ReadAll()
-	if err != nil {
-		return fmt.Errorf("recovery: read wal: %w", err)
-	}
+
+	// Step 4: Replay WAL
 	for _, rec := range records {
 		if rec.Sequence <= checkpointSequence {
 			continue
 		}
-		effects := rec.Effects
-		if len(effects) == 0 {
-			effects = []WALEffect{{Type: rec.Type, Key: rec.Key, Value: rec.Value, ExpiresAt: rec.TTLNano}}
-		}
-		for _, effect := range effects {
+		for _, effect := range expandEffects(rec) {
 			if err := applyRecoveredEffect(kv, vecStore, rec.Sequence, effect); err != nil {
 				return err
 			}
 		}
 	}
 	return nil
+}
+
+func expandEffects(rec *WALRecord) []WALEffect {
+	if len(rec.Effects) > 0 {
+		return rec.Effects
+	}
+	return []WALEffect{{Type: rec.Type, Key: rec.Key, Value: rec.Value, ExpiresAt: rec.TTLNano}}
 }
 
 func applyRecoveredEffect(kv *engine.KVStore, vecStore *engine.VectorStore, sequence uint64, effect WALEffect) error {
@@ -117,6 +146,38 @@ func applyRecoveredEffect(kv *engine.KVStore, vecStore *engine.VectorStore, sequ
 		if vecStore != nil {
 			if _, err := vecStore.VDel(effect.Key, string(effect.Value)); err != nil {
 				return fmt.Errorf("recovery: vector tombstone sequence %d: %w", sequence, err)
+			}
+		}
+	case RecordVMigrateStart:
+		if vecStore != nil {
+			dim, enc, err := DecodeVMigrateStartPayload(effect.Value)
+			if err != nil {
+				return fmt.Errorf("recovery: invalid migrate start sequence %d: %w", sequence, err)
+			}
+			if err := vecStore.StartMigration(effect.Key, dim, enc); err != nil {
+				return fmt.Errorf("recovery: migrate start sequence %d: %w", sequence, err)
+			}
+		}
+	case RecordVMigrateAdd:
+		if vecStore != nil {
+			docID, vector := DecodeVAddPayload(effect.Value)
+			if docID == "" || len(vector) == 0 {
+				return fmt.Errorf("recovery: invalid migrate add sequence %d", sequence)
+			}
+			if err := vecStore.InsertShadowVector(effect.Key, docID, vector); err != nil {
+				return fmt.Errorf("recovery: migrate add sequence %d: %w", sequence, err)
+			}
+		}
+	case RecordVMigrateSwap:
+		if vecStore != nil {
+			if err := vecStore.SwapMigration(effect.Key); err != nil {
+				return fmt.Errorf("recovery: migrate swap sequence %d: %w", sequence, err)
+			}
+		}
+	case RecordVMigrateCancel:
+		if vecStore != nil {
+			if err := vecStore.CancelMigration(effect.Key); err != nil {
+				return fmt.Errorf("recovery: migrate cancel sequence %d: %w", sequence, err)
 			}
 		}
 	case RecordDeleteIndex:

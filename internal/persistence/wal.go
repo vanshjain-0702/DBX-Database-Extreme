@@ -34,13 +34,17 @@ func DecodeRecord(data []byte) (*WALRecord, error) {
 
 // WALRecord types.
 const (
-	RecordSet         = byte(1)
-	RecordDelete      = byte(2)
-	RecordExpire      = byte(3)
-	RecordVAdd        = byte(4)
-	RecordVAddBatch   = byte(5)
-	RecordVTombstone  = byte(6)
-	RecordDeleteIndex = byte(7)
+	RecordSet            = byte(1)
+	RecordDelete         = byte(2)
+	RecordExpire         = byte(3)
+	RecordVAdd           = byte(4)
+	RecordVAddBatch      = byte(5)
+	RecordVTombstone     = byte(6)
+	RecordDeleteIndex    = byte(7)
+	RecordVMigrateStart  = byte(8)
+	RecordVMigrateAdd    = byte(9)
+	RecordVMigrateSwap   = byte(10)
+	RecordVMigrateCancel = byte(11)
 )
 
 var walV2Magic = []byte("DBXWAL2\n")
@@ -717,6 +721,29 @@ func (w *WAL) Close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.file.Close()
+}
+
+// EncodeVMigrateStartPayload serializes shadow-migration START parameters.
+func EncodeVMigrateStartPayload(dim int, encoding string) []byte {
+	enc := []byte(encoding)
+	buf := make([]byte, 8+len(enc))
+	binary.BigEndian.PutUint32(buf[0:], uint32(dim))
+	binary.BigEndian.PutUint32(buf[4:], uint32(len(enc)))
+	copy(buf[8:], enc)
+	return buf
+}
+
+// DecodeVMigrateStartPayload deserializes shadow-migration START parameters.
+func DecodeVMigrateStartPayload(data []byte) (int, string, error) {
+	if len(data) < 8 {
+		return 0, "", fmt.Errorf("short migrate start payload")
+	}
+	dim := int(binary.BigEndian.Uint32(data[0:4]))
+	encLen := int(binary.BigEndian.Uint32(data[4:8]))
+	if dim <= 0 || encLen < 0 || len(data) < 8+encLen {
+		return 0, "", fmt.Errorf("invalid migrate start payload")
+	}
+	return dim, string(data[8 : 8+encLen]), nil
 }
 
 // EncodeVAddPayload serializes a docID and vector into a byte slice for the WAL.

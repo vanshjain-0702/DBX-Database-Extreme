@@ -142,10 +142,9 @@ func newMMapVectorIndex(path string, dim, capacity int, enc *security.Encryptor,
 			idx.Close()
 			return nil, fmt.Errorf("invalid vector metadata encoding: %w", encErr)
 		}
-		if fileEnc != encoding {
-			idx.Close()
-			return nil, fmt.Errorf("vector encoding mismatch: index is %s, tenant is %s", fileEnc, encoding)
-		}
+		// Existing indexes keep their on-disk encoding (e.g. after VMIGRATE SWAP
+		// to float32 while the tenant default remains sq8).
+		encoding = fileEnc
 		idx.encoding = fileEnc
 		rowSize = idx.rowBytes()
 		if len(meta.IDs) > len(idx.mmap)/rowSize {
@@ -615,6 +614,13 @@ func (s *VectorStore) CloseAll() {
 				continue
 			}
 			if idx, ok := e.Value.(*MMapVectorIndex); ok && idx != nil {
+				idx.migrationMu.Lock()
+				if idx.shadowIndex != nil {
+					idx.shadowIndex.Close()
+					idx.shadowIndex = nil
+					idx.isMigrating = false
+				}
+				idx.migrationMu.Unlock()
 				idx.Close()
 				e.Value = nil
 			}
