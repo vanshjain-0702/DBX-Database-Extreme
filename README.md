@@ -99,6 +99,21 @@ time-travel is bounded by WAL retention and is slower than current-state search.
 
 ---
 
+## Performance & Benchmarks
+
+At DBX, we believe in **100% transparent and reproducible** benchmarks. We prioritize strict per-tenant isolation, but we absolutely refuse to sacrifice throughput to get there.
+
+By testing against DBX's plaintext port (`6380`) with the industry-standard `redis-benchmark` tool (64 clients, pipeline size 64), the engine achieves:
+- **SET (string):** ~75,583 ops/sec
+- **GET (string):** ~77,458 ops/sec
+
+Don't take our word for it. You can run these tools yourself to verify.
+**[Read the full methodology and get the verifiable benchmark script here](docs/BENCHMARKS.md).**
+
+Local tip: `configs/local.yaml` ships with `auth.enabled: false` so plaintext RESP tools can connect without AUTH. Production and orchestrator tenants still require scoped keys.
+
+---
+
 ## The problem DBX exists to solve
 
 You are building a product where **every one of your customers needs their own memory**: an
@@ -486,8 +501,8 @@ HTTP and RESP surfaces are in the [API reference](docs/api-reference.md).
 | Updates | [posts.html](https://dbxdb.co.in/posts.html) — latest engine notes; header badge until you open the page. RSS: [posts.xml](https://dbxdb.co.in/posts.xml). |
 | Incubation pitch | [pitch.html](https://dbxdb.co.in/pitch.html) — live 20-slide 16:9 deck. How to present: [`website/PITCH.md`](website/PITCH.md). |
 | Architecture, API, positioning | [`docs/`](docs/) |
-| Changelog | [`website/changelog.html`](website/changelog.html) |
-| LLM-readable summary | [`website/llms.txt`](website/llms.txt) |
+| Changelog | [`website/changelog.html`](https://dbxdb.co.in/changelog.html) |
+| LLM-readable summary | [`website/llms.txt`](https://dbxdb.co.in/llms.txt) |
 | Operator UI | [`dashboard/`](dashboard/) — Tenant keys, console, explorer, vector playground. Embedded in the orchestrator binary. |
 
 ---

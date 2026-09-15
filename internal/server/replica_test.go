@@ -176,6 +176,40 @@ func TestSkipBuiltinUserRejectsDefaultAUTH(t *testing.T) {
 	}
 }
 
+func TestAuthDisabledKeepsNoPassDefault(t *testing.T) {
+	cfg := replicaTestConfig(t, "", "", "")
+	cfg.Auth.Enabled = false
+	inst, err := NewInstance(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := inst.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer inst.Stop()
+	waitRESP(t, cfg)
+
+	conn, err := dialRESP(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(3 * time.Second))
+	writer := protocol.NewWriter(conn)
+	_ = writer.WriteArray(1)
+	_ = writer.WriteBulkString([]byte("PING"))
+	if err := writer.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	if line != "+PONG\r\n" {
+		t.Fatalf("expected open NoPass PING, got %q", line)
+	}
+}
+
 func waitRESP(t *testing.T, cfg *config.Config) {
 	t.Helper()
 	if cfg.Server.Socket != "" {

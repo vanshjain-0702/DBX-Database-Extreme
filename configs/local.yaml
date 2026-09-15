@@ -4,7 +4,7 @@ server:
   # The engine is private to the local machine/container. Publish the
   # orchestrator (port 8000) instead of this data-plane listener.
   host: "127.0.0.1"
-  port: 6399
+  port: 6380
   http_port: 8080
   grpc_port: 9090
   max_connections: 10000
@@ -46,7 +46,10 @@ cluster:
   rebalance_interval: "5m"
 
 auth:
-  enabled: true
+  # false = open NoPass "default" user for local redis-benchmark / harnesses.
+  # true + DBX_DEFAULT_PASSWORD = password-protected standalone server.
+  # Orchestrator tenants never use this path (scoped keys only).
+  enabled: false
   default_user: "default"
   require_password: true
 

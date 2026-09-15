@@ -46,7 +46,11 @@ func main() {
 		fmt.Fprintf(os.Stderr, "failed to create server instance: %v\n", err)
 		os.Exit(1)
 	}
-	inst.SkipBuiltinUser()
+	// Only orchestrator-spawned workers must reject the builtin default user.
+	// Standalone `dbx-server` keeps local NoPass / DBX_DEFAULT_PASSWORD auth.
+	if os.Getenv("DBX_ORCHESTRATOR_PID") != "" || *tenantID != "" {
+		inst.SkipBuiltinUser()
+	}
 	if *tenantID != "" {
 		inst.SetTenantID(*tenantID)
 	}

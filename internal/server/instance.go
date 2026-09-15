@@ -109,14 +109,23 @@ func (i *Instance) Start(ctx context.Context) error {
 	multi := transaction.NewMultiManager()
 
 	aclStore := auth.NewACLStore()
-	aclStore.DisableDefault()
 	// Orchestrator tenants authenticate only with scoped keys. A PermAll
 	// "default" user would inherit DBX_DEFAULT_PASSWORD from the control plane.
-	if !i.skipBuiltinUser && cfg.Auth.Enabled && cfg.Auth.RequirePassword {
+	// Standalone local/dev with auth.enabled=false keeps the NoPass default so
+	// redis-benchmark and plaintext harnesses can connect without AUTH.
+	switch {
+	case i.skipBuiltinUser:
+		aclStore.DisableDefault()
+	case cfg.Auth.Enabled && cfg.Auth.RequirePassword:
+		aclStore.DisableDefault()
 		password := os.Getenv("DBX_DEFAULT_PASSWORD")
 		if password != "" {
 			aclStore.SetDefaultPassword(cfg.Auth.DefaultUser, password)
 		}
+	case cfg.Auth.Enabled:
+		// Auth on but no password required: keep NoPass default for local tools.
+	default:
+		// auth.enabled=false: keep NoPass default (open local bench profile).
 	}
 	for _, user := range i.initialUsers {
 		aclStore.AddUser(user)
