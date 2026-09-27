@@ -2,10 +2,13 @@ package config
 
 import "testing"
 
+const testReplToken = "config-test-replication-token-0123456789"
+
 func TestValidateAllowsAsyncWALReplication(t *testing.T) {
 	cfg := Defaults()
 	cfg.Replication.Role = "primary"
 	cfg.Replication.ListenAddr = "127.0.0.1:7401"
+	cfg.Replication.Token = testReplToken
 	if err := Validate(cfg); err != nil {
 		t.Fatalf("primary: %v", err)
 	}
@@ -14,6 +17,19 @@ func TestValidateAllowsAsyncWALReplication(t *testing.T) {
 	cfg.Replication.PrimaryAddr = "127.0.0.1:7401"
 	if err := Validate(cfg); err != nil {
 		t.Fatalf("replica: %v", err)
+	}
+}
+
+func TestValidateRejectsReplicationWithoutToken(t *testing.T) {
+	cfg := Defaults()
+	cfg.Replication.Role = "primary"
+	cfg.Replication.ListenAddr = "127.0.0.1:7401"
+	if err := Validate(cfg); err == nil {
+		t.Fatal("primary without replication.token must fail closed")
+	}
+	cfg.Replication.Token = "short"
+	if err := Validate(cfg); err == nil {
+		t.Fatal("a short replication.token must be rejected")
 	}
 }
 
@@ -35,7 +51,7 @@ func TestValidateStandaloneRejectsStrayReplicaAddrs(t *testing.T) {
 
 func TestTenantEngineStartsWithoutCheckoutYAML(t *testing.T) {
 	cfg := TenantEngine(t.TempDir(), 6401, 8081)
-	if err := ApplyReplication(cfg, "", "", ""); err != nil {
+	if err := ApplyReplication(cfg, "", "", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Persistence.DataDir == "" || cfg.Replication.RaftEnabled {
@@ -43,6 +59,7 @@ func TestTenantEngineStartsWithoutCheckoutYAML(t *testing.T) {
 	}
 	cfg.Replication.Role = "primary"
 	cfg.Replication.ListenAddr = "127.0.0.1:7401"
+	cfg.Replication.Token = testReplToken
 	if err := Validate(cfg); err != nil {
 		t.Fatal(err)
 	}

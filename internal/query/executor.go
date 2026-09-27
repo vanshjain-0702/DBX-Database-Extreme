@@ -2049,13 +2049,23 @@ func (e *Executor) buildInfo() string {
 
 var timeTravelCounter atomic.Int64
 
+// scratchDir is where replay indexes are built. They hold this tenant's
+// vectors, and a sandboxed worker can only write inside its own directory, so
+// the shared TempDir is only a fallback for stores without a data directory.
+func (e *Executor) scratchDir() string {
+	if e.vec != nil && e.vec.DataDir() != "" {
+		return filepath.Join(e.vec.DataDir(), engine.ScratchDirName)
+	}
+	return os.TempDir()
+}
+
 func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query []float32, opts engine.SearchOpts) ([]engine.SearchResult, error) {
 	if e.wal == nil {
 		return nil, fmt.Errorf("Time-Travel search requires WAL to be enabled")
 	}
 
-	tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("dbx-timetravel-%d-%d", time.Now().UnixNano(), timeTravelCounter.Add(1)))
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
+	tempDir := filepath.Join(e.scratchDir(), fmt.Sprintf("%d-%d", time.Now().UnixNano(), timeTravelCounter.Add(1)))
+	if err := os.MkdirAll(tempDir, 0o700); err != nil {
 		return nil, fmt.Errorf("failed to create temp dir for time-travel: %w", err)
 	}
 	defer os.RemoveAll(tempDir)
@@ -2064,16 +2074,12 @@ func (e *Executor) executeTimeTravelSearch(storageKey string, asOf int64, query 
 	tempVec := engine.NewVectorStore(tempKV, tempDir, 0)
 	defer tempVec.CloseAll()
 
-	records, err := e.wal.ReadAll()
+	records, err := e.wal.ReadKeyHistory(storageKey, asOf)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read WAL for time-travel: %w", err)
 	}
 
 	for _, rec := range records {
-		if rec.Timestamp > asOf {
-			break // WAL is ordered by time, we can stop here
-		}
-
 		for _, effect := range rec.Effects {
 			if effect.Key != storageKey {
 				continue

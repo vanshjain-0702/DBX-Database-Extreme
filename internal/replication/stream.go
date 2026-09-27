@@ -10,7 +10,6 @@ import (
 
 	"github.com/dbx/dbx/internal/isolation"
 	"github.com/dbx/dbx/internal/persistence"
-	"github.com/dbx/dbx/internal/protocol"
 )
 
 // PrimaryStream manages sending WAL records to connected replicas.
@@ -19,6 +18,11 @@ type PrimaryStream struct {
 	replicas map[uint64]*StreamReplicaConn
 	nextID   uint64
 	listener net.Listener
+	token    string
+	// pending holds connections still in handshake or bootstrap. Stop closes
+	// them and waits, so no bootstrap reads the WAL after the engine closes it.
+	pending  map[net.Conn]struct{}
+	admitWG  sync.WaitGroup
 	done     chan struct{}
 	liveCh   chan []byte
 	stopOnce sync.Once
@@ -31,21 +35,37 @@ const maxReplicationFrameSize = 64 << 20
 type StreamReplicaConn struct {
 	ID   uint64
 	Conn net.Conn
-	mu   sync.Mutex
+	// mu serializes writes and guards cipher's frame counter.
+	mu     sync.Mutex
+	cipher *frameCipher
 }
 
-func NewPrimaryStream() *PrimaryStream {
+// send seals data for this replica and writes it as one frame. The caller
+// holds r.mu.
+func (r *StreamReplicaConn) send(data []byte) error {
+	return writeFrame(r.Conn, r.cipher.seal(data))
+}
+
+// NewPrimaryStream creates a primary that streams only to replicas proving
+// they hold token.
+func NewPrimaryStream(token string) *PrimaryStream {
 	return &PrimaryStream{
 		replicas: make(map[uint64]*StreamReplicaConn),
+		token:    token,
+		pending:  make(map[net.Conn]struct{}),
 		done:     make(chan struct{}),
 		liveCh:   make(chan []byte, liveReplicationBuffer),
 	}
 }
 
-// Start listens for replicas and bootstraps each connection from the WAL.
+// Start listens for replicas and bootstraps each authenticated connection
+// from the WAL.
 func (p *PrimaryStream) Start(addr string, wal *persistence.WAL) error {
 	if wal == nil {
 		return fmt.Errorf("replication: WAL is required")
+	}
+	if len(p.token) < MinTokenLength {
+		return fmt.Errorf("replication: a token of at least %d characters is required", MinTokenLength)
 	}
 	listener, err := isolation.Listen(addr, nil)
 	if err != nil {
@@ -66,11 +86,45 @@ func (p *PrimaryStream) Start(addr string, wal *persistence.WAL) error {
 				}
 				continue
 			}
-			id := p.AddReplica(conn)
-			go p.bootstrap(id, conn, wal)
+			p.mu.Lock()
+			select {
+			case <-p.done:
+				p.mu.Unlock()
+				_ = conn.Close()
+				return
+			default:
+			}
+			p.pending[conn] = struct{}{}
+			p.admitWG.Add(1)
+			p.mu.Unlock()
+			go p.admit(conn, wal)
 		}
 	}()
 	return nil
+}
+
+// admit registers conn for live records only after the handshake, so an
+// unauthenticated peer never receives a single WAL byte.
+func (p *PrimaryStream) admit(conn net.Conn, wal *persistence.WAL) {
+	defer p.admitWG.Done()
+	defer func() {
+		p.mu.Lock()
+		delete(p.pending, conn)
+		p.mu.Unlock()
+	}()
+	fc, err := serverHandshake(conn, p.token)
+	if err != nil {
+		_ = conn.Close()
+		return
+	}
+	select {
+	case <-p.done:
+		_ = conn.Close()
+		return
+	default:
+	}
+	id := p.addReplica(conn, fc)
+	p.bootstrap(id, conn, wal)
 }
 
 // Addr returns the bound replication listener address.
@@ -111,7 +165,7 @@ func (p *PrimaryStream) bootstrap(id uint64, conn net.Conn, wal *persistence.WAL
 			return
 		}
 		replica.mu.Lock()
-		if err := writeFrame(conn, persistence.EncodeRecord(rec)); err != nil {
+		if err := replica.send(persistence.EncodeRecord(rec)); err != nil {
 			replica.mu.Unlock()
 			p.RemoveReplica(id)
 			conn.Close()
@@ -166,18 +220,23 @@ func (p *PrimaryStream) Stop() {
 			_ = replica.Conn.Close()
 			delete(p.replicas, id)
 		}
+		for conn := range p.pending {
+			_ = conn.Close()
+		}
 		p.mu.Unlock()
+		p.admitWG.Wait()
 	})
 }
 
-// AddReplica registers a new replica stream.
-func (p *PrimaryStream) AddReplica(conn net.Conn) uint64 {
+// addReplica registers an authenticated replica and the cipher for its frames.
+func (p *PrimaryStream) addReplica(conn net.Conn, fc *frameCipher) uint64 {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.nextID++
 	p.replicas[p.nextID] = &StreamReplicaConn{
-		ID:   p.nextID,
-		Conn: conn,
+		ID:     p.nextID,
+		Conn:   conn,
+		cipher: fc,
 	}
 	return p.nextID
 }
@@ -189,7 +248,7 @@ func (p *PrimaryStream) RemoveReplica(id uint64) {
 	delete(p.replicas, id)
 }
 
-// Broadcast sends a raw WAL record payload to all connected replicas.
+// Broadcast seals a raw WAL record payload for each connected replica.
 func (p *PrimaryStream) Broadcast(data []byte) {
 	if len(data) == 0 || len(data) > maxReplicationFrameSize {
 		return
@@ -197,15 +256,10 @@ func (p *PrimaryStream) Broadcast(data []byte) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	// Length prefixed frame
-	frame := make([]byte, 4)
-	binary.BigEndian.PutUint32(frame, uint32(len(data)))
-	payload := append(frame, data...)
-
 	for id, rep := range p.replicas {
 		rep.Conn.SetWriteDeadline(time.Now().Add(time.Second))
 		rep.mu.Lock()
-		err := writeFull(rep.Conn, payload)
+		err := rep.send(data)
 		rep.mu.Unlock()
 		if err != nil {
 			// If a replica is too slow or disconnected, drop it.
@@ -216,7 +270,7 @@ func (p *PrimaryStream) Broadcast(data []byte) {
 }
 
 func writeFrame(conn net.Conn, data []byte) error {
-	if len(data) == 0 || len(data) > maxReplicationFrameSize {
+	if len(data) == 0 || len(data) > maxSealedFrameSize {
 		return io.ErrShortBuffer
 	}
 	frame := make([]byte, 4)
@@ -238,6 +292,7 @@ type ReplicaStream struct {
 	Engine      interface {
 		ApplyWALRecord(rec *persistence.WALRecord) error
 	}
+	token    string
 	mu       sync.Mutex
 	conn     net.Conn
 	done     chan struct{}
@@ -245,12 +300,14 @@ type ReplicaStream struct {
 }
 
 // NewReplicaStream creates a background consumer connecting to the primary.
-func NewReplicaStream(addr string, engine interface {
+// token must match the primary's; the handshake authenticates both ends.
+func NewReplicaStream(addr, token string, engine interface {
 	ApplyWALRecord(*persistence.WALRecord) error
 }) *ReplicaStream {
 	return &ReplicaStream{
 		PrimaryAddr: addr,
 		Engine:      engine,
+		token:       token,
 		done:        make(chan struct{}),
 	}
 }
@@ -265,7 +322,13 @@ func (rs *ReplicaStream) Start() {
 			default:
 			}
 
+			var fc *frameCipher
 			conn, err := isolation.DialTimeout(rs.PrimaryAddr, time.Second)
+			if err == nil {
+				if fc, err = clientHandshake(conn, rs.token); err != nil {
+					conn.Close()
+				}
+			}
 			if err != nil {
 				select {
 				case <-rs.done:
@@ -290,12 +353,7 @@ func (rs *ReplicaStream) Start() {
 			default:
 			}
 
-			writer := protocol.NewWriter(conn)
-			_ = writer.WriteArray(1)
-			_ = writer.WriteBulkString([]byte("SYNC"))
-			_ = writer.Flush()
-
-			rs.consumeStream(conn)
+			rs.consumeStream(conn, fc)
 			rs.setConn(nil)
 			conn.Close()
 		}
@@ -321,20 +379,25 @@ func (rs *ReplicaStream) Stop() {
 	})
 }
 
-func (rs *ReplicaStream) consumeStream(conn net.Conn) {
-	// Simple length-prefixed frame consumer
+// consumeStream applies sealed frames until the connection fails or a frame
+// does not authenticate; either way the caller reconnects and re-bootstraps.
+func (rs *ReplicaStream) consumeStream(conn net.Conn, fc *frameCipher) {
 	for {
 		var length uint32
 		if err := binary.Read(conn, binary.BigEndian, &length); err != nil {
-			return // reconnect
+			return
 		}
-		if length == 0 || length > maxReplicationFrameSize {
+		if length <= sealOverhead || length > maxSealedFrameSize {
 			return
 		}
 
-		data := make([]byte, length)
-		if _, err := io.ReadFull(conn, data); err != nil {
-			return // reconnect
+		sealed := make([]byte, length)
+		if _, err := io.ReadFull(conn, sealed); err != nil {
+			return
+		}
+		data, err := fc.open(sealed)
+		if err != nil {
+			return
 		}
 
 		rec, err := persistence.DecodeRecord(data)

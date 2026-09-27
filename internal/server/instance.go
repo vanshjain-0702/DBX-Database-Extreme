@@ -223,7 +223,7 @@ func (i *Instance) Start(ctx context.Context) error {
 	}
 
 	if wal != nil && cfg.Replication.Role == "primary" && cfg.Replication.ListenAddr != "" && !cfg.Replication.RaftEnabled {
-		primary := replication.NewPrimaryStream()
+		primary := replication.NewPrimaryStream(cfg.Replication.Token)
 		if err := primary.Start(cfg.Replication.ListenAddr, wal); err != nil {
 			_ = wal.Close()
 			return fmt.Errorf("replication listener failed: %w", err)
@@ -232,7 +232,7 @@ func (i *Instance) Start(ctx context.Context) error {
 		i.primaryStream = primary
 	}
 	if cfg.Replication.Role == "replica" {
-		replica := replication.NewReplicaStream(cfg.Replication.PrimaryAddr, executor)
+		replica := replication.NewReplicaStream(cfg.Replication.PrimaryAddr, cfg.Replication.Token, executor)
 		replica.Start()
 		i.replicaStream = replica
 	}
@@ -573,7 +573,11 @@ func (i *Instance) BecomePrimary(listenAddr string) error {
 		return nil
 	}
 	if i.wal != nil && listenAddr != "" && (i.cfg == nil || !i.cfg.Replication.RaftEnabled) {
-		primary := replication.NewPrimaryStream()
+		token := ""
+		if i.cfg != nil {
+			token = i.cfg.Replication.Token
+		}
+		primary := replication.NewPrimaryStream(token)
 		if err := primary.Start(listenAddr, i.wal); err != nil {
 			return fmt.Errorf("replication listener failed: %w", err)
 		}

@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"io"
@@ -76,7 +77,10 @@ type WALRecord struct {
 
 // WAL is a write-ahead log for durability.
 type WAL struct {
-	mu        sync.Mutex
+	mu sync.Mutex
+	// order makes sequence assignment and enqueueing one step, so frames land
+	// in the log in sequence (and timestamp) order.
+	order     sync.Mutex
 	file      *os.File
 	writer    *bufio.Writer
 	dir       string
@@ -266,6 +270,8 @@ func (w *WAL) Write(rec *WALRecord) error {
 	if err := w.Failure(); err != nil {
 		return fmt.Errorf("wal is write-stopped: %w", err)
 	}
+	rec.done = make(chan struct{})
+	w.order.Lock()
 	rec.Sequence = w.seq.Add(1)
 	rec.Timestamp = time.Now().UnixNano()
 	if len(rec.Effects) == 0 {
@@ -284,9 +290,8 @@ func (w *WAL) Write(rec *WALRecord) error {
 			ExpiresAt: expiresAt,
 		}}
 	}
-
-	rec.done = make(chan struct{})
 	w.recordCh <- rec
+	w.order.Unlock()
 	<-rec.done
 	return rec.err
 }
@@ -505,20 +510,76 @@ func (w *WAL) Failure() error {
 
 // ReadAll reads all WAL records (for recovery).
 func (w *WAL) ReadAll() ([]*WALRecord, error) {
+	var all []*WALRecord
+	if err := w.scan(func(rec *WALRecord) error {
+		all = append(all, rec)
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].Sequence < all[j].Sequence })
+	return all, nil
+}
+
+// errStopScan ends a scan early without reporting an error.
+var errStopScan = errors.New("wal: stop scan")
+
+// ReadKeyHistory returns, in sequence order, the records that come before the
+// first record stamped after until, reduced to their effects on key. The log
+// is in sequence order, so the scan stops at that record: an AS_OF query reads
+// only the log up to its point in time, and holds only that key's history.
+func (w *WAL) ReadKeyHistory(key string, until int64) ([]*WALRecord, error) {
+	var matched []*WALRecord
+	cutoff := uint64(math.MaxUint64)
+	err := w.scan(func(rec *WALRecord) error {
+		if rec.Timestamp > until {
+			cutoff = rec.Sequence
+			return errStopScan
+		}
+		var effects []WALEffect
+		for _, effect := range rec.Effects {
+			if effect.Key == key {
+				effects = append(effects, effect)
+			}
+		}
+		if len(effects) > 0 {
+			rec.Effects = effects
+			rec.Type, rec.Key, rec.Value, rec.TTLNano = effects[0].Type, effects[0].Key, effects[0].Value, effects[0].ExpiresAt
+			matched = append(matched, rec)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(matched, func(i, j int) bool { return matched[i].Sequence < matched[j].Sequence })
+	end := sort.Search(len(matched), func(i int) bool { return matched[i].Sequence >= cutoff })
+	return matched[:end], nil
+}
+
+// scan decodes every WAL segment in name order and hands each record to emit.
+// Archived segments are named by sequence and sort before wal.log. When emit
+// returns errStopScan, scan stops and returns nil.
+func (w *WAL) scan(emit func(*WALRecord) error) error {
+	err := w.scanSegments(emit)
+	if errors.Is(err, errStopScan) {
+		return nil
+	}
+	return err
+}
+
+func (w *WAL) scanSegments(emit func(*WALRecord) error) error {
 	entries, err := os.ReadDir(w.dir)
 	if err != nil {
 		if w.file == nil {
-			return nil, err
+			return err
 		}
 		if _, seekErr := w.file.Seek(0, io.SeekStart); seekErr != nil {
-			return nil, err
+			return err
 		}
-		records, readErr := decodeRecords(w.file, w.enc)
+		readErr := scanRecordsMode(w.file, true, w.enc, emit)
 		_, _ = w.file.Seek(0, io.SeekEnd)
-		if readErr != nil {
-			return nil, readErr
-		}
-		return records, nil
+		return readErr
 	}
 	var paths []string
 	for _, entry := range entries {
@@ -531,60 +592,60 @@ func (w *WAL) ReadAll() ([]*WALRecord, error) {
 		}
 	}
 	sort.Strings(paths)
-	var all []*WALRecord
 	for _, path := range paths {
 		f, openErr := os.Open(path)
 		if openErr != nil {
-			return nil, openErr
+			return openErr
 		}
-		var records []*WALRecord
-		var readErr error
-		if filepath.Base(path) == "wal.log" {
-			records, readErr = decodeRecords(f, w.enc)
-		} else {
-			records, readErr = decodeRecordsMode(f, false, w.enc)
-		}
+		readErr := scanRecordsMode(f, filepath.Base(path) == "wal.log", w.enc, emit)
 		f.Close()
 		if readErr != nil {
-			return nil, fmt.Errorf("%s: %w", filepath.Base(path), readErr)
+			return fmt.Errorf("%s: %w", filepath.Base(path), readErr)
 		}
-		all = append(all, records...)
 	}
-	sort.Slice(all, func(i, j int) bool { return all[i].Sequence < all[j].Sequence })
-	return all, nil
+	return nil
 }
 
-func decodeRecords(r io.Reader, enc *security.Encryptor) ([]*WALRecord, error) {
-	return decodeRecordsMode(r, true, enc)
-}
-
-func decodeRecordsMode(r io.Reader, allowPartialTail bool, enc *security.Encryptor) ([]*WALRecord, error) {
+func scanRecordsMode(r io.Reader, allowPartialTail bool, enc *security.Encryptor, emit func(*WALRecord) error) error {
 	header := make([]byte, len(walV2Magic))
 	if _, err := io.ReadFull(r, header); err != nil {
-		return nil, fmt.Errorf("missing WAL v2 header: %w", err)
+		return fmt.Errorf("missing WAL v2 header: %w", err)
 	}
 	if enc != nil {
 		if !bytes.Equal(header, walEncMagic) {
-			return nil, fmt.Errorf("unsupported WAL format")
+			return fmt.Errorf("unsupported WAL format")
 		}
 	} else if !bytes.Equal(header, walV2Magic) {
-		return nil, fmt.Errorf("unsupported WAL format")
+		return fmt.Errorf("unsupported WAL format")
 	}
-	return decodeFrames(r, allowPartialTail, enc)
+	return scanFrames(r, allowPartialTail, enc, emit)
 }
 
 func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) ([]*WALRecord, error) {
 	var records []*WALRecord
+	err := scanFrames(r, allowPartialTail, enc, func(rec *WALRecord) error {
+		records = append(records, rec)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// scanFrames decodes one record at a time so callers that only need part of
+// the log never hold all of it in memory.
+func scanFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor, emit func(*WALRecord) error) error {
 	for {
 		var lengthBuf [4]byte
 		if _, err := io.ReadFull(r, lengthBuf[:]); err != nil {
 			if err == io.EOF {
-				return records, nil
+				return nil
 			}
 			if err == io.ErrUnexpectedEOF && allowPartialTail {
-				return records, nil
+				return nil
 			}
-			return nil, fmt.Errorf("WAL frame length: %w", err)
+			return fmt.Errorf("WAL frame length: %w", err)
 		}
 		frameLen := int(binary.BigEndian.Uint32(lengthBuf[:]))
 		minLen := 1 + 8 + 8 + 4 + 4
@@ -592,37 +653,37 @@ func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) (
 			minLen = 12 + 16
 		}
 		if frameLen < minLen || frameLen > maxWALFrameSize {
-			return nil, fmt.Errorf("invalid WAL frame length %d", frameLen)
+			return fmt.Errorf("invalid WAL frame length %d", frameLen)
 		}
 		frame := make([]byte, frameLen)
 		if _, err := io.ReadFull(r, frame); err != nil {
 			if err == io.ErrUnexpectedEOF && allowPartialTail {
-				return records, nil
+				return nil
 			}
-			return nil, fmt.Errorf("WAL frame payload: %w", err)
+			return fmt.Errorf("WAL frame payload: %w", err)
 		}
 		if enc != nil {
 			plain, err := enc.Decrypt(frame)
 			if err != nil {
-				return nil, fmt.Errorf("WAL decrypt: %w", err)
+				return fmt.Errorf("WAL decrypt: %w", err)
 			}
 			frame = plain
 			if len(frame) < 1+8+8+4+4 {
-				return nil, fmt.Errorf("invalid WAL frame length %d", len(frame))
+				return fmt.Errorf("invalid WAL frame length %d", len(frame))
 			}
 		}
 		body := frame[:len(frame)-4]
 		expectedCRC := binary.BigEndian.Uint32(frame[len(frame)-4:])
 		if actual := crc32.ChecksumIEEE(body); actual != expectedCRC {
-			return nil, fmt.Errorf("WAL CRC mismatch (expected %x, got %x)", expectedCRC, actual)
+			return fmt.Errorf("WAL CRC mismatch (expected %x, got %x)", expectedCRC, actual)
 		}
 		off := 0
 		if body[off] != 2 {
-			return nil, fmt.Errorf("unsupported WAL record version %d", body[off])
+			return fmt.Errorf("unsupported WAL record version %d", body[off])
 		}
 		off++
 		if off+20 > len(body) {
-			return nil, fmt.Errorf("truncated WAL transaction header")
+			return fmt.Errorf("truncated WAL transaction header")
 		}
 		rec := &WALRecord{
 			Sequence:  binary.BigEndian.Uint64(body[off:]),
@@ -632,12 +693,12 @@ func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) (
 		effectCount := int(binary.BigEndian.Uint32(body[off:]))
 		off += 4
 		if effectCount <= 0 || effectCount > 1_000_000 {
-			return nil, fmt.Errorf("invalid WAL effect count %d", effectCount)
+			return fmt.Errorf("invalid WAL effect count %d", effectCount)
 		}
 		rec.Effects = make([]WALEffect, 0, effectCount)
 		for i := 0; i < effectCount; i++ {
 			if off+17 > len(body) {
-				return nil, fmt.Errorf("truncated WAL effect header")
+				return fmt.Errorf("truncated WAL effect header")
 			}
 			effectType := body[off]
 			keyLen := int(binary.BigEndian.Uint32(body[off+1:]))
@@ -645,7 +706,7 @@ func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) (
 			expiresAt := int64(binary.BigEndian.Uint64(body[off+9:]))
 			off += 17
 			if keyLen < 0 || valueLen < 0 || off+keyLen+valueLen > len(body) {
-				return nil, fmt.Errorf("invalid WAL effect lengths")
+				return fmt.Errorf("invalid WAL effect lengths")
 			}
 			effect := WALEffect{
 				Type:      effectType,
@@ -657,11 +718,13 @@ func decodeFrames(r io.Reader, allowPartialTail bool, enc *security.Encryptor) (
 			rec.Effects = append(rec.Effects, effect)
 		}
 		if off != len(body) {
-			return nil, fmt.Errorf("WAL frame has %d trailing bytes", len(body)-off)
+			return fmt.Errorf("WAL frame has %d trailing bytes", len(body)-off)
 		}
 		first := rec.Effects[0]
 		rec.Type, rec.Key, rec.Value, rec.TTLNano = first.Type, first.Key, first.Value, first.ExpiresAt
-		records = append(records, rec)
+		if err := emit(rec); err != nil {
+			return err
+		}
 	}
 }
 

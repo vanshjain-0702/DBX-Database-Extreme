@@ -420,10 +420,18 @@ const (
 	maxVectorBatch      = 1000
 )
 
+// ScratchDirName holds short-lived replay indexes (time-travel search) inside
+// the tenant directory. Anything left there is from a crashed query.
+const ScratchDirName = ".timetravel"
+
 func NewVectorStore(kv *KVStore, dataDir string, maxVectors int) *VectorStore {
 	os.MkdirAll(dataDir, 0755)
+	_ = os.RemoveAll(filepath.Join(dataDir, ScratchDirName))
 	return &VectorStore{kv: kv, dataDir: dataDir, maxVectors: maxVectors, encoding: EncodingSQ8}
 }
+
+// DataDir is the tenant directory that holds this store's index files.
+func (s *VectorStore) DataDir() string { return s.dataDir }
 
 // SetEncoding selects sq8 (default) or float32 for new indexes on this tenant.
 func (s *VectorStore) SetEncoding(encoding string) error {

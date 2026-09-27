@@ -57,6 +57,8 @@ type Manager struct {
 	nextReplPort int
 	RaftNode     *RaftNode
 	profile      isolation.Profile
+	replKeyMu    sync.Mutex
+	replKey      []byte
 }
 
 func NewManager(stateFile string) (*Manager, error) {
@@ -222,6 +224,13 @@ func (m *Manager) ProvisionWith(id, name string, replicaCount int, vectorEncodin
 	encoding, err := config.NormalizeVectorEncoding(vectorEncoding)
 	if err != nil {
 		return nil, err
+	}
+	if replicaCount > 0 {
+		// The replica set starts in the background; the node key must not be
+		// created there, after the caller has already seen success.
+		if _, err := m.replicationKey(); err != nil {
+			return nil, err
+		}
 	}
 	m.mu.Lock()
 	if _, exists := m.tenants[id]; exists {
@@ -608,7 +617,15 @@ func (m *Manager) StartTenant(t *Tenant) error {
 		}
 		m.mu.RUnlock()
 	}
-	if err := config.ApplyReplication(cfgObj, role, listenAddr, primaryAddr); err != nil {
+	replToken := ""
+	if role != "" {
+		token, err := m.replicationToken(replicationGroup(t))
+		if err != nil {
+			return err
+		}
+		replToken = token
+	}
+	if err := config.ApplyReplication(cfgObj, role, listenAddr, primaryAddr, replToken); err != nil {
 		return err
 	}
 	enginePath := filepath.Join(t.DataDir, "engine.yaml")
@@ -918,7 +935,11 @@ func (m *Manager) writePromotedEngineConfig(t *Tenant, listenAddr string) error 
 		cfgObj.Server.Socket = isolation.RESPSocket(t.DataDir)
 		cfgObj.Server.HTTPSocket = isolation.HTTPSocket(t.DataDir)
 	}
-	if err := config.ApplyReplication(cfgObj, "primary", listenAddr, ""); err != nil {
+	token, err := m.replicationToken(t.ID)
+	if err != nil {
+		return err
+	}
+	if err := config.ApplyReplication(cfgObj, "primary", listenAddr, "", token); err != nil {
 		return err
 	}
 	out, err := yaml.Marshal(cfgObj)

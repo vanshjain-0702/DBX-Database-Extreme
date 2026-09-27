@@ -4,8 +4,8 @@ import sys
 import time
 import random
 import uuid
-import threading
 import statistics
+from collections import Counter
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'sdk', 'python'))
 from dbx import ControlPlane, DBXClient
@@ -40,7 +40,8 @@ def brutal_worker(worker_id, plane):
         "Vector": {"count": 0, "latencies": []},
         "TimeTravel": {"count": 0, "latencies": []},
         "Migration": {"count": 0, "latencies": []},
-        "errors": 0
+        "errors": 0,
+        "error_messages": [],
     }
     
     try:
@@ -87,6 +88,7 @@ def brutal_worker(worker_id, plane):
                     
             except Exception as e:
                 stats["errors"] += 1
+                stats["error_messages"].append(f"op {op}: {type(e).__name__}: {str(e)[:120]}")
                 
     finally:
         # We don't shred here immediately to leave the memory footprint high
@@ -126,9 +128,11 @@ def main():
     }
     total_errors = 0
     total_ops = 0
-    
+    error_kinds = Counter()
+
     for r in results:
         total_errors += r["errors"]
+        error_kinds.update(r["error_messages"])
         for cat in agg.keys():
             agg[cat].extend(r[cat]["latencies"])
             total_ops += r[cat]["count"]
@@ -149,6 +153,11 @@ def main():
             print(f"  Count: {len(lats)}")
             print(f"  Avg Latency: {avg:.2f} ms")
             print(f"  P99 Latency: {p99:.2f} ms")
+
+    if error_kinds:
+        print("\n--- Errors (most common) ---")
+        for message, count in error_kinds.most_common(5):
+            print(f"  {count:>6} x {message}")
 
 if __name__ == "__main__":
     main()

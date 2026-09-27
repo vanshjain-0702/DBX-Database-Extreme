@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Legal Auditor — on DBX</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --ink: #e8eef4;
+      --muted: #8b9aab;
+      --accent: #c4a35a;
+      --line: #2a3542;
+      --ok: #6bbf8a;
+      --danger: #d97a6c;
+      --font: "IBM Plex Sans", "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background:
+        radial-gradient(1200px 600px at 10% -10%, #1e2a38 0%, transparent 55%),
+        radial-gradient(900px 500px at 100% 0%, #24301f 0%, transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.5rem 2rem 0.5rem;
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      letter-spacing: 0.02em;
+      font-weight: 600;
+    }
+    header p { margin: 0.35rem 0 1rem; color: var(--muted); font-size: 0.95rem; }
+    main { display: grid; gap: 1.25rem; padding: 1.25rem 2rem 2rem; max-width: 1100px; }
+    .panel {
+      background: color-mix(in srgb, var(--panel) 92%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1rem 1.15rem;
+    }
+    .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--accent); font-weight: 600; }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input, textarea, select, button {
+      font: inherit;
+      border-radius: 3px;
+      border: 1px solid var(--line);
+      background: #121820;
+      color: var(--ink);
+      padding: 0.5rem 0.65rem;
+      width: 100%;
+    }
+    textarea { min-height: 120px; font-family: var(--mono); font-size: 0.85rem; }
+    button {
+      width: auto;
+      cursor: pointer;
+      background: var(--accent);
+      color: #1a1408;
+      border: none;
+      font-weight: 600;
+      padding: 0.55rem 0.9rem;
+    }
+    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+    button.danger { background: var(--danger); color: #1a0c0a; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+    .muted { color: var(--muted); font-size: 0.85rem; }
+    .hit {
+      border-top: 1px solid var(--line);
+      padding: 0.65rem 0;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+    }
+    .hit strong { color: var(--ok); }
+    #status { min-height: 1.2rem; color: var(--muted); font-size: 0.85rem; }
+    .hidden { display: none; }
+    @media (max-width: 720px) {
+      main, header { padding-left: 1rem; padding-right: 1rem; }
+      .row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Legal Auditor</h1>
+    <p>Child product of <strong>DBX</strong> — one isolated tenant per client. Embeddings stay with this app.</p>
+    <div id="status"></div>
+  </header>
+
+  <main>
+    <section class="panel" id="auth-panel">
+      <h2>Firm access</h2>
+      <div class="row">
+        <div>
+          <label>Email</label>
+          <input id="email" type="email" placeholder="ops@firm.example" />
+        </div>
+        <div>
+          <label>Password (min 8)</label>
+          <input id="password" type="password" />
+        </div>
+      </div>
+      <div style="margin-top:0.75rem">
+        <label>Firm name (register only)</label>
+        <input id="firm" type="text" placeholder="Northwind Legal" />
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-register">Register</button>
+        <button type="button" class="secondary" id="btn-login">Log in</button>
+      </div>
+    </section>
+
+    <section class="panel hidden" id="app-panel">
+      <h2>Clients <span class="muted">(each = one DBX tenant)</span></h2>
+      <div class="row">
+        <div>
+          <label>New client name</label>
+          <input id="client-name" placeholder="Atlas Corp" />
+        </div>
+        <div>
+          <label>Active client</label>
+          <select id="client-select"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="btn-create-client">Create client tenant</button>
+        <button type="button" class="secondary" id="btn-refresh">Refresh</button>
+        <button type="button" class="secondary" id="btn-export">Export</button>
+        <button type="button" class="secondary" id="btn-hibernate">Hibernate</button>
+        <button type="button" class="danger" id="btn-delete">Purge client</button>
+      </div>
+
+      <h2 style="margin-top:1.25rem">Ingest contract text</h2>
+      <label>Document name</label>
+      <input id="doc-name" placeholder="msa-2026" />
+      <label style="margin-top:0.5rem">Text</label>
+      <textarea id="doc-text" placeholder="Paste contract clauses…"></textarea>
+      <div class="actions">
+        <button type="button" id="btn-ingest">Chunk · embed · VADD</button>
+      </div>
+
+      <h2 style="margin-top:1.25rem">Audit query</h2>
+      <label>Checklist question</label>
+      <input id="audit-query" placeholder="indemnity liability cap" />
+      <div class="actions">
+        <button type="button" id="btn-audit">VSEARCH with citations</button>
+      </div>
+      <div id="citations"></div>
+    </section>
+  </main>
+
+  <script>
+    const state = { token: localStorage.getItem("la_token") || "" };
+
+    function setStatus(msg, ok) {
+      const el = document.getElementById("status");
+      el.textContent = msg || "";
+      el.style.color = ok === false ? "var(--danger)" : "var(--muted)";
+    }
+
+    async function api(path, opts = {}) {
+      const headers = Object.assign({ "Content-Type": "application/json" }, opts.headers || {});
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      const res = await fetch(path, Object.assign({}, opts, { headers }));
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.detail || res.statusText);
+      return body;
+    }
+
+    function showApp(on) {
+      document.getElementById("auth-panel").classList.toggle("hidden", on);
+      document.getElementById("app-panel").classList.toggle("hidden", !on);
+    }
+
+    async function refreshClients() {
+      const data = await api("/api/clients");
+      const sel = document.getElementById("client-select");
+      sel.innerHTML = "";
+      for (const c of data.clients) {
+        const opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = c.name + " (" + c.tenant_id + ")";
+        sel.appendChild(opt);
+      }
+    }
+
+    function clientId() {
+      return document.getElementById("client-select").value;
+    }
+
+    document.getElementById("btn-register").onclick = async () => {
+      try {
+        const body = await api("/api/register", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+            firm_name: document.getElementById("firm").value,
+          }),
+        });
+        state.token = body.token;
+        localStorage.setItem("la_token", state.token);
+        showApp(true);
+        await refreshClients();
+        setStatus("Registered as " + body.user.email, true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-login").onclick = async () => {
+      try {
+        const body = await api("/api/login", {
+          method: "POST",
+          body: JSON.stringify({
+            email: document.getElementById("email").value,
+            password: document.getElementById("password").value,
+          }),
+        });
+        state.token = body.token;
+        localStorage.setItem("la_token", state.token);
+        showApp(true);
+        await refreshClients();
+        setStatus("Logged in", true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-create-client").onclick = async () => {
+      try {
+        const name = document.getElementById("client-name").value;
+        await api("/api/clients", { method: "POST", body: JSON.stringify({ name }) });
+        await refreshClients();
+        setStatus("Provisioned DBX tenant for " + name, true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-refresh").onclick = () => refreshClients().catch(e => setStatus(String(e.message || e), false));
+
+    document.getElementById("btn-ingest").onclick = async () => {
+      try {
+        const id = clientId();
+        if (!id) throw new Error("create a client first");
+        const result = await api("/api/clients/" + id + "/ingest", {
+          method: "POST",
+          body: JSON.stringify({
+            doc_name: document.getElementById("doc-name").value,
+            text: document.getElementById("doc-text").value,
+          }),
+        });
+        setStatus("Ingested " + result.chunk_count + " chunks into tenant", true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-audit").onclick = async () => {
+      try {
+        const id = clientId();
+        if (!id) throw new Error("create a client first");
+        const result = await api("/api/clients/" + id + "/audit", {
+          method: "POST",
+          body: JSON.stringify({ query: document.getElementById("audit-query").value }),
+        });
+        const box = document.getElementById("citations");
+        box.innerHTML = "";
+        for (const hit of result.citations) {
+          const div = document.createElement("div");
+          div.className = "hit";
+          div.innerHTML = "<strong>" + hit.id + "</strong> · score " + hit.score.toFixed(4) +
+            "<div>" + (hit.text || "").replace(/</g, "&lt;") + "</div>";
+          box.appendChild(div);
+        }
+        setStatus("Audit returned " + result.citations.length + " citations", true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-export").onclick = async () => {
+      try {
+        const id = clientId();
+        const r = await api("/api/clients/" + id + "/export", { method: "POST" });
+        setStatus("Export: " + JSON.stringify(r), true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-hibernate").onclick = async () => {
+      try {
+        const id = clientId();
+        const r = await api("/api/clients/" + id + "/hibernate", { method: "POST" });
+        setStatus("Hibernated: " + JSON.stringify(r), true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    document.getElementById("btn-delete").onclick = async () => {
+      try {
+        const id = clientId();
+        if (!confirm("Purge this client tenant from DBX?")) return;
+        await api("/api/clients/" + id, { method: "DELETE" });
+        await refreshClients();
+        setStatus("Client purged", true);
+      } catch (e) { setStatus(String(e.message || e), false); }
+    };
+
+    (async () => {
+      if (!state.token) return;
+      try {
+        await api("/api/me");
+        showApp(true);
+        await refreshClients();
+        setStatus("Session restored", true);
+      } catch (_) {
+        state.token = "";
+        localStorage.removeItem("la_token");
+      }
+    })();
+  </script>
+</body>
+</html>

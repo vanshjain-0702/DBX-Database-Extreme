@@ -238,6 +238,34 @@ func TestTimeTravelSearchReplaysOverwriteAndDelete(t *testing.T) {
 	}
 }
 
+// A sandboxed worker can only write inside its tenant directory, so the replay
+// index for AS_OF must not be created under the shared TempDir.
+func TestTimeTravelSearchStaysInsideTenantDir(t *testing.T) {
+	executor, wal := newDurableTestExecutor(t)
+	defer wal.Close()
+	if got := executeForTest(t, executor, "VADD", "mem", "doc", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("vadd = %q", got)
+	}
+	time.Sleep(time.Millisecond)
+	asOf := time.Now().UnixNano()
+
+	rel, err := filepath.Rel(executor.vec.DataDir(), executor.scratchDir())
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		t.Fatalf("scratch dir %s is outside tenant dir %s", executor.scratchDir(), executor.vec.DataDir())
+	}
+	got := executeForTest(t, executor, "VSEARCH", "mem", "1", "0", "1", "AS_OF", fmt.Sprint(asOf))
+	if !strings.Contains(got, "doc") {
+		t.Fatalf("AS_OF search = %q", got)
+	}
+	entries, err := os.ReadDir(executor.scratchDir())
+	if err != nil {
+		t.Fatalf("scratch dir was not created in the tenant dir: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("replay index was not cleaned up: %d entries left", len(entries))
+	}
+}
+
 func TestRecoveryRejectsMismatchedVectorSeals(t *testing.T) {
 	dir := t.TempDir()
 	kv := engine.New(8)

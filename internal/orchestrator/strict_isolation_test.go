@@ -41,6 +41,8 @@ func strictWorkerBinary(t *testing.T) string {
 		}
 		out := filepath.Join(dir, "dbx-server")
 		cmd := exec.Command("go", "build", "-o", out, "github.com/dbx/dbx/cmd/dbx-server")
+		// Per-thread seals need AllThreadsSyscall, which a cgo binary lacks.
+		cmd.Env = append(os.Environ(), "CGO_ENABLED=0")
 		if combined, err := cmd.CombinedOutput(); err != nil {
 			workerBinErr = fmt.Errorf("building dbx-server: %v: %s", err, combined)
 			return
@@ -234,14 +236,35 @@ func TestStrictWorkerDoesNotInheritControlPlaneSecrets(t *testing.T) {
 	if worker == nil || worker.cmd == nil || worker.cmd.Process == nil {
 		t.Fatal("no worker process")
 	}
-	environ, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", worker.cmd.Process.Pid))
-	if err != nil {
-		t.Skipf("cannot read worker environ: %v", err)
-	}
+	environ := []byte(strings.Join(worker.cmd.Env, "\x00"))
 	for _, forbidden := range []string{"DBX_KEK=", "DBX_JWT_SECRET=", "DBX_ADMIN_PASSWORD=", "DBX_DEFAULT_PASSWORD="} {
 		if bytes.Contains(environ, []byte(forbidden)) {
 			t.Errorf("tenant worker inherited %s", strings.TrimSuffix(forbidden, "="))
 		}
+	}
+	m.mu.RLock()
+	quota := m.tenantQuotas[tenant.ID]
+	m.mu.RUnlock()
+	wantLimit := fmt.Sprintf("GOMEMLIMIT=%d", workerMemoryLimit(quota))
+	if quota <= 0 || !bytes.Contains(environ, []byte(wantLimit)) {
+		t.Errorf("worker has no Go soft memory limit under its %d-byte quota (want %s)", quota, wantLimit)
+	}
+
+	// Once sealed, a process with the same uid (a sibling worker) must not be
+	// able to read the worker's environ, which holds its control token.
+	if os.Geteuid() == 0 {
+		return
+	}
+	path := fmt.Sprintf("/proc/%d/environ", worker.cmd.Process.Pid)
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.ReadFile(path); err != nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("worker environ is readable by a same-uid process; it is not marked non-dumpable")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 
@@ -335,6 +358,31 @@ func TestStrictModeReplicationReachesReplica(t *testing.T) {
 			t.Fatalf("replica never received the write under strict isolation: GET = %q", got)
 		}
 		time.Sleep(100 * time.Millisecond)
+	}
+}
+
+// AS_OF search builds a replay index on disk; under Landlock that has to happen
+// inside the tenant directory or every historical query fails.
+func TestStrictModeTimeTravelSearch(t *testing.T) {
+	m, _ := newStrictManager(t)
+	tenant, err := m.Provision("history", "History", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.StopAll()
+	waitRunning(t, m, tenant.ID)
+	secret, key, err := m.CreateTenantKey(tenant.ID, "w", "writer", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := tenantSocketCommand(t, tenant.DataDir, key.ID, secret, "VADD", "mem", "doc", "1", "0"); got != ":1\r\n" {
+		t.Fatalf("VADD = %q", got)
+	}
+	time.Sleep(2 * time.Millisecond)
+	asOf := fmt.Sprint(time.Now().UnixNano())
+	got := tenantSocketCommand(t, tenant.DataDir, key.ID, secret, "VSEARCH", "mem", "1", "0", "1", "AS_OF", asOf)
+	if strings.HasPrefix(got, "-") {
+		t.Fatalf("AS_OF search inside the sandbox failed: %q", got)
 	}
 }
 

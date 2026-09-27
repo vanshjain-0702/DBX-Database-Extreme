@@ -95,6 +95,9 @@ func replicaTestConfig(t *testing.T, role, listen, primaryAddr string) *config.C
 	cfg.Replication.Role = role
 	cfg.Replication.ListenAddr = listen
 	cfg.Replication.PrimaryAddr = primaryAddr
+	if role != "" {
+		cfg.Replication.Token = testReplicationToken
+	}
 	cfg.Replication.RaftEnabled = false
 	cfg.Observability.Logging.Level = "error"
 	if err := config.Validate(cfg); err != nil {
@@ -102,6 +105,8 @@ func replicaTestConfig(t *testing.T, role, listen, primaryAddr string) *config.C
 	}
 	return cfg
 }
+
+const testReplicationToken = "server-test-replication-token-0123456789"
 
 func freePort(t *testing.T) int {
 	t.Helper()

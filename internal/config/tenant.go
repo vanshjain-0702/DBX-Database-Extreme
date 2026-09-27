@@ -21,6 +21,7 @@ func TenantEngine(dataDir string, respPort, httpPort int) *Config {
 	cfg.Replication.Role = ""
 	cfg.Replication.ListenAddr = ""
 	cfg.Replication.PrimaryAddr = ""
+	cfg.Replication.Token = ""
 	cfg.Replication.RaftEnabled = false
 	cfg.Replication.RaftBootstrap = false
 	cfg.Cluster.Enabled = false
@@ -31,10 +32,11 @@ func TenantEngine(dataDir string, respPort, httpPort int) *Config {
 }
 
 // ApplyReplication overlays async WAL roles. Raft stays disabled.
-func ApplyReplication(cfg *Config, role, listenAddr, primaryAddr string) error {
+func ApplyReplication(cfg *Config, role, listenAddr, primaryAddr, token string) error {
 	cfg.Replication.Role = role
 	cfg.Replication.ListenAddr = listenAddr
 	cfg.Replication.PrimaryAddr = primaryAddr
+	cfg.Replication.Token = token
 	cfg.Replication.RaftEnabled = false
 	cfg.Replication.RaftBootstrap = false
 	return Validate(cfg)

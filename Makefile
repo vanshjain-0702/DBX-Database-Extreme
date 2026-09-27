@@ -18,7 +18,7 @@ build: build-server build-orchestrator
 build-server:
 	@echo "==> Building dbx-server..."
 	@mkdir -p $(BUILD_DIR)
-	go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_SERVER) ./cmd/dbx-server
+	CGO_ENABLED=0 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_SERVER) ./cmd/dbx-server
 
 ## build-dashboard: Compile the operator UI into dashboard/dist for Go embed
 build-dashboard:

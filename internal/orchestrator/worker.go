@@ -187,6 +187,16 @@ func childEnv(extra ...string) []string {
 	return append(out, extra...)
 }
 
+// workerMemoryLimit is the Go soft memory limit for a worker whose cgroup
+// memory.max is quota. It leaves 10% for stacks and runtime metadata, so the
+// garbage collector runs harder before the kernel OOM-kills the tenant.
+func workerMemoryLimit(quota int64) int64 {
+	if quota <= 0 {
+		return 0
+	}
+	return quota / 10 * 9
+}
+
 func newWorkerToken() (string, error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
@@ -230,11 +240,15 @@ func (m *Manager) startIsolatedWorker(t *Tenant, cfgPath string, dek []byte, quo
 	cmd.Stderr = os.Stderr
 	// Each worker gets its own control token, so one worker cannot authenticate
 	// to another worker's control endpoints even if it escapes its sandbox.
-	cmd.Env = childEnv(
-		"DBX_TENANT_ID="+t.ID,
-		"DBX_INTERNAL_API_TOKEN="+token,
+	env := []string{
+		"DBX_TENANT_ID=" + t.ID,
+		"DBX_INTERNAL_API_TOKEN=" + token,
 		fmt.Sprintf("DBX_ORCHESTRATOR_PID=%d", os.Getpid()),
-	)
+	}
+	if limit := workerMemoryLimit(quota); limit > 0 {
+		env = append(env, fmt.Sprintf("GOMEMLIMIT=%d", limit))
+	}
+	cmd.Env = childEnv(env...)
 	cmd.SysProcAttr = workerProcAttr()
 	if err := cmd.Start(); err != nil {
 		return err

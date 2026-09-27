@@ -31,6 +31,8 @@ sdk/python/.venv/
 *.egg-info/
 .pytest_cache/
 sdk/python/.pytest_cache/
+legal-auditor/data/*.json
+legal-auditor/.venv/
 
 # Environment & secrets
 .env

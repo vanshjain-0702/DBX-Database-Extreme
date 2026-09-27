@@ -3,9 +3,9 @@
 package isolation
 
 import (
+	"errors"
 	"fmt"
 	"os"
-	"runtime"
 	"syscall"
 	"unsafe"
 )
@@ -33,10 +33,23 @@ const (
 	accessFSMakeSym    = 1 << 12
 	accessFSRefer      = 1 << 13
 	accessFSTruncate   = 1 << 14
+
+	accessNetBindTCP    = 1 << 0
+	accessNetConnectTCP = 1 << 1
 )
 
+// landlockRulesetAttr mirrors struct landlock_ruleset_attr. Kernels older than
+// ABI 4 reject the handledAccessNet field, so its size is passed per ABI.
 type landlockRulesetAttr struct {
-	handledAccessFS uint64
+	handledAccessFS  uint64
+	handledAccessNet uint64
+}
+
+func rulesetAttrSize(abi int) uintptr {
+	if abi >= 4 {
+		return unsafe.Sizeof(landlockRulesetAttr{})
+	}
+	return unsafe.Sizeof(uint64(0))
 }
 
 type landlockPathBeneathAttr struct {
@@ -84,15 +97,14 @@ func addPathRule(ruleset int, path string, access uint64) error {
 // RestrictFilesystem applies Linux Landlock so this process can only use the
 // tenant directory for general filesystem access. /proc, /dev, and /etc remain
 // readable because the Go runtime and TLS roots need them. Sibling tenant
-// directories are not reachable.
+// directories are not reachable. On ABI 4+ kernels TCP bind and connect are
+// denied as well; workers only speak over inherited or Unix sockets.
 //
-// PR_SET_NO_NEW_PRIVS is per-thread. Go may migrate this goroutine between
-// syscalls, and landlock_restrict_self then returns EPERM on the thread that
-// never got the bit. Pin the rest of the function to one OS thread.
+// Landlock domains and PR_SET_NO_NEW_PRIVS attach to the calling thread only.
+// A Go process already runs several OS threads, and any goroutine pinned to
+// one of them would keep full access, so both are applied on every thread
+// through AllThreadsSyscall. That requires a binary built with CGO_ENABLED=0.
 func RestrictFilesystem(tenantDir string) error {
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
 	abi, err := landlockABI()
 	if err != nil {
 		return fmt.Errorf("landlock is unavailable: %w", err)
@@ -102,7 +114,10 @@ func RestrictFilesystem(tenantDir string) error {
 	}
 	handled := handledAccess(abi)
 	attr := landlockRulesetAttr{handledAccessFS: handled}
-	fd, _, errno := syscall.Syscall(sysLandlockCreateRuleset, uintptr(unsafe.Pointer(&attr)), unsafe.Sizeof(attr), 0)
+	if abi >= 4 {
+		attr.handledAccessNet = accessNetBindTCP | accessNetConnectTCP
+	}
+	fd, _, errno := syscall.Syscall(sysLandlockCreateRuleset, uintptr(unsafe.Pointer(&attr)), rulesetAttrSize(abi), 0)
 	if errno != 0 {
 		return fmt.Errorf("landlock create_ruleset: %w", errno)
 	}
@@ -125,13 +140,37 @@ func RestrictFilesystem(tenantDir string) error {
 		return err
 	}
 
-	if _, _, errno := syscall.Syscall(syscall.SYS_PRCTL, unixPRSetNoNewPrivs, 1, 0); errno != 0 {
-		return fmt.Errorf("prctl PR_SET_NO_NEW_PRIVS: %w", errno)
+	if err := setNoNewPrivsAllThreads(); err != nil {
+		return err
 	}
-	if _, _, errno := syscall.Syscall(sysLandlockRestrictSelf, uintptr(ruleset), 0, 0); errno != 0 {
-		return fmt.Errorf("landlock restrict_self: %w", errno)
+	if _, _, errno := syscall.AllThreadsSyscall(sysLandlockRestrictSelf, uintptr(ruleset), 0, 0); errno != 0 {
+		return fmt.Errorf("landlock restrict_self: %w", allThreadsErr(errno))
 	}
 	return nil
+}
+
+// LandlockNetworkSupported reports whether this kernel's Landlock can deny TCP.
+func LandlockNetworkSupported() bool {
+	abi, err := landlockABI()
+	return err == nil && abi >= 4
+}
+
+func setNoNewPrivsAllThreads() error {
+	if _, _, errno := syscall.AllThreadsSyscall(syscall.SYS_PRCTL, unixPRSetNoNewPrivs, 1, 0); errno != 0 {
+		return fmt.Errorf("prctl PR_SET_NO_NEW_PRIVS: %w", allThreadsErr(errno))
+	}
+	return nil
+}
+
+// ErrThreadSealUnsupported means the binary links cgo, so the runtime cannot
+// apply a per-thread seal to every thread and the worker must not start.
+var ErrThreadSealUnsupported = errors.New("isolation: per-thread seals need every OS thread; rebuild dbx-server with CGO_ENABLED=0")
+
+func allThreadsErr(errno syscall.Errno) error {
+	if errno == syscall.ENOTSUP {
+		return ErrThreadSealUnsupported
+	}
+	return errno
 }
 
 const unixPRSetNoNewPrivs = 38

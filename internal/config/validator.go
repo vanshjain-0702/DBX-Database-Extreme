@@ -2,6 +2,9 @@ package config
 
 import "fmt"
 
+// MinReplicationTokenLength is the shortest accepted replication.token.
+const MinReplicationTokenLength = 32
+
 // Validate checks the config for semantic errors.
 func Validate(cfg *Config) error {
 	if cfg.Server.Port <= 0 || cfg.Server.Port > 65535 {
@@ -56,6 +59,9 @@ func Validate(cfg *Config) error {
 		if cfg.Replication.PrimaryAddr == "" {
 			return fmt.Errorf("config: primary_addr is required for replica role")
 		}
+	}
+	if cfg.Replication.Role != "" && len(cfg.Replication.Token) < MinReplicationTokenLength {
+		return fmt.Errorf("config: replication.token of at least %d characters is required for role %s; an unauthenticated replication listener streams the whole WAL to any local process", MinReplicationTokenLength, cfg.Replication.Role)
 	}
 	if cfg.Cluster.Enabled {
 		return fmt.Errorf("config: cluster mode is not supported by the single-node v1 profile")

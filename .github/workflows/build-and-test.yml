@@ -56,6 +56,8 @@ jobs:
           fi
 
       - name: Build server
+        env:
+          CGO_ENABLED: "0"
         run: go build -o bin/dbx-server ./cmd/dbx-server
 
       - name: Build orchestrator
@@ -87,6 +89,10 @@ jobs:
         run: python3 scripts/ci/check-coverage.py
       - name: Density isolation
         run: go test -count=1 -timeout 3m ./internal/engine/ ./internal/query/ ./internal/security/ ./internal/auth/ ./internal/orchestrator/ -run 'Density|NoisyNeighbor|Quota|BackupRestore|Hibernate|TenantUsage|ReaderCannot|EnforceReader|MetricsAuthorized'
+      - name: Worker seals without cgo
+        env:
+          CGO_ENABLED: "0"
+        run: go test -count=1 -timeout 5m -v ./internal/isolation/ ./internal/replication/ ./internal/orchestrator/ -run 'LockDown|Restrict|NetworkFilter|Strict|Handshake|Unauthenticated|WrongToken|Impostor|WithoutToken|Encrypted|Tampered|Replayed|SessionKeys'
       - name: Vector smoke harness
         run: |
           set -euo pipefail

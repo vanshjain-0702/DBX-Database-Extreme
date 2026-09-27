@@ -2,7 +2,6 @@ import os
 import sys
 import uuid
 import time
-import math
 
 sys.path.append(os.path.join(os.path.dirname(__file__), 'sdk', 'python'))
 from dbx import ControlPlane, DBXClient

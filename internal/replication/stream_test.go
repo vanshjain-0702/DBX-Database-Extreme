@@ -1,6 +1,7 @@
 package replication
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"net"
@@ -34,14 +35,14 @@ func TestPrimaryAndReplicaStreamBootstrapWAL(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	primary := NewPrimaryStream()
+	primary := NewPrimaryStream(testReplToken)
 	if err := primary.Start("127.0.0.1:0", wal); err != nil {
 		t.Fatal(err)
 	}
 	defer primary.Stop()
 
 	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, 1)}
-	replica := NewReplicaStream(primary.Addr(), engine)
+	replica := NewReplicaStream(primary.Addr(), testReplToken, engine)
 	replica.Start()
 	defer replica.Stop()
 
@@ -69,14 +70,14 @@ func TestReplicaBootstrapsUnflushedEverysecWrites(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	primary := NewPrimaryStream()
+	primary := NewPrimaryStream(testReplToken)
 	if err := primary.Start("127.0.0.1:0", wal); err != nil {
 		t.Fatal(err)
 	}
 	defer primary.Stop()
 
 	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, 1)}
-	replica := NewReplicaStream(primary.Addr(), engine)
+	replica := NewReplicaStream(primary.Addr(), testReplToken, engine)
 	replica.Start()
 	defer replica.Stop()
 
@@ -90,17 +91,33 @@ func TestReplicaBootstrapsUnflushedEverysecWrites(t *testing.T) {
 	}
 }
 
+func testSessionPair(t *testing.T) (*frameCipher, *frameCipher) {
+	t.Helper()
+	replicaNonce := bytes.Repeat([]byte{7}, handshakeNonce)
+	primaryNonce := bytes.Repeat([]byte{9}, handshakeNonce)
+	sealer, err := sessionCipher(testReplToken, replicaNonce, primaryNonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opener, err := sessionCipher(testReplToken, replicaNonce, primaryNonce)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sealer, opener
+}
+
 func TestReplicaStreamRejectsOversizedFrame(t *testing.T) {
 	server, client := net.Pipe()
-	rs := NewReplicaStream("", testReplicaEngine{})
+	rs := NewReplicaStream("", testReplToken, testReplicaEngine{})
+	_, opener := testSessionPair(t)
 	done := make(chan struct{})
 	go func() {
-		rs.consumeStream(server)
+		rs.consumeStream(server, opener)
 		close(done)
 	}()
 
 	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], maxReplicationFrameSize+1)
+	binary.BigEndian.PutUint32(header[:], maxSealedFrameSize+1)
 	if _, err := client.Write(header[:]); err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +130,59 @@ func TestReplicaStreamRejectsOversizedFrame(t *testing.T) {
 	server.Close()
 }
 
+// consumeFrames feeds sealed frames to a replica and returns the records it
+// applied before it dropped the connection.
+func consumeFrames(t *testing.T, opener *frameCipher, frames ...[]byte) []*persistence.WALRecord {
+	t.Helper()
+	server, client := net.Pipe()
+	defer client.Close()
+	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, len(frames))}
+	rs := NewReplicaStream("", testReplToken, engine)
+	done := make(chan struct{})
+	go func() {
+		rs.consumeStream(server, opener)
+		server.Close()
+		close(done)
+	}()
+	for _, frame := range frames {
+		if err := writeFrame(client, frame); err != nil {
+			break
+		}
+	}
+	client.Close()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("replica did not stop consuming")
+	}
+	close(engine.records)
+	var applied []*persistence.WALRecord
+	for rec := range engine.records {
+		applied = append(applied, rec)
+	}
+	return applied
+}
+
+func TestReplicaRejectsTamperedFrame(t *testing.T) {
+	sealer, opener := testSessionPair(t)
+	frame := sealer.seal(persistence.EncodeRecord(&persistence.WALRecord{Type: persistence.RecordSet, Key: "k", Value: []byte("v")}))
+	frame[len(frame)/2] ^= 0x01
+	if applied := consumeFrames(t, opener, frame); len(applied) != 0 {
+		t.Fatalf("replica applied a tampered frame: %#v", applied[0])
+	}
+}
+
+func TestReplicaRejectsReplayedFrame(t *testing.T) {
+	sealer, opener := testSessionPair(t)
+	frame := sealer.seal(persistence.EncodeRecord(&persistence.WALRecord{Type: persistence.RecordSet, Key: "k", Value: []byte("v")}))
+	applied := consumeFrames(t, opener, frame, frame)
+	if len(applied) != 1 {
+		t.Fatalf("replica applied %d records from one frame sent twice, want 1", len(applied))
+	}
+}
+
 func TestReplicaStreamStopIsIdempotent(t *testing.T) {
-	rs := NewReplicaStream("", testReplicaEngine{})
+	rs := NewReplicaStream("", testReplToken, testReplicaEngine{})
 	rs.Stop()
 	rs.Stop()
 }
@@ -126,7 +194,7 @@ func TestPrimaryStreamsLiveEverysecWrites(t *testing.T) {
 	}
 	defer wal.Close()
 
-	primary := NewPrimaryStream()
+	primary := NewPrimaryStream(testReplToken)
 	if err := primary.Start("127.0.0.1:0", wal); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +202,7 @@ func TestPrimaryStreamsLiveEverysecWrites(t *testing.T) {
 	wal.Subscribe(primary.BroadcastRecord)
 
 	engine := &collectingReplicaEngine{records: make(chan *persistence.WALRecord, 4)}
-	replica := NewReplicaStream(primary.Addr(), engine)
+	replica := NewReplicaStream(primary.Addr(), testReplToken, engine)
 	replica.Start()
 	defer replica.Stop()
 

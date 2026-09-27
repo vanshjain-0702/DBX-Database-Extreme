@@ -40,18 +40,29 @@ macOS or Windows as Landlock-isolated.
 
 1. **Process.** The orchestrator `exec`s `dbx-server` per tenant. A panic or
    memory blow-up is one worker. Tenants do not share a Go heap.
-2. **Filesystem.** After bind, the worker calls Landlock so it cannot **open**
-   paths outside its tenant directory, except read-only `/proc` and `/etc` and
-   read/write `/dev` (the Go runtime and timezone data need them). Reading a
-   sibling `$DATA/tenants/{other}/...` is denied by the kernel. Each worker also
-   gets its own control token, so it cannot authenticate to a neighbour's
-   control endpoints.
+2. **Filesystem and network.** After bind, the worker calls Landlock so it
+   cannot **open** paths outside its tenant directory, except read-only `/proc`
+   and `/etc` and read/write `/dev` (the Go runtime and timezone data need
+   them). Reading a sibling `$DATA/tenants/{other}/...` is denied by the kernel.
+   Landlock and `no_new_privs` are per-thread, so they are applied to **every**
+   OS thread of the worker with `AllThreadsSyscall`; that is why `dbx-server`
+   must be built with `CGO_ENABLED=0` (a cgo build refuses to seal and exits).
+   A seccomp filter, synchronized to all threads, then allows `socket()` only
+   for `AF_UNIX`, blocks `io_uring_setup`, and kills foreign-ABI (i386/x32)
+   syscalls, so a compromised worker cannot open TCP, UDP, raw, or netlink
+   sockets. On ABI 4+ kernels Landlock also denies TCP bind/connect. The worker
+   is marked non-dumpable (`PR_SET_DUMPABLE=0`), so a sibling worker with the
+   same uid cannot read its `/proc/<pid>/mem`, `environ`, or fds, or ptrace it.
+   Each worker also gets its own control token, so it cannot authenticate to a
+   neighbour's control endpoints.
 3. **Memory.** The orchestrator places the worker in a cgroup v2 with
    `memory.max` equal to the tenant quota **when the host delegates cgroup
    writes**. Most containers do not: expect
    `cgroup mkdir: permission denied`, which is logged and non-fatal. Treat the
    cgroup as a bonus on bare metal and the application quota plus
-   `DBX_NODE_MEMORY_BUDGET` as the real limit.
+   `DBX_NODE_MEMORY_BUDGET` as the real limit. Every worker also starts with
+   `GOMEMLIMIT` at 90% of its quota, so the Go garbage collector returns memory
+   under pressure instead of growing the heap until the kernel OOM-kills it.
 4. **Crypto.** Each tenant has a 256-bit DEK, wrapped by `DBX_KEK` (also
    256-bit, hex). WAL frames, snapshots, `.vec.meta` (ids and tombstones), and
    `.hnsw` (the graph) are AES-256-GCM. The worker receives only its DEK on
@@ -66,7 +77,19 @@ macOS or Windows as Landlock-isolated.
    credentials plus POSIX permissions are the correct same-host control, and
    loopback TLS handshakes are a measured cost. Replication uses
    `isolation.DialTimeout` so Unix-socket replicas get the same 1-second
-   connect timeout as TCP replicas.
+   connect timeout as TCP replicas. A replica worker is a different PID than
+   the orchestrator, so the replication socket is authenticated instead: before
+   the primary sends a single WAL byte, both sides prove possession of a
+   per-group key with a mutual HMAC-SHA256 challenge-response over fresh
+   nonces. The key is derived from a node secret (`replication.key`, mode
+   `0600`, beside `state.json` and outside every tenant directory, so Landlock
+   hides it from workers). A peer without the key gets nothing, and a replica
+   refuses to apply records from a primary that cannot prove the key. Both
+   sides then derive a session key from the group key and both nonces, and
+   every WAL frame is AES-256-GCM with a frame-counter nonce. The bytes on the
+   socket are ciphertext, each connection has its own key, and a tampered,
+   replayed, dropped, or reordered frame fails to open, so the replica
+   disconnects and re-bootstraps.
 
 ## Implementation notes
 
@@ -80,6 +103,11 @@ macOS or Windows as Landlock-isolated.
 - **Worker HTTP timeout.** The Unix-socket HTTP client for worker control
   endpoints has a 2-minute timeout so large-tenant backup downloads do not
   time out.
+- **Time travel cost.** `AS_OF` replays one key's WAL history into scratch
+  space under the tenant directory (`.timetravel`, the only place Landlock lets
+  a worker write). WAL frames are written in sequence order, so the scan stops
+  at the first record after the requested time: a query about the past reads
+  only the log up to that point and holds only that key's history in memory.
 - **Per-worker tokens.** Each sandboxed worker receives a unique
   `DBX_INTERNAL_API_TOKEN` at spawn. The HTTP proxy resolves it per request so
   a worker restart does not leave the cached proxy holding a stale credential.
@@ -99,16 +127,22 @@ Read this section before repeating any of the claims above.
   no index. DBX does not encrypt SQ8 rows in-process.
 - **Landlock governs file opens, not sockets or metadata.** ABI 1–3 has no right
   covering `connect()` to an existing Unix socket, and `stat()` on a sibling
-  path still succeeds. Cross-tenant socket access is stopped by `SO_PEERCRED`
-  and file mode, not by Landlock. The replication socket has no peer-PID check
-  because a replica worker is a different PID than the orchestrator.
-- **There is no network restriction.** A worker can still open outbound TCP.
-  Landlock ABI 4 network rules are not used.
-- **Data in use is plaintext in the worker.** A debugger on that PID, root, or a
-  kernel that ignores Landlock can read it.
+  path still succeeds. Cross-tenant socket access is stopped by `SO_PEERCRED`,
+  file mode, and (for replication) the HMAC handshake, not by Landlock.
+- **The network seal is outbound-only and architecture-specific.** Listeners
+  bound before lockdown keep working; the seccomp filter exists for
+  linux/amd64 and linux/arm64, and `strict` refuses to start elsewhere.
+- **Replication is same-host.** The stream is authenticated and encrypted, but
+  it runs over a `0600` Unix socket between workers on one node. There is no
+  cross-host replication, sharding, or failover between machines; the key is a
+  pre-shared node secret, so there is no forward secrecy if `replication.key`
+  leaks.
+- **Data in use is plaintext in the worker.** Root with `CAP_SYS_PTRACE`, or a
+  kernel that ignores Landlock and seccomp, can read it. Non-dumpable stops a
+  same-uid sibling, not root.
 - **User namespaces are not applied.** Workers run as the orchestrator uid.
-  Landlock and peer-PID checks are what stop a sibling worker, not a different
-  uid.
+  Landlock, seccomp, non-dumpable, and peer-PID checks are what stop a sibling
+  worker, not a different uid.
 - **Density is process-bound under `strict`.** The published 100 tenants/node
   figure was measured in-process (shared Go runtime, idle data in page cache).
   Re-measured on Linux 6.12 with Landlock: a freshly started idle worker is
@@ -128,7 +162,9 @@ Read this section before repeating any of the claims above.
 - Set `DBX_KEK` to 64 hex characters before enabling `standard` or `strict`.
   Missing KEK is a boot failure, not a silent plaintext fallback.
 - Keep `dbx-server` next to `dbx-orchestrator` (Docker image does this;
-  `DBX_SERVER_BIN` overrides).
+  `DBX_SERVER_BIN` overrides). Build it with `CGO_ENABLED=0`.
+- Standalone primary/replica configs must set `replication.token` (32+
+  characters, identical on both sides). The orchestrator derives these itself.
 - Public TLS is unchanged: do not run `-insecure-http` in production.
 - For embedding confidentiality, put `DBX_DATA_DIR` on LUKS or fscrypt.
   Set `DBX_REQUIRE_DISK_ENCRYPTION=1` to refuse boot on a plaintext volume.

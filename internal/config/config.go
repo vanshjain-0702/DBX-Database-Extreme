@@ -58,9 +58,12 @@ type PersistenceConfig struct {
 
 // ReplicationConfig holds replication topology settings.
 type ReplicationConfig struct {
-	Role         string        `yaml:"role"` // "primary" or "replica"
-	ListenAddr   string        `yaml:"listen_addr"`
-	PrimaryAddr  string        `yaml:"primary_addr"`
+	Role        string `yaml:"role"` // "primary" or "replica"
+	ListenAddr  string `yaml:"listen_addr"`
+	PrimaryAddr string `yaml:"primary_addr"`
+	// Token is the shared key a replica must prove it holds before the
+	// primary streams any WAL record. Required for primary and replica roles.
+	Token        string        `yaml:"token"`
 	Replicas     []string      `yaml:"replicas"`
 	Quorum       int           `yaml:"quorum"`
 	SyncTimeout  time.Duration `yaml:"sync_timeout"`

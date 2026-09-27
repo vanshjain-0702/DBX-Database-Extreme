@@ -36,6 +36,9 @@ func sealedTestConfig(t *testing.T, dir, role, listen, primaryAddr string) *conf
 	cfg.Replication.Role = role
 	cfg.Replication.ListenAddr = listen
 	cfg.Replication.PrimaryAddr = primaryAddr
+	if role != "" {
+		cfg.Replication.Token = testReplicationToken
+	}
 	cfg.Replication.RaftEnabled = false
 	cfg.Observability.Logging.Level = "error"
 	if err := config.Validate(cfg); err != nil {
