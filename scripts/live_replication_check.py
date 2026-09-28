@@ -12,6 +12,7 @@ sys.path.append(
 from dbx import ControlPlane, DBXClient  # noqa: E402
 
 N = 300
+NO_TCP_LISTENER = "no TCP listener (replication runs on a 0600 Unix socket)"
 
 
 def wait_ping(client):
@@ -78,14 +79,11 @@ if rport:
     ):
         leaked = sniff(rport, payload)
         if leaked is None:
-            print(
-                f"attacker [{label}]: no TCP listener (replication runs on a 0600 Unix socket)"
-            )
+            print(f"attacker [{label}]: {NO_TCP_LISTENER}")
             continue
         bad = b"privileged-contract" in leaked or len(leaked) > 0
-        print(
-            f"attacker [{label}]: received {len(leaked)} bytes -> {'LEAK' if bad else 'nothing (blocked)'}"
-        )
+        verdict = "LEAK" if bad else "nothing (blocked)"
+        print(f"attacker [{label}]: received {len(leaked)} bytes -> {verdict}")
         ok &= not bad
 else:
     print("no TCP replication port exposed (Unix socket mode)")
