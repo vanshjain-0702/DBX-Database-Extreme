@@ -34,9 +34,7 @@ def test_firm_store_register_login_clients() -> None:
         user = store.user_for_token(token)
         assert user is not None
         assert user["email"] == "a@firm.test"
-        client = store.add_client(
-            "a@firm.test", "Atlas", "la-atlas", "kid", "secret"
-        )
+        client = store.add_client("a@firm.test", "Atlas", "la-atlas", "kid", "secret")
         listed = store.list_clients("a@firm.test")
         assert len(listed) == 1
         assert listed[0]["tenant_id"] == "la-atlas"

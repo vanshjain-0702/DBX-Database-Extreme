@@ -151,7 +151,10 @@ def main() -> None:
         )
 
         exported = bridge.export_client(atlas_creds["tenant_id"])
-        _assert("path" in exported or "status" in exported or bool(exported), "Atlas export returned")
+        _assert(
+            "path" in exported or "status" in exported or bool(exported),
+            "Atlas export returned",
+        )
         print("export:", exported)
 
         # Purge both tenants (delete my data = one tenant)

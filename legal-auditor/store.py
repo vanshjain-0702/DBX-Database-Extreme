@@ -139,7 +139,9 @@ class FirmStore:
                 return None
             return dict(c)
 
-    def remove_client(self, owner_email: str, client_id: str) -> Optional[Dict[str, Any]]:
+    def remove_client(
+        self, owner_email: str, client_id: str
+    ) -> Optional[Dict[str, Any]]:
         with self._lock:
             c = self._data["clients"].get(client_id)
             if not c or c["owner_email"] != owner_email:

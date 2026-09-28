@@ -164,7 +164,9 @@ def audit(
 
 
 @app.get("/api/clients/{client_id}/usage")
-def usage(client_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+def usage(
+    client_id: str, user: Dict[str, Any] = Depends(current_user)
+) -> Dict[str, Any]:
     client = store.get_client(user["email"], client_id)
     if not client:
         raise HTTPException(status_code=404, detail="client not found")
@@ -201,7 +203,9 @@ def hibernate(
 
 
 @app.post("/api/clients/{client_id}/wake")
-def wake(client_id: str, user: Dict[str, Any] = Depends(current_user)) -> Dict[str, Any]:
+def wake(
+    client_id: str, user: Dict[str, Any] = Depends(current_user)
+) -> Dict[str, Any]:
     client = store.get_client(user["email"], client_id)
     if not client:
         raise HTTPException(status_code=404, detail="client not found")

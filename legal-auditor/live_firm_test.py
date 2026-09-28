@@ -138,9 +138,7 @@ def main() -> int:
 
         firm_ok = True
         for name, doc_name, text in firm["clients"]:
-            code, created = req(
-                "POST", "/api/clients", {"name": name}, token=token
-            )
+            code, created = req("POST", "/api/clients", {"name": name}, token=token)
             if code >= 400:
                 print(f"   create client {name}: FAIL HTTP {code} {created}")
                 firm_ok = False

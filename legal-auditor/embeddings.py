@@ -13,7 +13,6 @@ import os
 import struct
 from typing import List
 
-
 DEFAULT_DIM = 64
 
 
@@ -65,9 +64,7 @@ def _openai_embed(texts: List[str], dim: int = DEFAULT_DIM) -> List[List[float]]
     try:
         from openai import OpenAI  # type: ignore
     except ImportError as exc:
-        raise RuntimeError(
-            "EMBEDDING_MODE=openai requires the openai package"
-        ) from exc
+        raise RuntimeError("EMBEDDING_MODE=openai requires the openai package") from exc
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise RuntimeError("OPENAI_API_KEY is required when EMBEDDING_MODE=openai")

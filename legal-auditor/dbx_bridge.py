@@ -121,8 +121,7 @@ class DBXBridge:
         vector = embed_query(query, dim=DEFAULT_DIM)
         hits = mem.recall(vector, top_k=top_k)
         return [
-            {"id": doc_id, "text": text, "score": score}
-            for doc_id, text, score in hits
+            {"id": doc_id, "text": text, "score": score} for doc_id, text, score in hits
         ]
 
     def export_client(self, tenant_id: str) -> Dict[str, Any]:
