@@ -6,7 +6,7 @@ import random
 import uuid
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "sdk", "python"))
-from dbx import ControlPlane, DBXClient
+from dbx import ControlPlane, DBXClient  # noqa: E402
 
 NUM_WORKERS = 20
 OPS_PER_WORKER = 500

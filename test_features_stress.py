@@ -5,7 +5,7 @@ import time
 import uuid
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "sdk", "python"))
-from dbx import ControlPlane, DBXClient
+from dbx import ControlPlane, DBXClient  # noqa: E402
 
 
 def run_migration_stress(plane, worker_id):

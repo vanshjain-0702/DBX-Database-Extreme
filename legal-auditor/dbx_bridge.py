@@ -15,7 +15,7 @@ if _SDK.is_dir() and str(_SDK) not in sys.path:
 
 from dbx import ControlPlane, DBXClient, DBXError, TenantMemory  # noqa: E402
 
-from embeddings import DEFAULT_DIM, chunk_text, embed_query, embed_texts
+from embeddings import DEFAULT_DIM, chunk_text, embed_query, embed_texts  # noqa: E402
 
 INDEX = "legal_docs"
 

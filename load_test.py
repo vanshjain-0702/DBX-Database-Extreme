@@ -9,7 +9,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "sdk", "python"))
 
-from dbx import DBXClient, ControlPlane
+from dbx import DBXClient, ControlPlane  # noqa: E402
 
 
 def load_test_client(client_id, num_strings=250000, num_vectors=25000, dim=128):
@@ -53,7 +53,7 @@ def load_test_client(client_id, num_strings=250000, num_vectors=25000, dim=128):
     # 4. Insert Hash Strings
     print(f"[{client_id}] Inserting {num_strings} strings...")
     start_time = time.time()
-    # To speed up, we can use pipeline if it's supported, but the dbx.py client doesn't expose pipeline.
+    # A pipeline would be faster, but the dbx.py client doesn't expose one.
     # We will just do sets. Wait, 250k sets might take a few minutes.
     # Let's do it in smaller batches or just sequential.
     for i in range(num_strings):

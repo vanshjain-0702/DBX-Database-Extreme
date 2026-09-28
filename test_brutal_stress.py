@@ -8,7 +8,7 @@ import statistics
 from collections import Counter
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "sdk", "python"))
-from dbx import ControlPlane, DBXClient
+from dbx import ControlPlane, DBXClient  # noqa: E402
 
 NUM_WORKERS = 50
 OPS_PER_WORKER = 500
