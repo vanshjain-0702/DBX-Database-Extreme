@@ -207,6 +207,21 @@ func main() {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+
+		// Wait for the primary tenant to become ready
+		client := &http.Client{Timeout: 500 * time.Millisecond}
+		for i := 0; i < 20; i++ {
+			resp, err := client.Get(fmt.Sprintf("http://localhost:%d/health", t.HTTPPort))
+			if err == nil && resp.StatusCode == http.StatusOK {
+				resp.Body.Close()
+				break
+			}
+			if resp != nil {
+				resp.Body.Close()
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+
 		json.NewEncoder(w).Encode(t)
 	})
 

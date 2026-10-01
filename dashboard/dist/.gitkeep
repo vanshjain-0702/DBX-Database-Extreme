@@ -1,0 +1,1 @@
+# Keep dist present so //go:embed all:dist compiles before Vite runs.

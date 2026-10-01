@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DBX — Database product deck</title>
+  <meta name="description" content="DBX database product overview: tenant-first architecture, database features, operations, and measured performance.">
+  <meta name="theme-color" content="#071522">
+  <link rel="icon" href="assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/pitch.css">
+  <link rel="stylesheet" href="assets/dbx-pitch.css">
+</head>
+<body>
+  <main class="stage">
+    <div class="deck" role="region" aria-label="DBX database product deck">
+      <section class="slide is-on cover" data-notes="DBX is a database for software that needs separate memory for every customer. This deck covers its tenant model, database features, operating experience, measured performance, and current boundaries.">
+        <div class="cover-grid">
+          <div class="cover-copy">
+            <div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">Product overview · v1.2.0</span></div></div>
+            <p class="kicker">A database for multi-tenant products</p>
+            <h1>Every customer<br>gets a <em>database.</em></h1>
+            <p class="lede">Durable application state and vector memory, organized around the tenant boundary and operated from one self-hosted product.</p>
+            <div class="cover-meta"><span>01 <b>Tenant-first</b></span><span>02 <b>KV + vectors</b></span><span>03 <b>Self-hosted</b></span></div>
+          </div>
+          <figure class="shot hero-shot"><div class="shot-bar"><i></i><i></i><i></i><span>dbx · product experience</span></div><img src="assets/product/marketing-home.png" alt="DBX database product website home page"><figcaption>Database, operator experience, and deployment in one DBX product</figcaption></figure>
+        </div>
+        <div class="slide-index"><span>DBX / DATABASE</span><span>PRODUCT BRIEF</span></div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>01 / 12</span></div>
+      </section>
+
+      <section class="slide problem-slide" data-notes="The design problem is the boundary: applications often encode tenant identity in keys and then repeat that choice in backup, restore, and access-control code. DBX makes the tenant the storage and lifecycle unit.">
+        <div class="eyebrow-row"><p class="kicker">01 / THE PROBLEM</p><span class="side-label">MULTI-TENANT MEMORY</span></div>
+        <h2>Tenant separation is easy to get wrong.</h2>
+        <p class="lede">When customer boundaries live in application conventions, every workflow must remember them.</p>
+        <div class="problem-points" aria-label="Three common sources of tenant-boundary risk">
+          <article class="problem-point"><span class="problem-number">01</span><h3>Keys carry identity</h3><p>Tenant IDs are repeated in key prefixes and query paths.</p></article>
+          <article class="problem-point"><span class="problem-number">02</span><h3>Access checks repeat</h3><p>Each service must apply the right customer scope.</p></article>
+          <article class="problem-point"><span class="problem-number">03</span><h3>Lifecycle fragments</h3><p>Backup and deletion span scripts and storage conventions.</p></article>
+        </div>
+        <p class="problem-thesis"><span>DBX DESIGN CHOICE</span><strong>Make the tenant the database boundary.</strong></p>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>02 / 12</span></div>
+      </section>
+
+      <section class="slide light architecture-slide" data-notes="Requests enter over RESP or the HTTP control API. The control plane authenticates and routes work to the tenant engine. Tenant engines carry their own KV state, WAL, snapshots, vector rows, and HNSW index.">
+        <div class="eyebrow-row"><p class="kicker">02 / ARCHITECTURE</p><span class="side-label">ONE NODE · TENANT-SCOPED ENGINES</span></div>
+        <h2>One ingress. <em>Independent tenant engines.</em></h2>
+        <p class="lede">Authenticate once, then route each request to its tenant-scoped data engine.</p>
+        <div class="architecture-flow" aria-label="Application client flows through authenticated ingress to independent tenant engines">
+          <div class="flow-node app-node"><span class="flow-step">01</span><span class="flow-caption">APPLICATION</span><strong>Client</strong><p>RESP or HTTP API</p></div>
+          <div class="flow-arrow" aria-hidden="true"><span></span></div>
+          <div class="flow-node ingress-node"><span class="flow-step">02</span><span class="flow-caption">CONTROL PLANE</span><strong>Authenticated<br>ingress</strong><p>Identity · route</p></div>
+          <div class="flow-arrow" aria-hidden="true"><span></span></div>
+          <div class="engine-stack"><div class="engine-stack-head"><span class="flow-step">03</span><strong>Independent tenant engines</strong></div>
+            <div class="engine-card"><strong>Tenant A</strong><span>KV + TTL</span><span>WAL + snapshots</span><span>Vector index</span></div>
+            <div class="engine-card"><strong>Tenant B</strong><span>KV + TTL</span><span>WAL + snapshots</span><span>Vector index</span></div>
+            <div class="engine-card"><strong>Tenant C</strong><span>KV + TTL</span><span>WAL + snapshots</span><span>Vector index</span></div>
+          </div>
+        </div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>03 / 12</span></div>
+      </section>
+
+      <section class="slide" data-notes="These operations are available in the current release. DBX stores and searches embeddings supplied by the application; it does not run an embedding or multimodal model.">
+        <div class="eyebrow-row"><p class="kicker">03 / DATABASE FEATURES</p><span class="side-label">ONE TENANT · TWO DATA MODES</span></div>
+        <h2>Working state and semantic recall,<br>inside one tenant boundary.</h2>
+        <div class="feature-split">
+          <div class="feature-column kv-column"><div class="feature-mark">01 <span>STATE</span></div><h3>Key-value store</h3><p>Application state that is quick to read, update, and expire.</p><ul class="feature-list"><li>RESP-compatible strings</li><li>TTL, counters, and persistence</li><li>Redis client libraries: Python, Node, Go</li></ul><div class="feature-code">SET session:42 "active" EX 1800</div></div>
+          <div class="feature-divider"><span>ONE ENGINE</span><b>+</b></div>
+          <div class="feature-column vec-column"><div class="feature-mark">02 <span>RECALL</span></div><h3>Vector search</h3><p>Caller-provided embeddings indexed for approximate nearest-neighbor retrieval.</p><ul class="feature-list"><li>Sharded HNSW + SQ8 storage</li><li><code>VSEARCH</code> and <code>VSIM</code></li><li>Weighted vector fusion with <code>VFUSE</code></li></ul><div class="feature-code">VSEARCH docs query top_k 10</div></div>
+        </div>
+        <p class="bottom-note">Embeddings come from the caller. DBX does not run embedding, image, or multimodal models.</p>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>04 / 12</span></div>
+      </section>
+
+      <section class="slide playground-slide" data-notes="The vector playground is an operator view of the same retrieval surface available to applications. It shows semantic, similar-to-id, and multimodal controls, but DBX does not create embeddings or run the selected model.">
+        <div class="eyebrow-row"><p class="kicker">04 / DEVELOPER EXPERIENCE</p><span class="side-label">QUERY · INSPECT · TUNE</span></div>
+        <div class="split-heading"><div><h2>Explore vector retrieval<br>before wiring an app.</h2><p class="lede">Try a tenant index, adjust search controls, and inspect ranked results from one workspace.</p></div><div class="callout-number"><b>VSEARCH</b><span>VSIM · VFUSE</span></div></div>
+        <figure class="shot product-large"><div class="shot-bar"><i></i><i></i><i></i><span>tenant / searchlab / vector playground</span></div><img src="assets/product/playground.png" alt="DBX vector playground showing query controls and ranked results"><figcaption>Vector Playground · query controls and ranked neighbors in the DBX dashboard</figcaption></figure>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>05 / 12</span></div>
+      </section>
+
+      <section class="slide light ops-slide" data-notes="The dashboard is part of the deployment and exposes operator views for metrics, raw commands, and tenant data inspection. These screenshots show the dashboard's populated UI surfaces.">
+        <div class="eyebrow-row"><p class="kicker">05 / OPERATOR EXPERIENCE</p><span class="side-label">BUILT-IN DASHBOARD</span></div>
+        <h2>From live health to raw data,<br>without leaving the product.</h2>
+        <div class="ops-layout">
+          <figure class="shot ops-main"><div class="shot-bar"><i></i><i></i><i></i><span>DBX / tenant / overview</span></div><img src="assets/product/overview.png" alt="DBX dashboard overview with operation rate, memory, clients, and charts"><figcaption>OVERVIEW · runtime health and key distribution</figcaption></figure>
+          <div class="ops-rail"><figure class="shot"><div class="shot-bar"><i></i><i></i><i></i><span>DBX / tenant / console</span></div><img src="assets/product/console.png" alt="DBX command console with a RESP query and response"><figcaption>CONSOLE · issue RESP commands</figcaption></figure><figure class="shot"><div class="shot-bar"><i></i><i></i><i></i><span>DBX / tenant / explorer</span></div><img src="assets/product/explorer.png" alt="DBX data explorer listing keys and values"><figcaption>DATA EXPLORER · inspect tenant keys</figcaption></figure></div>
+        </div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>06 / 12</span></div>
+      </section>
+
+      <section class="slide" data-notes="Linux strict profile uses a separate worker per tenant with Landlock bounds, per-tenant key material, and Unix-socket peer checks. The vector payload rows are mmap-backed and are not encrypted by DBX. Running workers see plaintext; use encrypted storage where at-rest confidentiality is required.">
+        <div class="eyebrow-row"><p class="kicker">06 / ISOLATION & SECURITY</p><span class="side-label">BOUNDARIES BY DESIGN</span></div>
+        <h2>Tenant separation reaches the<br>worker and its data lifecycle.</h2>
+        <div class="security-layout">
+          <div class="security-visual"><div class="outer-boundary"><span class="boundary-tag">CONTROL PLANE</span><div class="access-tokens"><span>reader</span><span>writer</span><span>tenant admin</span></div><div class="inner-boundary"><div class="worker-head"><span class="pulse"></span><b>LINUX STRICT WORKER</b><small>tenant-scoped process</small></div><div class="worker-items"><div>Landlock filesystem bounds</div><div>Per-tenant keys · WAL + metadata + graph</div><div>Unix-socket peer credentials</div></div></div></div><div class="visual-caption">ISOLATION PROFILE / LINUX</div></div>
+          <div class="security-copy"><div class="security-stat"><strong>14–17</strong><span>MiB idle RSS<br>per strict worker</span></div><h3>Clear separation.<br>Honest storage boundary.</h3><p>Scoped roles, quotas, usage APIs, and tenant lifecycle actions are managed through the control plane.</p><div class="honest-note"><b>At-rest detail</b><p>Vector payload rows are mmap-backed and not encrypted by DBX. Use encrypted storage such as LUKS or fscrypt when at-rest confidentiality is required. Data is plaintext inside a running worker.</p></div></div>
+        </div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>07 / 12</span></div>
+      </section>
+
+      <section class="slide" data-notes="Durability and operations are tenant-scoped. Shadow migration builds a replacement index while the current index remains searchable. Time-travel search reconstructs prior state from retained WAL history and costs more than current search. Replication is asynchronous; the primary acknowledges locally.">
+        <div class="eyebrow-row"><p class="kicker">07 / DURABILITY & OPERATIONS</p><span class="side-label">OPERATE ONE CUSTOMER AT A TIME</span></div>
+        <h2>Customer-level operations<br>are built into the data model.</h2>
+        <div class="operations-board">
+          <div class="operation-item"><span class="op-no">01</span><div><h3>Recover</h3><p>Checksummed WAL and checkpoints restore tenant data after restart.</p></div><span class="op-tag">WAL + RECOVERY</span></div>
+          <div class="operation-item"><span class="op-no">02</span><div><h3>Back up</h3><p>Versioned tenant archives carry SHA-256 checksums across KV and vector state.</p></div><span class="op-tag">TENANT ARCHIVE</span></div>
+          <div class="operation-item"><span class="op-no">03</span><div><h3>Change safely</h3><p>Build and promote a replacement vector index while the current index remains searchable.</p></div><span class="op-tag">SHADOW MIGRATION</span></div>
+          <div class="operation-item"><span class="op-no">04</span><div><h3>Investigate</h3><p>Search retained vector state as of a timestamp for retrieval analysis.</p></div><span class="op-tag">TIME-TRAVEL</span></div>
+          <div class="operation-item"><span class="op-no">05</span><div><h3>Replicate</h3><p>Optional WAL replicas receive changes asynchronously; primary writes acknowledge locally.</p></div><span class="op-tag">ASYNC WAL</span></div>
+          <div class="operation-item"><span class="op-no">06</span><div><h3>Observe</h3><p>Console, explorer, playground, tenant keys, and runtime views ship with the deployment.</p></div><span class="op-tag">OPERATOR UI</span></div>
+        </div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>08 / 12</span></div>
+      </section>
+
+      <section class="slide perf-slide" data-notes="Measured 27 August 2026: Windows 10, 18 logical processors, 15.6 GiB RAM. Loopback RESP, one tenant, 64 connections, pipeline 64, 128,000 operations per workload. The results are specific to this host and configuration, not a Linux certification or competitor comparison.">
+        <div class="eyebrow-row"><p class="kicker">08 / MEASURED PERFORMANCE</p><span class="side-label">KEY-VALUE · LOOPBACK RESP</span></div>
+        <div class="perf-head"><h2>Fast key-value operations<br>on a measured host.</h2><span class="host-stamp">CERTIFICATION RUN<br><b>27 AUG 2026</b></span></div>
+        <div class="kv-bench">
+          <div class="throughput-panel"><div class="metric-label">OPERATIONS / SECOND <span>64 connections · pipeline 64</span></div><div class="throughput-row"><label>GET</label><div class="throughput-track"><div class="throughput-fill get-fill"></div></div><strong>284,785</strong></div><div class="throughput-row"><label>SET</label><div class="throughput-track"><div class="throughput-fill set-fill"></div></div><strong>186,147</strong></div><div class="bench-footnote">Relative bar length / maximum observed GET rate</div></div>
+          <div class="bench-context"><div class="context-mark">DBX / KV</div><div class="context-facts"><div><b>128k</b><span>operations per workload</span></div><div><b>1</b><span>tenant · no eviction</span></div><div><b>Every second</b><span>WAL sync setting</span></div></div><p class="condition">Windows 10 · 18 logical processors · 15.6 GiB RAM<br>Loopback RESP · 27 Aug 2026</p></div>
+        </div>
+        <p class="tiny bench-note">Measured on the Windows 10 certification host; this run does not certify Linux performance. Results vary with host, durability settings, workload, and client. Methodology: <code>scripts/benchmarks/performance_analysis.md</code>.</p>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>09 / 12</span></div>
+      </section>
+
+      <section class="slide light vector-slide" data-notes="Vector workload: 100,000 vectors × 128 dimensions, SQ8, eight-way sharded HNSW. Recall was compared with a float32 brute-force baseline. The mean and fifth percentile are both shown to make quality distribution visible. Certification host was Windows 10 with 18 logical processors and 15.6 GiB RAM; Linux CI reruns vector gates, but that host does not certify Linux performance.">
+        <div class="eyebrow-row"><p class="kicker">09 / MEASURED PERFORMANCE</p><span class="side-label">VECTOR INDEX · SQ8 + SHARDED HNSW</span></div>
+        <div class="vector-heading"><div><h2>Latency with recall,<br>on the same slide.</h2><p class="lede">100,000 vectors × 128 dimensions · float32 brute-force recall baseline</p></div><div class="quality-score"><span>RECALL@10 MEAN</span><b>0.920</b><small>p05 · 0.800</small></div></div>
+        <div class="latency-board"><div class="latency-head"><span>SEARCH LATENCY</span><span>LOWER IS FASTER</span></div><div class="latency-line"><span>p50</span><div class="latency-track"><i style="width:61.4%"></i></div><b>2.304 <small>ms</small></b></div><div class="latency-line"><span>p95</span><div class="latency-track"><i style="width:83.5%"></i></div><b>3.132 <small>ms</small></b></div><div class="latency-line"><span>p99</span><div class="latency-track"><i style="width:99.5%"></i></div><b>3.730 <small>ms</small></b></div><div class="ingest-ribbon"><span>VECTOR INGEST</span><b>7,233 / sec</b><span>8-way sharded · SQ8</span></div></div>
+        <p class="tiny bench-note">27 Aug 2026 · Windows 10 · 18 logical processors · 15.6 GiB RAM. Linux CI reruns vector gates; this Windows host does not certify Linux performance. Methodology: <code>scripts/benchmarks/performance_analysis.md</code>.</p>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>10 / 12</span></div>
+      </section>
+
+      <section class="slide deployment-slide" data-notes="The supported current profile is 100 tenants per node and up to 100,000 vectors per tenant. DBX v1 is single-node. It does not claim clustering, cross-node sharding, SQL joins, or billion-vector capacity. Embeddings are supplied by the caller.">
+        <div class="eyebrow-row"><p class="kicker">10 / DEPLOYMENT & CAPACITY</p><span class="side-label">CURRENT SUPPORTED PROFILE</span></div>
+        <div class="deploy-layout"><div class="deploy-copy"><h2>Built for bounded,<br>per-customer working sets.</h2><p class="lede">A self-hosted database with tenant-scoped application state, vector search, and an included operator dashboard.</p><div class="deploy-metrics"><div><b>100</b><span>tenants / node</span></div><div><b>100k</b><span>vectors / tenant</span></div></div><div class="boundary-box"><div class="boundary-title">CURRENT BOUNDARIES</div><p>Single-node v1 · no cluster or cross-node sharding · no SQL joins · no billion-vector claim.</p></div></div><figure class="shot deploy-shot"><div class="shot-bar"><i></i><i></i><i></i><span>dbx / product / features</span></div><img src="assets/product/marketing-features.png" alt="DBX marketing site product features page"><figcaption>DBX product overview · self-hosted database and operator workflow</figcaption></figure></div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>11 / 12</span></div>
+      </section>
+
+      <section class="slide close-slide" data-notes="Close on DBX's product thesis: tenant as the unit of storage and lifecycle. Point to the DBX website and repository for product details, API references, and benchmark methodology.">
+        <div class="close-copy"><div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">DBX · v1.2.0</span></div></div><p class="kicker">A database boundary for every customer</p><h1>One customer.<br>One <em>database.</em></h1><p class="lede">Durable state, vector memory, and tenant-level operations in one self-hosted database.</p><div class="close-links"><a href="https://dbx-database-extreme.com">dbx-database-extreme.com</a><span>github.com/vanshjain-0702/DBX-Database-Extreme</span></div></div>
+        <figure class="shot close-shot"><div class="shot-bar"><i></i><i></i><i></i><span>DBX / operator / overview</span></div><img src="assets/product/overview.png" alt="DBX operator dashboard showing database health and key distribution"><figcaption>Inspect the product, API, and measured benchmark methodology</figcaption></figure>
+        <div class="slide-index"><span>DBX / DATABASE</span><span>END</span></div>
+        <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>12 / 12</span></div>
+      </section>
+    </div>
+    <div class="progress" data-progress></div>
+    <nav class="chrome" aria-label="Deck controls"><button type="button" data-prev aria-label="Previous slide">← Prev</button><span class="counter" data-counter>1 / 12</span><button type="button" data-next aria-label="Next slide">Next →</button><button type="button" data-notes-toggle>Notes</button><button type="button" data-full>Full screen</button><button type="button" data-print>PDF / Print</button></nav>
+    <aside class="notes" aria-live="polite"></aside>
+  </main>
+  <script src="assets/dbx-database-pitch.js"></script>
+</body>
+</html>

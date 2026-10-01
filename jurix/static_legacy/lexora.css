@@ -1,0 +1,422 @@
+/* ═══════════════════════════════════════════════════════════════════
+   JURIX — Lexora (Auditor Dark Mode)
+   Ultra-premium dark theme: Deep Slate (#0B0F19) base
+   Gold/Champagne accents on midnight backgrounds
+   ═══════════════════════════════════════════════════════════════════ */
+
+body.lex-dark {
+  --canvas: #0D1117;
+  --surface: #161B22;
+  --ink: #E6E1D3;
+  --muted: #8B8680;
+  --line: rgba(196, 165, 116, 0.1);
+  --line-strong: rgba(196, 165, 116, 0.18);
+  --hover: rgba(196, 165, 116, 0.05);
+
+  /* Accents stay warm gold/copper */
+  --copper: #D4A06A;
+  --copper-soft: rgba(212, 160, 106, 0.12);
+  --gold: #C4A574;
+  --gold-soft: rgba(196, 165, 116, 0.12);
+  --champagne: rgba(247, 231, 206, 0.08);
+
+  /* Muted risk/status for dark backgrounds */
+  --high: #E06B5E;
+  --high-soft: rgba(224, 107, 94, 0.1);
+  --medium: #E0A84B;
+  --medium-soft: rgba(224, 168, 75, 0.1);
+  --clear: #6BAF7A;
+  --clear-soft: rgba(107, 175, 122, 0.1);
+
+  /* Depth */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 24px 64px rgba(0, 0, 0, 0.4);
+  --glass: rgba(22, 27, 34, 0.88);
+  --glass-border: rgba(196, 165, 116, 0.12);
+
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Surfaces & Panels
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .topbar {
+  background: rgba(13, 17, 23, 0.92);
+-webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+  border-bottom-color: var(--line);
+}
+body.lex-dark .nav {
+  background: var(--surface);
+  border-right-color: var(--line);
+}
+body.lex-dark .surface,
+body.lex-dark .main {
+  background: var(--canvas);
+}
+body.lex-dark .banner {
+  background: var(--high-soft);
+  border-bottom-color: rgba(224, 107, 94, 0.15);
+}
+
+/* ── Navigation ──────────────────────────────────────────────────── */
+body.lex-dark .nav a[aria-current="page"] {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+body.lex-dark .nav a[aria-current="page"]::before {
+  background: var(--gold);
+}
+body.lex-dark .nav a:hover:not([aria-current="page"]) {
+  background: var(--hover);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Buttons
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .btn {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: #0D1117;
+}
+body.lex-dark .btn:hover {
+  background: #D4B88A;
+  box-shadow: 0 4px 20px rgba(196, 165, 116, 0.2);
+}
+body.lex-dark .btn:disabled {
+  background: rgba(196, 165, 116, 0.15);
+  border-color: transparent;
+  color: var(--muted);
+}
+body.lex-dark .btn-quiet {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+body.lex-dark .btn-quiet:hover {
+  background: var(--hover);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+body.lex-dark .btn-danger {
+  background: var(--high);
+  border-color: var(--high);
+  color: #fff;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Seal Badge (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .seal {
+  background: rgba(196, 165, 116, 0.08);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+body.lex-dark .seal:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+body.lex-dark .seal .ring {
+  border-color: var(--gold);
+}
+body.lex-dark .seal .ring::after {
+  background: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Tables
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark th {
+  background: rgba(22, 27, 34, 0.8);
+  color: var(--muted);
+}
+body.lex-dark th, body.lex-dark td {
+  border-bottom-color: var(--line);
+}
+body.lex-dark tbody tr:hover {
+  background: var(--hover);
+}
+body.lex-dark tbody tr[aria-selected="true"] {
+  background: var(--gold-soft);
+}
+body.lex-dark tbody tr[aria-selected="true"] td:first-child {
+  box-shadow: inset 3px 0 0 var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Segments, Inputs & Misc
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .seg {
+  border-color: var(--line-strong);
+}
+body.lex-dark .seg button {
+  background: transparent;
+  color: var(--muted);
+}
+body.lex-dark .seg button[aria-pressed="true"] {
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+body.lex-dark .search input,
+body.lex-dark .g-input,
+body.lex-dark textarea.g-input {
+  background: rgba(22, 27, 34, 0.6);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+body.lex-dark .search input:focus,
+body.lex-dark .g-input:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+body.lex-dark .search kbd {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+body.lex-dark mark {
+  background: linear-gradient(135deg, rgba(196, 165, 116, 0.25), rgba(212, 160, 106, 0.15));
+  color: var(--champagne);
+}
+body.lex-dark .dbx-pill {
+  border-color: var(--line-strong);
+}
+body.lex-dark .dbx-pill.on {
+  color: var(--clear);
+  border-color: var(--clear);
+  background: var(--clear-soft);
+}
+body.lex-dark .dbx-pill.off {
+  color: var(--high);
+  border-color: var(--high);
+  background: var(--high-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Initials avatar (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .initials {
+  border-color: var(--gold);
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+body.lex-dark .user {
+  border-left-color: var(--line);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Cards & Panels
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .card {
+  background: var(--surface);
+  border-color: var(--line);
+}
+body.lex-dark .card:hover {
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  border-color: var(--gold);
+}
+body.lex-dark .divider {
+  background: rgba(196, 165, 116, 0.03);
+  border-color: var(--line);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Evidence (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .evidence {
+  background: linear-gradient(135deg, rgba(22, 27, 34, 0.95), rgba(196, 165, 116, 0.03));
+  border-top-color: var(--line);
+}
+body.lex-dark .ev-quote {
+  color: var(--ink);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Instruments (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .instrument {
+  background: rgba(22, 27, 34, 0.7);
+  border-color: var(--line);
+}
+body.lex-dark .instrument:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-soft);
+}
+body.lex-dark .instrument b {
+  color: var(--ink);
+}
+body.lex-dark .meter {
+  background: rgba(196, 165, 116, 0.08);
+}
+body.lex-dark .meter i {
+  background: linear-gradient(90deg, var(--brass), var(--gold));
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Scenes & Heroes (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .scene {
+  background: rgba(22, 27, 34, 0.8);
+  border-color: var(--line);
+}
+body.lex-dark .scene-copy p {
+  color: var(--ink);
+}
+body.lex-dark .firm-hero {
+  border-color: var(--line);
+}
+body.lex-dark .firm-hero-copy {
+  background: linear-gradient(180deg, rgba(22, 27, 34, 0.96), rgba(13, 17, 23, 0.94));
+}
+body.lex-dark .firm-hero-copy h3 {
+  color: var(--ink);
+}
+body.lex-dark .firm-hero-copy p {
+  color: var(--muted);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Nav portrait (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .nav-portrait {
+  border-color: var(--line);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Counsel (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .counsel {
+  background: rgba(22, 27, 34, 0.94);
+-webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  border-color: var(--line-strong);
+}
+body.lex-dark .counsel header h2 {
+  color: var(--gold);
+}
+body.lex-dark .counsel textarea {
+  background: rgba(13, 17, 23, 0.8);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+body.lex-dark .counsel-turn {
+  border-top-color: var(--line);
+}
+body.lex-dark .counsel-turn blockquote {
+  border-left-color: var(--gold);
+  color: var(--ink);
+}
+body.lex-dark .counsel-prompts button {
+  border-color: var(--line-strong);
+  color: var(--muted);
+}
+body.lex-dark .counsel-prompts button:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Dialogs (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark dialog {
+  background: var(--surface);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+body.lex-dark dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+-webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Toast (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .toast {
+  background: var(--gold);
+  color: #0D1117;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Search popup (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .search-pop {
+  background: var(--surface);
+  border-color: var(--line-strong);
+}
+body.lex-dark .search-pop button {
+  border-bottom-color: var(--line);
+}
+body.lex-dark .search-pop button:hover {
+  background: var(--hover);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Command palette (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .cmd {
+  background: rgba(22, 27, 34, 0.96);
+  border-color: var(--line-strong);
+}
+body.lex-dark .cmd input {
+  color: var(--ink);
+  border-bottom-color: var(--line);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Seal stamp (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .seal-stamp-overlay {
+  background: rgba(0, 0, 0, 0.4);
+}
+body.lex-dark .seal-stamp {
+  background: var(--surface);
+  border-color: var(--gold);
+  box-shadow: 0 0 80px rgba(196, 165, 116, 0.2), var(--shadow-xl);
+}
+body.lex-dark .seal-stamp-text {
+  color: var(--gold);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Scanning bar (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .shell.is-busy .surface::after,
+body.lex-dark #audit.is-scanning::before {
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+body.lex-dark #audit.is-scanning {
+  outline-color: var(--gold-soft);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Body background (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(196, 165, 116, 0.04), transparent 50%),
+    var(--canvas);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Brand (dark)
+   ═══════════════════════════════════════════════════════════════════ */
+body.lex-dark .brand {
+  box-shadow: inset -2px 0 0 var(--gold);
+}
+body.lex-dark .wordmark {
+  color: var(--gold);
+}
+
+/* Smooth transition when toggling dark mode */
+body {
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+body.lex-dark *,
+body.lex-dark *::before,
+body.lex-dark *::after {
+  transition-property: background-color, color, border-color, box-shadow, opacity;
+  transition-duration: 0.3s;
+  transition-timing-function: ease;
+}

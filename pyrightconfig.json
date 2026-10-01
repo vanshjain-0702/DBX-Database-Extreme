@@ -5,7 +5,8 @@
     "**/venv",
     "**/__pycache__",
     "**/.pytest_cache",
-    "**/node_modules"
+    "**/node_modules",
+    "**/*.egg-info"
   ],
   "extraPaths": ["sdk/python"],
   "pythonVersion": "3.10",

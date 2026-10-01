@@ -8,6 +8,8 @@ GitHub Pages origin: [https://vanshjain-0702.github.io/DBX-Database-Extreme/](ht
 
 **Incubation pitch:** [pitch.html](https://dbxdb.co.in/pitch.html) — live 16:9 deck (arrow keys, full screen). How to present: [PITCH.md](PITCH.md).
 
+**DBX database product deck:** [dbx-database-pitch.html](dbx-database-pitch.html) — an 11-slide overview of database architecture, features, operations, and measured performance. [PDF](DBX-Database-Pitch.pdf).
+
 Source for the site is this folder. GitHub Actions deploys it from `main`
 ([Deploy site](../.github/workflows/pages.yml)). Local preview from the repo
 root: `make site` (http://127.0.0.1:8765/).

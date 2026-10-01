@@ -1,0 +1,485 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="JURIX — Premium legal audit platform. Sealed-tenant contract review with clause-level citation, playbook checklists, and AI-powered counsel. Each client is one sealed DBX tenant.">
+<title>JURIX — Legal Audit for Sealed Client Memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&family=Lora:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Public+Sans:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css?v=8">
+<link rel="stylesheet" href="studio.css?v=8">
+<link rel="stylesheet" href="motion.css?v=8">
+<link rel="stylesheet" href="lexora.css?v=8">
+<link rel="stylesheet" href="enhance.css?v=9">
+</head>
+<body>
+<div id="gate">
+  <section class="g-screen g-load" id="g-load" aria-label="JURIX is starting">
+    <canvas id="seal-canvas" aria-hidden="true"></canvas>
+    <div class="g-load-copy">
+      <h1 class="g-word">JURIX</h1>
+      <p class="g-load-line">Legal audit for sealed client memory.</p>
+      <p class="muted">Click or press Enter</p>
+      <div class="g-powered">
+        <span>Powered by</span>
+        <img src="/assets/logo.jpg" alt="DBX" width="36" height="36">
+        <span>Each client is one sealed tenant.</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="g-screen g-home" id="g-home" hidden>
+    <header class="g-bar">
+      <div class="g-bar-in">
+        <a class="g-logo" href="#home" data-go="home">JURIX</a>
+        <nav class="g-links" aria-label="Product">
+          <button type="button" data-sheet="sealed">Matters</button>
+          <button type="button" data-sheet="checklist">Checklists</button>
+          <button type="button" data-sheet="memo">Exports</button>
+        </nav>
+        <div class="g-bar-act"><button class="btn" type="button" data-go="login">Sign in</button></div>
+      </div>
+    </header>
+    <div class="g-wrap g-stage">
+      <div class="g-bento-hero">
+        <div class="g-bento-floating-pill">
+          <span class="dbx-pulse"></span> DBX V-Engine: 2.98ms UDS
+        </div>
+        <div class="g-bento-main">
+          <p class="g-eyebrow">Legal audit</p>
+          <h1 class="g-h1" id="g-home-h">Every client, <em>a sealed matter.</em></h1>
+          <p class="g-lede reveal-line">One client. One DBX tenant. The bench returns the clause and the citation.</p>
+          <div class="g-actions">
+            <button class="btn" type="button" data-go="login">Sign in</button>
+          </div>
+        </div>
+        <div class="g-bento-img g-img-1">
+          <img src="img/chambers.jpg" alt="Law library in chambers">
+        </div>
+        <div class="g-bento-img g-img-2">
+          <img src="img/desk.jpg" alt="">
+        </div>
+        <div class="g-bento-img g-img-3">
+          <img src="img/lamp.jpg" alt="">
+        </div>
+        <div class="g-bento-footer">
+          <h2 id="g-props-h" class="g-bento-label">Open a property</h2>
+          <div class="g-pills">
+            <button type="button" class="g-pill" id="g-p1" data-sheet="sealed"><span>01</span>Sealed client</button>
+            <button type="button" class="g-pill" id="g-p2" data-sheet="checklist"><span>02</span>Checklist</button>
+            <button type="button" class="g-pill" id="g-p3" data-sheet="citation"><span>03</span>Citation</button>
+            <button type="button" class="g-pill" id="g-p4" data-sheet="silence"><span>04</span>Silence</button>
+            <button type="button" class="g-pill" id="g-p5" data-sheet="memo"><span>05</span>Memorandum</button>
+            <button type="button" class="g-pill" id="g-p6" data-sheet="offboard"><span>06</span>Offboard</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <dialog class="g-sheet" id="g-sheet" aria-labelledby="g-sheet-h">
+      <div class="g-sheet-body">
+        <img id="g-sheet-img" alt="">
+        <div class="g-sheet-copy">
+          <p class="g-eyebrow" id="g-sheet-k"></p>
+          <h2 id="g-sheet-h"></h2>
+          <p id="g-sheet-p"></p>
+          <ol class="g-sheet-states" id="g-sheet-states" hidden>
+            <li><span>Indemnity cap</span><span class="s-high"><i class="sq"></i>High</span></li>
+            <li><span>Auto-renewal</span><span class="s-medium"><i class="sq"></i>Medium</span></li>
+            <li><span>Governing law</span><span class="s-clear"><i class="sq"></i>Clear</span></li>
+            <li><span>Breach notice</span><span class="s-missing"><i class="sq"></i>Missing</span></li>
+          </ol>
+          <p class="g-sheet-note" id="g-sheet-note" hidden>Example only. A live matter cites the clause stored in that tenant.</p>
+          <button class="btn" type="button" id="g-sheet-close">Close</button>
+        </div>
+      </div>
+    </dialog>
+    <footer class="g-foot"><div class="g-wrap">
+      <div class="g-powered"><span>Powered by</span><img src="/assets/logo.jpg" alt="DBX"><span>Each client is one sealed tenant.</span></div>
+      <span>Embeddings stay in JURIX. DBX stores the vectors.</span>
+    </div></footer>
+  </section>
+
+  <section class="g-screen g-login" id="g-login" hidden>
+    <header class="g-bar"><div class="g-bar-in"><a class="g-logo" href="#home" data-go="home">JURIX</a></div></header>
+    <div class="g-login-main">
+      <aside class="g-login-aside" aria-hidden="true">
+        <p class="g-login-caption"><strong>Chambers</strong> One client. One sealed tenant. The bench never reads across.</p>
+      </aside>
+      <div class="g-col">
+        <p class="g-eyebrow" id="g-login-kicker">Firm access</p>
+        <h1 id="g-login-h">Sign in to Jurix</h1>
+        <div class="credential-plate" aria-label="What this sign-in opens">
+          <div><span>Session</span><b>Firm bench</b></div>
+          <div><span>Memory</span><b>DBX tenant</b></div>
+          <div><span>Recall</span><b>This client only</b></div>
+          <div><span>Embeddings</span><b>Held by Jurix</b></div>
+        </div>
+        <p class="muted" id="g-login-sub">Use the firm email and password. The bench opens on your matters.</p>
+        <form id="g-form" novalidate>
+          <div class="g-field" id="g-firm-field" hidden>
+            <label for="g-firm">Firm name</label>
+            <input class="g-input" id="g-firm" name="firm" autocomplete="organization">
+          </div>
+          <div class="g-field">
+            <label for="g-email">Work email</label>
+            <input class="g-input" id="g-email" name="email" type="email" required autocomplete="username" placeholder="you@firm.com">
+            <p class="g-err" id="g-email-err" hidden>Enter a firm email.</p>
+          </div>
+          <div class="g-field">
+            <label for="g-password">Password</label>
+            <input class="g-input" id="g-password" name="password" type="password" required autocomplete="current-password" minlength="8">
+            <p class="g-err" id="g-pass-err" hidden>Use at least 8 characters.</p>
+          </div>
+          <div class="g-field" id="g-code-field" hidden>
+            <label for="g-code">Firm code</label>
+            <input class="g-input mono" id="g-code" name="code" autocomplete="off" maxlength="12" placeholder="HM-0000">
+          </div>
+          <button class="btn g-block" type="submit" id="g-submit">Continue</button>
+          <button class="btn btn-quiet g-block" type="button" id="g-code-toggle">Continue with firm code</button>
+          <button class="g-textbtn" type="button" id="g-mode" style="margin-top:12px">Create a firm account</button>
+        </form>
+        <p class="g-fine">By continuing you use JURIX as a sealed-tenant audit bench. Documents are written only to the client tenant you open.</p>
+        <p class="g-terms" id="g-terms" hidden>A matter is one DBX tenant. Export writes a memorandum. Offboard purges that tenant and leaves the others.</p>
+        <button class="g-textbtn" type="button" id="g-terms-btn">Firm access terms</button>
+        <div><button class="g-textbtn" type="button" data-go="home">← Back to home</button></div>
+        <div class="g-powered"><span>Powered by</span><img src="/assets/logo.jpg" alt="DBX"><span>Each client is one sealed tenant.</span></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="shell" id="app" hidden>
+<div class="page-progress" id="page-progress" style="width:0"></div>
+  <header class="topbar">
+    <div class="brand"><span class="wordmark">JURIX</span><small>Matters · sealed on DBX</small></div>
+    <div class="firm"><span id="firm-name">Firm</span> <span class="muted">· Legal operations</span></div>
+    <form class="search" id="search-form" role="search">
+      <label for="q">Search this client</label>
+      <input id="q" type="search" placeholder="Clauses in the open tenant" autocomplete="off">
+      <kbd aria-hidden="true">/</kbd>
+      <div class="search-pop" id="search-pop" hidden></div>
+    </form>
+    <div class="actions">
+      <span class="dbx-pill" id="dbx-pill">DBX</span>
+      <button class="btn btn-quiet" type="button" id="cmd-btn" title="Command palette (⌘K)">⌘K</button>
+      <button class="btn btn-quiet" type="button" id="focus-btn" aria-pressed="false" title="Focus mode — dims sidebar and topbar">Focus</button>
+      <button class="btn btn-quiet" type="button" id="lex-btn" aria-pressed="false">Auditor dark</button>
+      <button class="btn btn-quiet" type="button" id="counsel-btn">Counsel</button>
+      <button class="btn" type="button" id="export-btn">Export memorandum</button>
+    </div>
+    <div class="user">
+      <span id="user-name">Reviewer</span>
+      <span class="initials" id="user-initials">—</span>
+      <button class="btn btn-quiet" type="button" id="logout-btn">Sign out</button>
+    </div>
+  </header>
+  <nav class="nav" aria-label="Primary">
+    <ul>
+      <li><a href="#matters" data-view="matters" aria-current="page">Matters <span class="count" id="nav-matters">0</span></a></li>
+      <li><a href="#checklists" data-view="checklists">Checklists <span class="count" id="nav-checks">4</span></a></li>
+      <li><a href="#exports" data-view="exports">Exports <span class="count" id="nav-exports">0</span></a></li>
+      <div class="nav-divider"></div>
+      <li><a href="#firm" data-view="firm">Firm</a></li>
+    </ul>
+    <div class="nav-foot">
+      <figure class="nav-portrait">
+        <img src="img/sealpress.jpg" alt="">
+      </figure>
+      <b id="nav-seal">0 clients · 0 sealed tenants</b><br>
+      One client per DBX tenant.<br>
+      Cross-tenant reads: <span class="mono" id="nav-leaks">0</span>
+    </div>
+  </nav>
+  <main class="main">
+    <div class="banner" id="banner" hidden></div>
+    <div class="surface">
+      <section id="view-matters">
+        <div class="section-head">
+          <h2>Matter queue</h2>
+          <span class="muted" id="queue-meta"></span>
+          <span class="spacer"></span>
+          <div class="seg" role="group" aria-label="Filter matters">
+            <button type="button" data-filter="all" aria-pressed="true">All<span class="n" id="f-all">0</span></button>
+            <button type="button" data-filter="open" aria-pressed="false">Open<span class="n" id="f-open">0</span></button>
+            <button type="button" data-filter="mine" aria-pressed="false">Mine<span class="n" id="f-mine">0</span></button>
+          </div>
+          <button class="btn" type="button" id="new-matter-btn">New matter</button>
+        </div>
+        <aside class="scene" aria-label="Queue atmosphere">
+          <img src="img/corridor.jpg" alt="">
+          <div class="scene-copy">
+            <p class="k">Matter queue</p>
+            <p>Each row is one sealed door. Open a client and the bench reads only that tenant.</p>
+          </div>
+        </aside>
+        <table aria-label="Matters">
+          <thead>
+            <tr><th>Client</th><th>Matter</th><th>Sealed tenant</th><th>Open findings</th><th>Reviewer</th></tr>
+          </thead>
+          <tbody id="queue-body"></tbody>
+        </table>
+        <div class="empty" id="queue-empty" hidden><strong>No matters in this filter.</strong> Create a client to provision a DBX tenant.</div>
+        <div class="divider"></div>
+        <section id="audit" hidden>
+          <header class="matter-head">
+            <div class="matter-head-lead">
+              <img class="matter-portrait" src="img/desk.jpg" alt="">
+              <div>
+                <div class="crumbs"><button type="button" data-view="matters">Matters</button> / <span id="crumb-client"></span></div>
+                <h1 id="matter-h"></h1>
+                <div class="matter-meta" id="matter-meta"></div>
+              </div>
+            </div>
+            <dl class="tally" id="tally"></dl>
+          </header>
+          <div class="instruments bento" id="instruments" hidden>
+            <div class="instrument bento-span"><span class="k">Vector recall</span><b id="ins-vector">—</b><span class="meter"><i id="ins-vector-bar"></i></span><p class="ins-hint">Playbook rows retrieved from this tenant’s vectors</p></div>
+            <div class="instrument"><span class="k">Sibling hits</span><b id="ins-silence">0</b><span class="meter"><i id="ins-silence-bar"></i></span></div>
+            <div class="instrument"><span class="k">Chunks in tenant</span><b id="ins-chunks">0</b></div>
+            <div class="instrument bento-span"><span class="k">Playbook</span><b id="ins-play">—</b></div>
+          </div>
+          <div class="scan-stage" id="scan-stage" hidden aria-hidden="true">
+            <div class="scan-beam"></div>
+            <p>Counsel is scanning this tenant…</p>
+          </div>
+          <svg class="graph" id="graph" hidden viewBox="0 0 640 148" role="img" aria-label="Sealed tenant graph"></svg>
+          <div class="section-head">
+            <h2>Contract checklist</h2>
+            <span class="muted" id="check-meta"></span>
+            <span class="spacer"></span>
+            <button class="btn btn-quiet" type="button" id="add-doc-btn">Add document</button>
+            <button class="btn" type="button" id="run-btn">Run checklist</button>
+            <button class="btn btn-quiet" type="button" id="brief-btn">Night brief</button>
+          </div>
+          <table class="checklist" id="checklist">
+            <thead>
+              <tr>
+                <th>#</th><th>Item</th><th>Playbook</th><th>Finding</th><th>Citation</th><th>State</th>
+              </tr>
+            </thead>
+            <tbody id="checklist-body"></tbody>
+          </table>
+          <div class="evidence" id="evidence" hidden>
+            <div class="ev-ref">
+              <span class="k">Evidence</span>
+              <span class="mono" id="ev-cite"></span>
+              <span id="ev-src"></span>
+            </div>
+            <div>
+              <blockquote class="ev-quote" id="ev-quote"></blockquote>
+              <p class="ev-note" id="ev-note"></p>
+              <ul class="notes" id="ev-notes"></ul>
+            </div>
+            <div class="ev-actions">
+              <button class="btn btn-quiet" type="button" id="note-btn">Add reviewer note</button>
+              <button class="btn btn-quiet" type="button" id="open-doc-btn">Open in document</button>
+            </div>
+          </div>
+          <div class="table-foot" id="table-foot"></div>
+        </section>
+        <div class="empty" id="audit-empty" hidden></div>
+      </section>
+
+      <section id="view-checklists" class="panel" hidden>
+        <div class="section-head"><h2>Playbook</h2><span class="muted" id="playbook-name"></span></div>
+        <aside class="scene" aria-label="Playbook atmosphere">
+          <img src="img/briefs.jpg" alt="">
+          <div class="scene-copy">
+            <p class="k">Commercial MSA</p>
+            <p>Floors for indemnity, renewal, governing law, and breach notice. Findings come from the open tenant.</p>
+          </div>
+        </aside>
+        <div id="playbook-list"></div>
+      </section>
+
+      <section id="view-exports" class="panel" hidden>
+        <div class="section-head"><h2>Exports</h2><span class="muted">Memoranda kept after you leave the matter</span></div>
+        <aside class="scene" aria-label="Exports atmosphere">
+          <img src="img/briefs.jpg" alt="">
+          <div class="scene-copy">
+            <p class="k">Memoranda</p>
+            <p>Exported findings stay with the firm after you leave the matter desk.</p>
+          </div>
+        </aside>
+        <table>
+          <thead><tr><th>When</th><th>Client</th><th>Matter</th><th>Kind</th><th></th></tr></thead>
+          <tbody id="export-body"></tbody>
+        </table>
+        <div class="empty" id="export-empty" hidden><strong>No memoranda yet.</strong> Export from an open matter.</div>
+      </section>
+
+      <section id="view-firm" class="panel" hidden>
+        <div class="section-head"><h2>Firm</h2><span class="muted" id="firm-sub"></span></div>
+        <aside class="firm-hero">
+          <img src="img/corridor.jpg" alt="Closed doors in chambers">
+          <div class="firm-hero-copy">
+            <h3>Sealed chambers</h3>
+            <p>Usage, hibernate, wake, and offboard act on one tenant. Sibling doors stay shut.</p>
+          </div>
+        </aside>
+        <div class="firm-grid">
+          <div class="card">
+            <h3>Account</h3>
+            <dl id="firm-account"></dl>
+          </div>
+          <div class="card">
+            <h3>DBX</h3>
+            <dl id="firm-dbx"></dl>
+            <p id="firm-usage"></p>
+          </div>
+        </div>
+        <div class="section-head">
+          <h2>This matter</h2>
+          <span class="spacer"></span>
+          <button class="btn btn-quiet" type="button" id="hibernate-btn">Hibernate</button>
+          <button class="btn btn-quiet" type="button" id="wake-btn">Wake</button>
+          <button class="btn btn-danger" type="button" id="offboard-btn">Export and purge</button>
+        </div>
+        <p class="empty" id="firm-matter-line"></p>
+      </section>
+    </div>
+  </main>
+</div>
+
+<div id="doc" hidden>
+  <header class="doc-bar">
+    <button class="doc-brand" type="button" id="doc-back">JURIX</button>
+    <div>
+      <strong id="doc-title">Document</strong>
+      <div class="muted" id="doc-sub"></div>
+    </div>
+    <span class="spacer"></span>
+    <button class="btn btn-quiet" type="button" id="doc-export">Export memorandum</button>
+  </header>
+  <div class="doc-layout">
+    <article id="doc-body"></article>
+    <aside id="doc-notes"></aside>
+    <aside class="doc-rail" aria-hidden="true">
+      <img src="img/chambers.jpg" alt="">
+    </aside>
+  </div>
+</div>
+
+<div id="night" hidden>
+  <header class="night-bar">
+    <div><span class="wordmark">JURIX</span> <span class="muted">On DBX</span></div>
+    <div id="night-matter"></div>
+    <div class="night-actions">
+      <button class="night-btn quiet" type="button" id="night-back">Back to bench</button>
+      <button class="night-btn" type="button" id="night-export">Export memorandum</button>
+    </div>
+  </header>
+  <div class="night-desk">
+    <article class="sheet" id="night-sheet"></article>
+    <aside>
+      <h2>Findings</h2>
+      <ul class="finding-list" id="night-findings"></ul>
+      <p class="muted" id="night-scope"></p>
+    </aside>
+  </div>
+</div>
+
+<dialog id="dlg-matter">
+  <form method="dialog" id="form-matter">
+    <h2>New sealed matter</h2>
+    <p class="muted">JURIX provisions a DBX tenant for this client. Nothing is shared with another matter.</p>
+    <div class="g-field"><label for="m-name">Client</label><input class="g-input" id="m-name" required></div>
+    <div class="g-field"><label for="m-matter">Matter</label><input class="g-input" id="m-matter" placeholder="MSA" required></div>
+    <div class="g-field"><label for="m-doc">Document name</label><input class="g-input" id="m-doc" placeholder="Contract.txt"></div>
+    <div class="g-field"><label for="m-text">Contract text</label><textarea class="g-input" id="m-text" placeholder="Paste the contract, or index a sample."></textarea></div>
+    <div class="dlg-actions">
+      <button class="btn btn-quiet" type="button" id="m-sample-msa" value="cancel">Sample MSA</button>
+      <button class="btn btn-quiet" type="button" id="m-sample-dpa">Sample DPA</button>
+      <button class="btn btn-quiet" type="button" id="m-cancel">Cancel</button>
+      <button class="btn" type="submit">Create</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-doc">
+  <form method="dialog" id="form-doc">
+    <h2>Index a document</h2>
+    <p class="muted">Chunks are embedded in JURIX and written into the open tenant.</p>
+    <div class="g-field"><label for="d-name">Document name</label><input class="g-input" id="d-name" required value="Contract.txt"></div>
+    <div class="g-field"><label for="d-text">Text</label><textarea class="g-input" id="d-text"></textarea></div>
+    <div class="dlg-actions">
+      <button class="btn btn-quiet" type="button" id="d-msa">Sample MSA</button>
+      <button class="btn btn-quiet" type="button" id="d-dpa">Sample DPA</button>
+      <button class="btn btn-quiet" type="button" id="d-cancel">Cancel</button>
+      <button class="btn" type="submit">Index</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-note">
+  <form method="dialog" id="form-note">
+    <h2>Reviewer note</h2>
+    <div class="g-field"><label for="n-text">Note</label><textarea class="g-input" id="n-text" required></textarea></div>
+    <div class="dlg-actions">
+      <button class="btn btn-quiet" type="button" id="n-cancel">Cancel</button>
+      <button class="btn" type="submit">Save note</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-off">
+  <form method="dialog" id="form-off">
+    <h2>Export and purge</h2>
+    <p id="off-copy"></p>
+    <div class="dlg-actions">
+      <button class="btn btn-quiet" type="button" id="off-cancel">Cancel</button>
+      <button class="btn btn-danger" type="submit">Purge this client</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="cmd" id="cmd" aria-label="Command palette">
+  <form id="cmd-form" autocomplete="off">
+    <label class="visually-hidden" for="cmd-q">Search this tenant</label>
+    <input id="cmd-q" type="search" placeholder="Search clauses in the open tenant…" autocomplete="off">
+    <p class="cmd-hint">⌘K · this client only · vector recall</p>
+  </form>
+  <div class="cmd-list" id="cmd-list"></div>
+</dialog>
+
+<aside class="counsel" id="counsel" hidden aria-label="Counsel">
+  <header>
+    <div>
+      <p class="g-eyebrow">Counsel</p>
+      <h2>Ask this matter</h2>
+    </div>
+    <button class="btn btn-quiet" type="button" id="counsel-close">Close</button>
+  </header>
+  <p class="counsel-note">Counsel quotes the open DBX tenant. It does not invent a clause and it does not read another client.</p>
+  <div class="counsel-log" id="counsel-log"></div>
+  <form id="counsel-form">
+    <div class="counsel-prompts">
+      <button type="button" data-ask="What is the indemnity cap?">Indemnity</button>
+      <button type="button" data-ask="How long is the renewal notice?">Renewal</button>
+      <button type="button" data-ask="What is the governing law?">Governing law</button>
+      <button type="button" data-ask="Is there a breach notice window?">Breach notice</button>
+      <button type="button" data-ask="Did any sibling tenant return this citation?">Silence</button>
+    </div>
+    <label class="visually-hidden" for="counsel-q">Question for this matter</label>
+    <div class="counsel-input-wrap">
+      <textarea id="counsel-q" placeholder="Ask about a clause in the open matter"></textarea>
+      <div id="counsel-suggest" class="counsel-suggest" hidden></div>
+    </div>
+    <button class="btn" type="submit" id="counsel-send">Ask the tenant</button>
+  </form>
+</aside>
+<div id="ai-tooltip" class="ai-tooltip" hidden>
+  <div class="ai-tooltip-head">✨ AI Translation</div>
+  <div id="ai-tooltip-body" class="ai-tooltip-body"></div>
+</div>
+<div id="raw-stream" class="raw-stream" hidden>
+  <div class="raw-head">DBX Vector Ingress // V8.2</div>
+  <div id="raw-lines" class="raw-lines"></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+<script src="app.js?v=8"></script>
+<script type="module" src="seal.js?v=8"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #C4A574;
+  --color-brand-dark: #B87333;
+  --color-dark: #12100E;
+  --color-dark-surface: #1C1712;
+  --color-light: #FDFCF8;
+  --color-light-surface: #F5F5F0;
+  
+  --font-serif: "Libre Baskerville", serif;
+  --font-sans: "Inter", sans-serif;
+  
+  --animate-spring: spring 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+body {
+  background-color: var(--color-light);
+  color: var(--color-dark);
+  font-family: var(--font-sans);
+}

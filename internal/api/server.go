@@ -597,10 +597,10 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 		// Enforce maximum payload size (512KB) to prevent DoS attacks
 		r.Body = http.MaxBytesReader(w, r.Body, 512*1024)
 
-		var req struct {
-			Command []string `json:"command"`
+		var rawReq struct {
+			Command interface{} `json:"command"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := json.NewDecoder(r.Body).Decode(&rawReq); err != nil {
 			if err.Error() == "http: request body too large" {
 				http.Error(w, "Payload too large", http.StatusRequestEntityTooLarge)
 				return
@@ -608,15 +608,28 @@ func (h *HTTPServer) ListenAndServe(ctx context.Context) error {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		if len(req.Command) == 0 {
+
+		var cmdStr []string
+		switch v := rawReq.Command.(type) {
+		case string:
+			cmdStr = strings.Fields(v)
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					cmdStr = append(cmdStr, s)
+				}
+			}
+		}
+
+		if len(cmdStr) == 0 {
 			http.Error(w, "empty command", http.StatusBadRequest)
 			return
 		}
-		args := make([][]byte, len(req.Command)-1)
-		for i, arg := range req.Command[1:] {
+		args := make([][]byte, len(cmdStr)-1)
+		for i, arg := range cmdStr[1:] {
 			args[i] = []byte(arg)
 		}
-		cmd := &protocol.Command{Name: req.Command[0], Args: args}
+		cmd := &protocol.Command{Name: strings.ToUpper(cmdStr[0]), Args: args}
 		var buf bytes.Buffer
 		writer := protocol.NewWriter(&buf)
 

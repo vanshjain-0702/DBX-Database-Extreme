@@ -1,0 +1,1035 @@
+/* ═══════════════════════════════════════════════════════════════════
+   JURIX — Enhancement Layer (v2)
+   Premium scrollbar, animated dialogs, enhanced navigation,
+   toolbar, page transitions, micro-animations.
+   This file layers ON TOP of app.css / studio.css / motion.css.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Custom Scrollbar ─────────────────────────────────────────── */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(154, 115, 64, 0.25);
+  border-radius: 100px;
+  transition: background 0.3s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--copper);
+}
+::-webkit-scrollbar-corner { background: transparent; }
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(154, 115, 64, 0.25) transparent;
+}
+
+/* ── 2. Smooth Page Transitions ─────────────────────────────────── */
+.shell, #doc, #night, #gate {
+  animation: pageIn 0.45s var(--ease-out) both;
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fx-enter { animation: appSlide 0.55s var(--ease-out) both; }
+@keyframes appSlide {
+  from { opacity: 0; transform: scale(0.985) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ── 3. Animated Dialogs ─────────────────────────────────────────── */
+dialog {
+  opacity: 0;
+  transform: translateY(16px) scale(0.96);
+  transition: opacity 0.35s var(--ease-out),
+              transform 0.35s var(--ease-spring),
+              overlay 0.35s allow-discrete,
+              display 0.35s allow-discrete;
+}
+dialog[open] {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+@starting-style {
+  dialog[open] {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+dialog::backdrop {
+  opacity: 0;
+  transition: opacity 0.35s ease, overlay 0.35s allow-discrete, display 0.35s allow-discrete;
+}
+dialog[open]::backdrop {
+  opacity: 1;
+}
+@starting-style {
+  dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+/* Dialog internal polish */
+dialog h2 {
+  font-family: var(--display);
+  font-size: 20px;
+  letter-spacing: 0.02em;
+}
+dialog .g-field label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+}
+
+/* ── 4. Enhanced Sidebar Navigation ──────────────────────────────── */
+.nav {
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(235, 228, 214, 0.3) 100%);
+  transition: width 0.3s var(--ease-out), opacity 0.3s ease;
+}
+.nav ul { padding: 4px 8px; }
+.nav a {
+  border-radius: 8px !important;
+  margin-bottom: 2px;
+  padding: 0 12px;
+  font-size: 13.5px;
+  transition: all 0.2s var(--ease-out);
+}
+.nav a:hover:not([aria-current="page"]) {
+  background: var(--gold-soft);
+  transform: translateX(2px);
+}
+.nav a[aria-current="page"] {
+  background: linear-gradient(135deg, var(--gold-soft), rgba(184, 115, 51, 0.08));
+  box-shadow: 0 1px 4px rgba(154, 115, 64, 0.1);
+}
+.nav a[aria-current="page"]::before {
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  left: 0;
+  background: linear-gradient(180deg, var(--copper), var(--gold));
+}
+.nav .count {
+  background: var(--canvas);
+  padding: 1px 7px;
+  border-radius: 100px;
+  font-size: 11px;
+  border: 1px solid var(--line);
+  min-width: 24px;
+  text-align: center;
+}
+/* Nav section dividers */
+.nav-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--line-strong), transparent);
+  margin: 10px 16px;
+}
+/* Sidebar portrait animation */
+.nav-portrait img {
+  border-radius: var(--radius-lg);
+  transition: transform 0.4s var(--ease-out), box-shadow 0.4s ease;
+  width: 100%;
+  object-fit: cover;
+  aspect-ratio: 16/9;
+}
+.nav-portrait img:hover {
+  transform: scale(1.02);
+  box-shadow: var(--shadow-md);
+}
+.nav-foot {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin: 0 8px;
+}
+
+/* ── 5. Enhanced Top Bar & Toolbar ───────────────────────────────── */
+.topbar {
+  background: linear-gradient(180deg, rgba(250, 250, 247, 0.95), rgba(250, 250, 247, 0.88));
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 1px 0 var(--line), var(--shadow-sm);
+}
+.brand .wordmark {
+  font-family: var(--display);
+  background: linear-gradient(135deg, var(--ink) 40%, var(--copper));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+/* Toolbar actions enhanced */
+.topbar .actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar .actions .btn-quiet {
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+.topbar .actions .btn-quiet::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--copper-soft), transparent);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.topbar .actions .btn-quiet:hover::after { opacity: 1; }
+/* DBX connection pill enhanced */
+.dbx-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+.dbx-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.dbx-pill.on::before {
+  background: var(--clear);
+  box-shadow: 0 0 6px rgba(74, 124, 89, 0.5);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+.dbx-pill.off::before {
+  background: var(--high);
+  box-shadow: 0 0 6px rgba(163, 52, 43, 0.5);
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 4px rgba(74, 124, 89, 0.3); }
+  50%      { box-shadow: 0 0 10px rgba(74, 124, 89, 0.6); }
+}
+/* User avatar enhanced */
+.initials {
+  position: relative;
+  transition: transform 0.2s var(--ease-out), box-shadow 0.2s ease;
+}
+.initials:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 0 3px var(--copper-soft);
+}
+/* Search bar enhanced */
+.search input {
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--canvas), rgba(235, 228, 214, 0.3));
+}
+.search input:focus {
+  background: var(--surface);
+  box-shadow: 0 0 0 3px var(--copper-soft), var(--shadow-md);
+}
+
+/* ── 6. Content Cards & Sections ─────────────────────────────────── */
+.section-head {
+  position: sticky;
+  top: var(--bar-h);
+  z-index: 3;
+  background: rgba(250, 250, 247, 0.92);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line);
+  padding: 12px 16px;
+}
+.section-head h2 {
+  font-family: var(--display);
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+/* Scene / atmosphere images */
+.scene {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  margin: 0 16px 16px;
+  max-height: 180px;
+}
+.scene img {
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease-out);
+}
+.scene:hover img { transform: scale(1.04); }
+.scene-copy {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24px 20px 16px;
+  background: linear-gradient(transparent, rgba(28, 23, 18, 0.85));
+  color: #fff;
+}
+.scene-copy .k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--champagne);
+  font-weight: 600;
+}
+.scene-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+/* ── 7. Table Enhancements ───────────────────────────────────────── */
+table { border-radius: var(--radius-lg); overflow: hidden; }
+thead { position: sticky; top: calc(var(--bar-h) + 46px); z-index: 2; }
+th {
+  background: linear-gradient(180deg, rgba(245, 245, 240, 0.95), rgba(235, 228, 214, 0.5)) !important;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+tbody tr {
+  transition: all 0.2s var(--ease-out);
+}
+tbody tr:hover {
+  background: linear-gradient(90deg, var(--gold-soft), transparent) !important;
+}
+tbody tr[aria-selected="true"] {
+  background: linear-gradient(90deg, var(--gold-soft), rgba(196, 165, 116, 0.06)) !important;
+}
+tbody tr[aria-selected="true"] td:first-child {
+  box-shadow: inset 3px 0 0 var(--copper);
+}
+
+/* ── 8. Instruments / Bento Dashboard ────────────────────────────── */
+.instruments {
+  padding: 16px;
+  margin: 0 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--surface), rgba(247, 231, 206, 0.12));
+  border: 1px solid var(--line);
+}
+.instrument {
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  transition: all 0.3s var(--ease-out);
+}
+.instrument:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--copper-soft);
+}
+.instrument .k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--copper);
+  font-weight: 600;
+}
+.meter {
+  display: block;
+  height: 4px;
+  border-radius: 100px;
+  background: var(--line);
+  margin-top: 8px;
+  overflow: hidden;
+}
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: 100px;
+  background: linear-gradient(90deg, var(--copper), var(--gold));
+  transition: width 0.8s var(--ease-out);
+}
+
+/* ── 9. Evidence Panel ───────────────────────────────────────────── */
+.evidence {
+  border-radius: var(--radius-lg);
+  margin: 8px 16px 16px;
+  border: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(250, 250, 247, 0.98), rgba(247, 231, 206, 0.12));
+  box-shadow: var(--shadow-sm);
+  animation: slideUp 0.3s var(--ease-out) both;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ev-quote {
+  position: relative;
+  padding-left: 16px;
+}
+.ev-quote::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, var(--copper), var(--gold));
+}
+
+/* ── 10. Card Enhancements ───────────────────────────────────────── */
+.card {
+  transition: all 0.25s var(--ease-out);
+  border-radius: var(--radius-lg);
+}
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--copper-soft);
+}
+.card h3 {
+  font-family: var(--display);
+  letter-spacing: 0.02em;
+}
+
+/* ── 11. Toast Notification ──────────────────────────────────────── */
+.toast {
+  animation: toastIn 0.4s var(--ease-spring) both;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(135deg, var(--ink), #2d3239);
+}
+.toast::before {
+  content: "✓";
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 20px) scale(0.92); }
+  to   { opacity: 1; transform: translate(-50%, 0) scale(1); }
+}
+
+/* ── 12. Counsel Sidebar ─────────────────────────────────────────── */
+.counsel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(420px, 100vw);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 32px rgba(28, 23, 18, 0.08);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  animation: slideIn 0.35s var(--ease-out) both;
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.counsel header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.counsel-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+.counsel-turn {
+  margin-bottom: 16px;
+  animation: msgIn 0.3s var(--ease-out) both;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.counsel-a {
+  background: linear-gradient(135deg, rgba(247, 231, 206, 0.2), rgba(196, 165, 116, 0.06));
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+}
+.counsel-a blockquote {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 8px 0;
+  padding-left: 14px;
+  border-left: 2px solid var(--copper);
+  color: #333;
+}
+.counsel .who {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--copper);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+.counsel-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 20px 10px;
+}
+.counsel-prompts button {
+  background: var(--canvas);
+  border: 1px solid var(--line);
+  padding: 5px 12px;
+  border-radius: 100px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.counsel-prompts button:hover {
+  background: var(--gold-soft);
+  border-color: var(--copper);
+  color: var(--copper);
+}
+.counsel-input-wrap {
+  padding: 0 20px 12px;
+  position: relative;
+}
+.counsel-input-wrap textarea {
+  width: 100%;
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+  resize: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.counsel-input-wrap textarea:focus {
+  border-color: var(--copper);
+  box-shadow: 0 0 0 3px var(--copper-soft);
+  outline: none;
+}
+.counsel-suggest {
+  position: absolute;
+  bottom: 100%;
+  left: 20px;
+  right: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--copper);
+  box-shadow: var(--shadow-md);
+  animation: fadeUp 0.2s ease both;
+}
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.counsel form {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.counsel form .btn {
+  margin: 0 20px 16px;
+  width: calc(100% - 40px);
+  justify-content: center;
+}
+.counsel-note {
+  padding: 0 20px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* ── 13. Loading / Busy States ───────────────────────────────────── */
+.is-busy { cursor: wait; pointer-events: none; }
+.is-busy .btn { opacity: 0.6; }
+.btn.is-busy {
+  position: relative;
+  color: transparent !important;
+}
+.btn.is-busy::after {
+  content: "";
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 14. Scan Stage Animation ────────────────────────────────────── */
+.scan-stage {
+  position: relative;
+  height: 48px;
+  margin: 0 16px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(184, 115, 51, 0.04), rgba(196, 165, 116, 0.06));
+  border: 1px solid var(--copper-soft);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.scan-beam {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(184, 115, 51, 0.12), transparent);
+  animation: scanMove 1.5s ease-in-out infinite;
+}
+@keyframes scanMove {
+  0%   { left: -100%; }
+  100% { left: 100%; }
+}
+.scan-stage p {
+  position: relative;
+  z-index: 1;
+  font-size: 12px;
+  color: var(--copper);
+  letter-spacing: 0.04em;
+}
+
+/* ── 15. Raw Stream Terminal ─────────────────────────────────────── */
+.raw-stream {
+  position: fixed;
+  bottom: 56px;
+  right: 20px;
+  width: 380px;
+  max-height: 220px;
+  background: rgba(11, 15, 25, 0.95);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(196, 165, 116, 0.15);
+  border-radius: var(--radius-lg);
+  z-index: 30;
+  overflow: hidden;
+  box-shadow: var(--shadow-xl);
+  animation: slideUp 0.3s var(--ease-out) both;
+}
+.raw-head {
+  padding: 8px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--gold);
+  border-bottom: 1px solid rgba(196, 165, 116, 0.1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.raw-lines {
+  padding: 8px 14px;
+  max-height: 180px;
+  overflow-y: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--bone);
+}
+.raw-lines p {
+  margin: 0 0 2px;
+  animation: termLine 0.2s ease both;
+  opacity: 0.85;
+}
+@keyframes termLine {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 0.85; transform: translateX(0); }
+}
+
+/* ── 16. AI Tooltip ──────────────────────────────────────────────── */
+.ai-tooltip {
+  position: fixed;
+  z-index: 25;
+  max-width: 320px;
+  background: rgba(250, 250, 247, 0.96);
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 10px 14px;
+  pointer-events: none;
+  animation: tooltipIn 0.2s var(--ease-out) both;
+}
+@keyframes tooltipIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ai-tooltip-head {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--copper);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.ai-tooltip-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+/* ── 17. Gate Bento Hero Enhancements ────────────────────────────── */
+.g-bento-img {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.g-bento-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease-out);
+}
+.g-bento-img:hover img { transform: scale(1.05); }
+
+/* Pills on home page */
+.g-pill {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  padding: 10px 16px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.25s var(--ease-out);
+  font: inherit;
+}
+.g-pill:hover {
+  border-color: var(--copper);
+  background: var(--gold-soft);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.g-pill span:first-child {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--copper);
+  font-weight: 600;
+  width: 20px;
+}
+
+/* ── 18. Login Credential Plate ──────────────────────────────────── */
+.credential-plate {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(247, 231, 206, 0.15), var(--canvas));
+  border: 1px solid var(--line);
+}
+.credential-plate > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.credential-plate span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-weight: 500;
+}
+.credential-plate b {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* ── 19. Login Page — Lady Justice Background ────────────────────── */
+.g-login {
+  position: relative;
+  overflow: hidden;
+}
+/* Full-page translucent Lady Justice background */
+.g-login::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: url("img/justice.jpg") center 20%/cover no-repeat;
+  opacity: 0.10;
+  pointer-events: none;
+  z-index: 0;
+}
+/* Warm gradient overlay on the login section */
+.g-login::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 30% 60%, rgba(184, 115, 51, 0.06), transparent 60%),
+    radial-gradient(ellipse at 70% 30%, rgba(196, 165, 116, 0.04), transparent 50%),
+    linear-gradient(180deg, rgba(245, 245, 240, 0.6), rgba(244, 239, 230, 0.85));
+  pointer-events: none;
+  z-index: 0;
+}
+.g-login .g-bar,
+.g-login .g-login-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Login aside with the justice image visible */
+.g-login-aside {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--walnut);
+  min-height: 420px;
+  display: grid;
+  align-items: end;
+}
+.g-login-aside::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("img/justice.jpg") center 15%/cover no-repeat;
+  opacity: 0.55;
+  transition: opacity 0.6s var(--ease-out), transform 8s ease;
+}
+.g-login-aside:hover::before {
+  opacity: 0.65;
+  transform: scale(1.03);
+}
+/* Gradient fade at the bottom for text readability */
+.g-login-aside::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(28, 23, 18, 0.4) 60%,
+    rgba(28, 23, 18, 0.85) 100%
+  );
+  pointer-events: none;
+}
+.g-login-caption {
+  position: relative;
+  z-index: 1;
+  color: var(--champagne);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.6;
+  padding: 32px 28px;
+}
+.g-login-caption strong {
+  display: block;
+  font-family: var(--display);
+  font-size: 28px;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  color: #fff;
+}
+.g-login-main {
+  grid-template-columns: 1fr 1fr !important;
+  gap: 32px;
+  max-width: 860px;
+}
+
+/* Login form column enhancement */
+.g-login .g-col {
+  position: relative;
+  z-index: 1;
+}
+.g-login .g-col h1 {
+  font-family: var(--display);
+  letter-spacing: 0.02em;
+}
+
+/* ── 20. Firm Page Hero ──────────────────────────────────────────── */
+.firm-hero {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin: 0 16px 16px;
+  max-height: 200px;
+}
+.firm-hero img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  transition: transform 0.6s var(--ease-out);
+}
+.firm-hero:hover img { transform: scale(1.03); }
+.firm-hero-copy {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 28px 24px 20px;
+  background: linear-gradient(transparent, rgba(28, 23, 18, 0.88));
+  color: #fff;
+}
+.firm-hero-copy h3 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+.firm-hero-copy p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+/* ── 21. Matter Header ───────────────────────────────────────────── */
+.matter-head {
+  background: linear-gradient(180deg, var(--surface), rgba(247, 231, 206, 0.06));
+}
+.matter-head-lead {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.matter-portrait {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+/* ── 22. Segmented Control ───────────────────────────────────────── */
+.seg {
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+}
+.seg button {
+  border-radius: 0 !important;
+  font-size: 12px;
+}
+.seg button[aria-pressed="true"] {
+  background: linear-gradient(135deg, var(--gold-soft), rgba(184, 115, 51, 0.08));
+  font-weight: 600;
+}
+
+/* ── 23. Empty States ────────────────────────────────────────────── */
+.empty {
+  text-align: center;
+  padding: 40px 24px;
+}
+.empty strong {
+  font-family: var(--display);
+  font-size: 18px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* ── 24. Command Palette (⌘K) ────────────────────────────────────── */
+.cmd {
+  width: min(580px, calc(100vw - 32px));
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-xl);
+  padding: 0;
+  overflow: hidden;
+}
+.cmd #cmd-q {
+  width: 100%;
+  height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  font-size: 16px;
+}
+.cmd #cmd-q:focus { outline: none; }
+.cmd-hint {
+  padding: 8px 20px;
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+.cmd-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 8px;
+}
+.cmd-list button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cmd-list button:hover {
+  background: var(--gold-soft);
+}
+
+/* ── 25. Graph SVG ───────────────────────────────────────────────── */
+.graph {
+  margin: 0 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+  padding: 12px;
+}
+
+/* ── 26. DBX Pulse dot ───────────────────────────────────────────── */
+.dbx-pulse {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--clear);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* ── 27. Checklist State Badges ──────────────────────────────────── */
+.state {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* ── 28. Progress bar for main loading ───────────────────────────── */
+.page-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--copper), var(--gold));
+  z-index: 999;
+  transition: width 0.3s var(--ease-out);
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── 29. Responsive Adjustments ──────────────────────────────────── */
+@media (max-width: 960px) {
+  .g-login-main {
+    grid-template-columns: 1fr !important;
+  }
+  .g-login-aside {
+    display: none !important;
+  }
+  .counsel {
+    width: 100vw;
+  }
+  .raw-stream {
+    width: calc(100vw - 40px);
+    right: 20px;
+  }
+}
+
+/* ── 30. Print styles ────────────────────────────────────────────── */
+@media print {
+  .topbar, .nav, .toast, .counsel, .raw-stream, .scan-stage { display: none !important; }
+  .shell { grid-template-columns: 1fr !important; }
+  .main { grid-column: 1 / -1; }
+}

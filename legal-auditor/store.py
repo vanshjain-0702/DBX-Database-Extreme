@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 import os
 import secrets
-import threading
 import time
+from filelock import FileLock
 from hashlib import pbkdf2_hmac
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -40,7 +40,7 @@ class FirmStore:
         default = Path(__file__).resolve().parent / "data" / "firm_store.json"
         self.path = Path(path or os.environ.get("LA_STORE_PATH", str(default)))
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
+        self._lock = FileLock(str(self.path) + ".lock")
         self._data: Dict[str, Any] = {"users": {}, "sessions": {}, "clients": {}}
         self._load()
 
@@ -56,6 +56,7 @@ class FirmStore:
     def register(self, email: str, password: str, firm_name: str) -> Dict[str, Any]:
         email = email.strip().lower()
         with self._lock:
+            self._load()
             if email in self._data["users"]:
                 raise ValueError("user already exists")
             user = {
@@ -71,6 +72,7 @@ class FirmStore:
     def login(self, email: str, password: str) -> str:
         email = email.strip().lower()
         with self._lock:
+            self._load()
             user = self._data["users"].get(email)
             if not user or not _verify_password(password, user["password_hash"]):
                 raise ValueError("invalid credentials")
@@ -82,8 +84,18 @@ class FirmStore:
             self._save()
             return token
 
+    def public_user(self, email: str) -> Optional[Dict[str, Any]]:
+        email = email.strip().lower()
+        with self._lock:
+            self._load()
+            user = self._data["users"].get(email)
+            if not user:
+                return None
+            return {"email": user["email"], "firm_name": user["firm_name"]}
+
     def user_for_token(self, token: str) -> Optional[Dict[str, Any]]:
         with self._lock:
+            self._load()
             session = self._data["sessions"].get(token)
             if not session:
                 return None
@@ -98,6 +110,7 @@ class FirmStore:
         secret: str,
     ) -> Dict[str, Any]:
         with self._lock:
+            self._load()
             client_id = secrets.token_hex(8)
             record = {
                 "id": client_id,
@@ -119,6 +132,7 @@ class FirmStore:
 
     def list_clients(self, owner_email: str) -> List[Dict[str, Any]]:
         with self._lock:
+            self._load()
             out = []
             for c in self._data["clients"].values():
                 if c["owner_email"] == owner_email:
@@ -134,6 +148,7 @@ class FirmStore:
 
     def get_client(self, owner_email: str, client_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
+            self._load()
             c = self._data["clients"].get(client_id)
             if not c or c["owner_email"] != owner_email:
                 return None
@@ -143,6 +158,7 @@ class FirmStore:
         self, owner_email: str, client_id: str
     ) -> Optional[Dict[str, Any]]:
         with self._lock:
+            self._load()
             c = self._data["clients"].get(client_id)
             if not c or c["owner_email"] != owner_email:
                 return None

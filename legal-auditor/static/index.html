@@ -6,153 +6,340 @@
   <title>Legal Auditor — on DBX</title>
   <style>
     :root {
-      --bg: #0f1419;
-      --panel: #1a222c;
-      --ink: #e8eef4;
-      --muted: #8b9aab;
-      --accent: #c4a35a;
-      --line: #2a3542;
-      --ok: #6bbf8a;
-      --danger: #d97a6c;
+      --ink-0: #070b12;
+      --ink-1: #0b111b;
+      --ink-2: #101926;
+      --ink-3: #162233;
+      --panel: rgba(15, 24, 37, .92);
+      --panel-soft: rgba(20, 32, 48, .74);
+      --text: #e7f1fa;
+      --muted: #8fa2b6;
+      --dim: #61758b;
+      --line: #26384d;
+      --line-bright: #36526d;
+      --cyan: #56d7f3;
+      --cyan-ink: #061318;
+      --violet: #a993ff;
+      --amber: #f0bc64;
+      --ok: #59d49a;
+      --danger: #ff7e82;
       --font: "IBM Plex Sans", "Segoe UI", sans-serif;
-      --mono: "IBM Plex Mono", Consolas, monospace;
+      --mono: "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
+      --shadow: 0 18px 50px rgba(0, 0, 0, .2);
     }
     * { box-sizing: border-box; }
+    html { background: var(--ink-0); }
     body {
-      margin: 0;
-      font-family: var(--font);
-      background:
-        radial-gradient(1200px 600px at 10% -10%, #1e2a38 0%, transparent 55%),
-        radial-gradient(900px 500px at 100% 0%, #24301f 0%, transparent 50%),
-        var(--bg);
-      color: var(--ink);
       min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      color: var(--text);
+      font-family: var(--font);
+      background-color: var(--ink-0);
+      background-image:
+        linear-gradient(rgba(101, 151, 183, .045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(101, 151, 183, .045) 1px, transparent 1px),
+        radial-gradient(900px 520px at 9% -10%, rgba(37, 101, 135, .18), transparent 67%),
+        radial-gradient(700px 440px at 100% 15%, rgba(84, 62, 143, .14), transparent 70%);
+      background-size: 32px 32px, 32px 32px, auto, auto;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .2;
+      background-image: radial-gradient(rgba(255,255,255,.5) .45px, transparent .6px);
+      background-size: 5px 5px;
+      mask-image: linear-gradient(to bottom, black, transparent 75%);
+    }
+    button, input, textarea, select { font: inherit; }
+    button, select { cursor: pointer; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 2px;
     }
     header {
-      padding: 1.5rem 2rem 0.5rem;
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) auto;
+      gap: 1rem;
+      align-items: end;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 1.5rem clamp(1rem, 4vw, 3.5rem) 1.15rem;
       border-bottom: 1px solid var(--line);
+      animation: rise .55s both;
     }
+    .brand-kicker, .eyebrow, .field-label, .card-label {
+      display: block;
+      color: var(--cyan);
+      font-family: var(--mono);
+      font-size: .67rem;
+      font-weight: 700;
+      letter-spacing: .14em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+    .brand-kicker { margin-bottom: .34rem; color: var(--violet); }
     header h1 {
       margin: 0;
-      font-size: 1.6rem;
-      letter-spacing: 0.02em;
+      font-size: clamp(1.55rem, 3vw, 2.2rem);
       font-weight: 600;
+      letter-spacing: -.045em;
+      line-height: 1;
     }
-    header p { margin: 0.35rem 0 1rem; color: var(--muted); font-size: 0.95rem; }
-    main { display: grid; gap: 1.25rem; padding: 1.25rem 2rem 2rem; max-width: 1100px; }
-    .panel {
-      background: color-mix(in srgb, var(--panel) 92%, transparent);
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      padding: 1rem 1.15rem;
-    }
-    .panel h2 { margin: 0 0 0.75rem; font-size: 1rem; color: var(--accent); font-weight: 600; }
-    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
-    input, textarea, select, button {
-      font: inherit;
-      border-radius: 3px;
-      border: 1px solid var(--line);
-      background: #121820;
-      color: var(--ink);
-      padding: 0.5rem 0.65rem;
-      width: 100%;
-    }
-    textarea { min-height: 120px; font-family: var(--mono); font-size: 0.85rem; }
-    button {
-      width: auto;
-      cursor: pointer;
-      background: var(--accent);
-      color: #1a1408;
-      border: none;
-      font-weight: 600;
-      padding: 0.55rem 0.9rem;
-    }
-    button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
-    button.danger { background: var(--danger); color: #1a0c0a; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
-    .muted { color: var(--muted); font-size: 0.85rem; }
-    .hit {
-      border-top: 1px solid var(--line);
-      padding: 0.65rem 0;
+    header h1 span { color: var(--cyan); font-weight: 400; }
+    header p { max-width: 590px; margin: .54rem 0 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+    .status-cluster { display: grid; gap: .6rem; min-width: min(100%, 310px); }
+    .system-live {
+      display: flex;
+      align-items: center;
+      gap: .55rem;
+      justify-content: flex-end;
+      color: #bdecd7;
       font-family: var(--mono);
-      font-size: 0.82rem;
+      font-size: .7rem;
+      letter-spacing: .06em;
+      text-transform: uppercase;
     }
-    .hit strong { color: var(--ok); }
-    #status { min-height: 1.2rem; color: var(--muted); font-size: 0.85rem; }
-    .hidden { display: none; }
-    @media (max-width: 720px) {
-      main, header { padding-left: 1rem; padding-right: 1rem; }
-      .row { grid-template-columns: 1fr; }
+    .live-dot { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 4px rgba(89,212,154,.1); }
+    .live-dot::after { content:""; position:absolute; inset:-5px; border:1px solid rgba(89,212,154,.55); border-radius:50%; animation: ping 2.2s infinite; }
+    #status {
+      min-height: 1.3rem;
+      padding: .5rem .65rem;
+      border: 1px solid var(--line);
+      background: rgba(7,11,18,.55);
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: .72rem;
+      line-height: 1.25;
+    }
+    #status:empty { display: none; }
+    main { max-width: 1440px; margin: 0 auto; padding: 1.35rem clamp(1rem, 4vw, 3.5rem) 3.25rem; }
+    .panel {
+      position: relative;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    #auth-panel { max-width: 780px; padding: clamp(1.2rem, 3vw, 2rem); overflow: hidden; animation: rise .6s .06s both; }
+    #auth-panel::after { content:"ACCESS / DBX"; position:absolute; right:-.3rem; bottom:-1rem; color:rgba(86,215,243,.055); font-family:var(--mono); font-size:clamp(3.4rem, 10vw, 7rem); font-weight:700; letter-spacing:-.08em; pointer-events:none; }
+    .panel h2 { position: relative; z-index: 1; margin: 0 0 1.25rem; font-size: 1.15rem; letter-spacing: -.02em; font-weight: 600; }
+    .panel h2::before { content:""; display:block; width:32px; height:2px; margin-bottom:.7rem; background:var(--cyan); box-shadow:12px 0 0 rgba(86,215,243,.18); }
+    .panel h2 .muted { color: var(--muted); font-size:.72rem; font-family:var(--mono); font-weight:400; letter-spacing:0; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; }
+    label { display:block; margin-bottom:.38rem; color:var(--muted); font-family:var(--mono); font-size:.7rem; letter-spacing:.045em; }
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 0;
+      background: rgba(4, 9, 15, .66);
+      color: var(--text);
+      padding: .68rem .75rem;
+      transition: border-color .18s, background .18s, box-shadow .18s;
+    }
+    input::placeholder, textarea::placeholder { color: var(--dim); }
+    input:hover, textarea:hover, select:hover { border-color: var(--line-bright); }
+    input:focus, textarea:focus, select:focus { border-color: var(--cyan); background:rgba(6,17,27,.95); box-shadow: inset 3px 0 var(--cyan); outline: none; }
+    textarea { min-height: 160px; resize: vertical; font-family:var(--mono); font-size:.79rem; line-height:1.55; }
+    .actions { display:flex; flex-wrap:wrap; gap:.55rem; margin-top:.9rem; }
+    button {
+      width:auto;
+      min-height: 2.45rem;
+      border: 1px solid var(--cyan);
+      border-radius: 0;
+      background: var(--cyan);
+      color: var(--cyan-ink);
+      padding: .55rem .8rem;
+      font-size: .78rem;
+      font-weight: 700;
+      letter-spacing: .015em;
+      transition: transform .18s, box-shadow .18s, background .18s, color .18s;
+    }
+    button:hover { transform: translateY(-2px); box-shadow: 0 7px 18px rgba(86,215,243,.17); }
+    button:active { transform: translateY(0); }
+    button.secondary { border-color:var(--line-bright); background:transparent; color:var(--text); }
+    button.secondary:hover { border-color:var(--violet); color:#ded7ff; box-shadow:0 7px 18px rgba(169,147,255,.12); }
+    button.danger { border-color: rgba(255,126,130,.65); background:transparent; color:#ffacac; }
+    button.danger:hover { background:rgba(255,126,130,.12); border-color:var(--danger); box-shadow:none; }
+    .muted { color:var(--muted); font-size:.84rem; }
+    .hidden { display:none !important; }
+
+    /* Authenticated operational workspace */
+    #app-panel { display:grid; grid-template-columns:minmax(250px, .84fr) minmax(360px, 1.35fr) minmax(260px, .8fr); gap:1rem; border:0; background:transparent; box-shadow:none; }
+    #app-panel > h2 { display:none; }
+    #app-panel > .row:first-of-type, #app-panel > .actions:first-of-type { display:contents; }
+    #app-panel > .row:first-of-type > div:first-child { grid-column:1; grid-row:2; }
+    #app-panel > .row:first-of-type > div:nth-child(2) { grid-column:1; grid-row:3; }
+    #app-panel > .actions:first-of-type { grid-column:1; grid-row:4; }
+    #app-panel > h2[style] { display:none; }
+    #app-panel > label[for], #app-panel > label { }
+    #app-panel > label:nth-of-type(1), #app-panel > #doc-name, #app-panel > label:nth-of-type(2), #app-panel > #doc-text, #app-panel > .actions:nth-of-type(2) { grid-column:2; }
+    #app-panel > label:nth-of-type(3), #app-panel > #audit-query, #app-panel > .actions:nth-of-type(3), #citations { grid-column:3; }
+    .workspace-head { grid-column:1 / -1; display:grid; grid-template-columns:1fr auto; gap:1rem; align-items:end; padding:.2rem 0 .15rem; animation:rise .45s .04s both; }
+    .workspace-head h2 { margin: .28rem 0 0; font-size:clamp(1.3rem, 2vw, 1.7rem); letter-spacing:-.04em; }
+    .workspace-head h2::before { display:none; }
+    .workspace-note { color:var(--muted); font-size:.8rem; }
+    .review-pulse { display:flex; align-items:center; gap:.55rem; color:var(--muted); font-family:var(--mono); font-size:.67rem; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap; }
+    .trace { position:relative; width:84px; height:18px; overflow:hidden; border-top:1px solid var(--line-bright); border-bottom:1px solid var(--line); background:repeating-linear-gradient(90deg, transparent 0 12px, rgba(86,215,243,.2) 12px 13px); }
+    .trace::after { content:""; position:absolute; top:2px; left:-16px; width:18px; height:12px; background:var(--cyan); box-shadow:0 0 13px 2px rgba(86,215,243,.8); animation:trace 2.8s linear infinite; }
+    .tenant-card, .ingest-card, .audit-card { position:relative; border:1px solid var(--line); background:var(--panel); box-shadow:var(--shadow); overflow:hidden; animation:rise .55s both; }
+    .tenant-card { grid-column:1; grid-row:2 / span 3; padding:1rem; animation-delay:.1s; }
+    .ingest-card { grid-column:2; grid-row:2 / span 3; padding:1rem; animation-delay:.16s; }
+    .audit-card { grid-column:3; grid-row:2 / span 3; padding:1rem; animation-delay:.22s; }
+    .tenant-card::before, .ingest-card::before, .audit-card::before { content:""; position:absolute; top:0; left:0; width:100%; height:2px; background:linear-gradient(90deg, var(--cyan), transparent 70%); opacity:.82; }
+    .audit-card::before { background:linear-gradient(90deg, var(--violet), transparent 70%); }
+    .section-header { display:flex; align-items:flex-start; justify-content:space-between; gap:.75rem; margin-bottom:1rem; }
+    .section-header h3 { margin:.2rem 0 0; font-size:1rem; letter-spacing:-.02em; }
+    .counter { border:1px solid rgba(89,212,154,.35); padding:.25rem .4rem; color:var(--ok); font-family:var(--mono); font-size:.65rem; letter-spacing:.04em; white-space:nowrap; }
+    .tenant-card .row { grid-template-columns:1fr; }
+    .tenant-card .actions { display:grid; grid-template-columns:1fr 1fr; }
+    .tenant-card .actions button:first-child, .tenant-card .actions button:last-child { grid-column:1 / -1; }
+    .tenant-card .actions button { padding-inline:.5rem; }
+    .context-bar { display:flex; align-items:center; gap:.55rem; margin:1.1rem 0 .9rem; padding:.65rem 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--muted); font-size:.72rem; }
+    .context-lock { width:7px; height:7px; border:1px solid var(--ok); transform:rotate(45deg); box-shadow:0 0 10px rgba(89,212,154,.42); }
+    .context-bar strong { color:#cfe3ee; font-family:var(--mono); font-size:.68rem; font-weight:500; }
+    .health-list { display:grid; gap:.55rem; margin-top:1rem; }
+    .health-line { display:flex; justify-content:space-between; gap:.5rem; color:var(--muted); font-family:var(--mono); font-size:.66rem; }
+    .health-line b { color:#c8dae8; font-weight:500; }
+    .health-line b.good { color:var(--ok); }
+    .ingest-card .eyebrow, .audit-card .eyebrow { margin-bottom:.3rem; }
+    .ingest-card h3, .audit-card h3 { margin:0 0 1rem; font-size:1.04rem; letter-spacing:-.02em; }
+    .ingest-card label[style] { margin-top:1rem !important; }
+    .ingest-card .actions { justify-content:flex-end; }
+    .audit-card { display:flex; flex-direction:column; min-height:0; }
+    .audit-card .actions { margin-top:.7rem; }
+    .audit-card .actions button { width:100%; }
+    #citations { min-height:0; margin-top:1rem; overflow:auto; }
+    #citations:empty::before { content:"Evidence citations will appear here after a vector search."; display:block; padding:1rem 0; border-top:1px solid var(--line); color:var(--dim); font-family:var(--mono); font-size:.72rem; line-height:1.55; }
+    .hit { padding:.78rem 0; border-top:1px solid var(--line); color:#c6d5df; font-family:var(--mono); font-size:.73rem; line-height:1.55; }
+    .hit strong { color:var(--cyan); font-weight:600; }
+    .hit div { margin-top:.35rem; color:var(--muted); }
+    .field-label { margin-bottom:.38rem; color:var(--muted); font-size:.66rem; letter-spacing:.08em; }
+    @keyframes rise { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes ping { 0%, 65% { transform:scale(.45); opacity:.8; } 100% { transform:scale(1.2); opacity:0; } }
+    @keyframes trace { to { transform:translateX(108px); } }
+    @media (max-width: 1050px) {
+      #app-panel { grid-template-columns:minmax(240px, .8fr) minmax(330px, 1.2fr); }
+      .tenant-card { grid-column:1; grid-row:2 / span 3; }
+      .ingest-card { grid-column:2; grid-row:2; }
+      .audit-card { grid-column:2; grid-row:3 / span 2; }
+    }
+    @media (max-width: 700px) {
+      header { grid-template-columns:1fr; align-items:start; }
+      .system-live { justify-content:flex-start; }
+      .workspace-head { grid-template-columns:1fr; }
+      #app-panel { grid-template-columns:1fr; }
+      .tenant-card, .ingest-card, .audit-card { grid-column:1; grid-row:auto; }
+      .row { grid-template-columns:1fr; }
+      #auth-panel { padding:1.1rem; }
+      .tenant-card .actions { grid-template-columns:1fr 1fr; }
+    }
+    @media (max-width: 420px) { .tenant-card .actions { grid-template-columns:1fr; } .tenant-card .actions button { grid-column:auto !important; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Legal Auditor</h1>
-    <p>Child product of <strong>DBX</strong> — one isolated tenant per client. Embeddings stay with this app.</p>
-    <div id="status"></div>
+    <div>
+      <span class="brand-kicker">DBX / Controlled Review</span>
+      <h1>Legal <span>Auditor</span></h1>
+      <p>Isolated evidence review for each client tenant. Embeddings remain inside this operational boundary.</p>
+    </div>
+    <div class="status-cluster" aria-live="polite">
+      <div class="system-live"><span class="live-dot" aria-hidden="true"></span> Secure processing posture</div>
+      <div id="status"></div>
+    </div>
   </header>
 
   <main>
-    <section class="panel" id="auth-panel">
-      <h2>Firm access</h2>
+    <section class="panel" id="auth-panel" aria-labelledby="access-heading">
+      <span class="eyebrow">Identity boundary</span>
+      <h2 id="access-heading">Firm access</h2>
       <div class="row">
         <div>
-          <label>Email</label>
-          <input id="email" type="email" placeholder="ops@firm.example" />
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="ops@firm.example" autocomplete="email" />
         </div>
         <div>
-          <label>Password (min 8)</label>
-          <input id="password" type="password" />
+          <label for="password">Password (min 8)</label>
+          <input id="password" type="password" autocomplete="current-password" />
         </div>
       </div>
       <div style="margin-top:0.75rem">
-        <label>Firm name (register only)</label>
-        <input id="firm" type="text" placeholder="Northwind Legal" />
+        <label for="firm">Firm name (register only)</label>
+        <input id="firm" type="text" placeholder="Northwind Legal" autocomplete="organization" />
       </div>
       <div class="actions">
-        <button type="button" id="btn-register">Register</button>
+        <button type="button" id="btn-register">Register firm</button>
         <button type="button" class="secondary" id="btn-login">Log in</button>
       </div>
     </section>
 
-    <section class="panel hidden" id="app-panel">
-      <h2>Clients <span class="muted">(each = one DBX tenant)</span></h2>
-      <div class="row">
+    <section class="hidden" id="app-panel" aria-label="Legal audit workspace">
+      <div class="workspace-head">
         <div>
-          <label>New client name</label>
-          <input id="client-name" placeholder="Atlas Corp" />
+          <span class="eyebrow">Operational workspace</span>
+          <h2>Review evidence without losing the thread.</h2>
         </div>
-        <div>
-          <label>Active client</label>
-          <select id="client-select"></select>
-        </div>
-      </div>
-      <div class="actions">
-        <button type="button" id="btn-create-client">Create client tenant</button>
-        <button type="button" class="secondary" id="btn-refresh">Refresh</button>
-        <button type="button" class="secondary" id="btn-export">Export</button>
-        <button type="button" class="secondary" id="btn-hibernate">Hibernate</button>
-        <button type="button" class="danger" id="btn-delete">Purge client</button>
+        <div class="review-pulse"><span class="trace" aria-hidden="true"></span> Provenance trace active</div>
       </div>
 
-      <h2 style="margin-top:1.25rem">Ingest contract text</h2>
-      <label>Document name</label>
-      <input id="doc-name" placeholder="msa-2026" />
-      <label style="margin-top:0.5rem">Text</label>
-      <textarea id="doc-text" placeholder="Paste contract clauses…"></textarea>
-      <div class="actions">
-        <button type="button" id="btn-ingest">Chunk · embed · VADD</button>
-      </div>
+      <section class="tenant-card" aria-labelledby="tenant-heading">
+        <div class="section-header">
+          <div><span class="eyebrow">Tenant control</span><h3 id="tenant-heading">Client boundary</h3></div>
+          <span class="counter">DBX / 01</span>
+        </div>
+        <div class="row">
+          <div>
+            <label for="client-name">New client name</label>
+            <input id="client-name" placeholder="Atlas Corp" />
+          </div>
+          <div>
+            <label for="client-select">Active client</label>
+            <select id="client-select" aria-label="Active client tenant"></select>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="btn-create-client">Create client tenant</button>
+          <button type="button" class="secondary" id="btn-refresh">Refresh</button>
+          <button type="button" class="secondary" id="btn-export">Export</button>
+          <button type="button" class="secondary" id="btn-hibernate">Hibernate</button>
+          <button type="button" class="danger" id="btn-delete">Purge client</button>
+        </div>
+        <div class="context-bar"><span class="context-lock" aria-hidden="true"></span><span>Tenant isolation <strong>ENFORCED</strong></span></div>
+        <div class="health-list" aria-label="Tenant health">
+          <div class="health-line"><span>VECTOR INDEX</span><b class="good">READY</b></div>
+          <div class="health-line"><span>RETENTION</span><b>CLIENT-SCOPED</b></div>
+          <div class="health-line"><span>EXPORT CHANNEL</span><b>ON DEMAND</b></div>
+        </div>
+      </section>
 
-      <h2 style="margin-top:1.25rem">Audit query</h2>
-      <label>Checklist question</label>
-      <input id="audit-query" placeholder="indemnity liability cap" />
-      <div class="actions">
-        <button type="button" id="btn-audit">VSEARCH with citations</button>
-      </div>
-      <div id="citations"></div>
+      <section class="ingest-card" aria-labelledby="ingest-heading">
+        <span class="eyebrow">Document intake</span>
+        <h3 id="ingest-heading">Prepare an auditable record</h3>
+        <label for="doc-name">Document name</label>
+        <input id="doc-name" placeholder="msa-2026" />
+        <label for="doc-text" style="margin-top:0.5rem">Text</label>
+        <textarea id="doc-text" placeholder="Paste contract clauses…"></textarea>
+        <div class="actions">
+          <button type="button" id="btn-ingest">Chunk · embed · VADD</button>
+        </div>
+      </section>
+
+      <section class="audit-card" aria-labelledby="audit-heading">
+        <span class="eyebrow">Evidence retrieval</span>
+        <h3 id="audit-heading">Audit query</h3>
+        <label for="audit-query">Checklist question</label>
+        <input id="audit-query" placeholder="indemnity liability cap" />
+        <div class="actions">
+          <button type="button" id="btn-audit">VSEARCH with citations</button>
+        </div>
+        <div id="citations" aria-live="polite"></div>
+      </section>
     </section>
   </main>
 
@@ -162,7 +349,7 @@
     function setStatus(msg, ok) {
       const el = document.getElementById("status");
       el.textContent = msg || "";
-      el.style.color = ok === false ? "var(--danger)" : "var(--muted)";
+      el.style.color = ok === false ? "var(--danger)" : ok === true ? "var(--ok)" : "var(--muted)";
     }
 
     async function api(path, opts = {}) {
