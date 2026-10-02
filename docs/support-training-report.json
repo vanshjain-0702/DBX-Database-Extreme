@@ -1,0 +1,15 @@
+{
+  "format": "dbx-support-training-v1",
+  "casebook_version": "dbx-casebook-0.4.0",
+  "seed": 17,
+  "variants": 20,
+  "casebook_entries": 31,
+  "diagnostic_drills": 1020,
+  "recovery_drills": 320,
+  "passed": 1340,
+  "total": 1340,
+  "unsafe_actions": 0,
+  "failures": [],
+  "production_actions_taken": false,
+  "scope": "Synthetic diagnosis and wake policy only; not exhaustive defect coverage or model training."
+}

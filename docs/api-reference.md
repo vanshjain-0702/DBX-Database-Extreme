@@ -26,6 +26,32 @@ Get a JWT token.
 
 ---
 
+## DBX Support Capability API
+
+This API is disabled unless its environment variables are configured. It uses
+separate bearer capabilities rather than operator JWTs:
+
+- `DBX_SUPPORT_READ_TOKEN` (at least 32 characters) with
+  `DBX_SUPPORT_READ_TENANTS` (comma-separated exact tenant IDs).
+- Optional, distinct `DBX_SUPPORT_WAKE_TOKEN` with
+  `DBX_SUPPORT_WAKE_TENANTS`, which must be a subset of the read allowlist.
+
+### GET `/api/support/v1/snapshot`
+
+Requires the read capability. Returns only the tenant views and usage summaries
+for the configured read allowlist. It does not return values, documents, or
+vectors.
+
+### POST `/api/support/v1/tenants/{tenantID}/wake`
+
+Requires the separate wake capability and an exact tenant ID in
+`DBX_SUPPORT_WAKE_TENANTS`. DBX writes a pre-action audit record to
+`DBX_SUPPORT_AUDIT_FILE` (default: `<DBX_DATA_DIR>/support-audit.jsonl`) before
+calling the tenant lifecycle manager. A failed audit prevents the action. Each
+tenant is rate-limited to one wake attempt per five minutes per orchestrator
+process. This is a static shared capability, not a short-lived per-agent identity;
+rotate it through the deployment secret manager.
+
 ## Tenant Management
 
 ### GET `/api/tenants`

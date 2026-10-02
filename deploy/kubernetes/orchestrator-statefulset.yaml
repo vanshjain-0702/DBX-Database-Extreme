@@ -44,6 +44,22 @@ spec:
             secretKeyRef:
               name: dbx-control-plane
               key: internal-token
+        - name: DBX_SUPPORT_READ_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-support-capabilities
+              key: read-token
+              optional: true
+        - name: DBX_SUPPORT_READ_TENANTS
+          value: ""
+        - name: DBX_SUPPORT_WAKE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-support-capabilities
+              key: wake-token
+              optional: true
+        - name: DBX_SUPPORT_WAKE_TENANTS
+          value: ""
         - name: DBX_DEFAULT_PASSWORD
           valueFrom:
             secretKeyRef:

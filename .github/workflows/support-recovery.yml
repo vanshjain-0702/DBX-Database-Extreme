@@ -1,0 +1,53 @@
+name: Support and Recovery
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: support-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  support:
+    name: Support drills (${{ matrix.os }}, Python ${{ matrix.python }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.25"
+          cache: true
+      - name: Support fault and contract tests
+        working-directory: support-extension
+        run: python -m unittest discover -s tests -v
+      - name: Synthetic training campaign
+        working-directory: support-extension
+        shell: bash
+        run: python -m dbx_support train --seed 17 --variants 20 > support-training.json
+      - name: API integration and concurrency
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            go test -count=1 -timeout 5m -race -v ./internal/orchestrator ./internal/server -run 'Support|RecoverTenantTask'
+          else
+            go test -count=1 -timeout 5m -v ./internal/orchestrator ./internal/server -run 'Support|RecoverTenantTask'
+          fi
+      - name: Preserve training evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: support-training-${{ matrix.os }}-${{ matrix.python }}
+          path: support-extension/support-training.json

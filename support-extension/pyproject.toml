@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dbx-support-extension"
+version = "0.4.0"
+description = "Manually started diagnostics and policy-gated recovery for DBX deployments"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+dbx-support = "dbx_support.cli:main"
+
+[tool.setuptools]
+packages = ["dbx_support"]

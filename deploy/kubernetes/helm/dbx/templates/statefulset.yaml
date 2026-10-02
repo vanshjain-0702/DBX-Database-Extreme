@@ -48,6 +48,22 @@ spec:
             secretKeyRef:
               name: dbx-control-plane
               key: internal-token
+        - name: DBX_SUPPORT_READ_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-support-capabilities
+              key: read-token
+              optional: true
+        - name: DBX_SUPPORT_READ_TENANTS
+          value: '{{ .Values.support.readTenants | default "" }}'
+        - name: DBX_SUPPORT_WAKE_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: dbx-support-capabilities
+              key: wake-token
+              optional: true
+        - name: DBX_SUPPORT_WAKE_TENANTS
+          value: '{{ .Values.support.wakeTenants | default "" }}'
         - name: DBX_ISOLATION_MODE
           value: '{{ .Values.isolationMode | default "strict" }}'
         - name: DBX_PRODUCTION

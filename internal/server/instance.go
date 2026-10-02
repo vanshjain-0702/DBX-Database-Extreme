@@ -95,6 +95,7 @@ func (i *Instance) Start(ctx context.Context) error {
 		i.snapshotter = snapshotter
 		recovery := persistence.NewRecovery(wal, snapshotter)
 		if err := recovery.Recover(kv, vecStore); err != nil {
+			logger.ErrorCode("DBX_WAL_RECOVERY_ERROR", "tenant startup recovery failed: %v", err)
 			_ = wal.Close()
 			i.wal = nil
 			i.snapshotter = nil
@@ -396,7 +397,7 @@ func (i *Instance) recoverTenantTask(name string) {
 			i.metrics.TenantReady.Store(0)
 		}
 		err := fmt.Errorf("tenant task %s panicked: %v", name, recovered)
-		i.logger.Error("%v", err)
+		i.logger.ErrorCode("DBX_TENANT_TASK_PANIC", "tenant task %s panicked; worker marked unhealthy", name)
 		select {
 		case i.serverErr <- err:
 		default:

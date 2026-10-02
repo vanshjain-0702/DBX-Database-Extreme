@@ -31,10 +31,25 @@ func NewLogger(level, format string) *Logger {
 	return &Logger{log: log}
 }
 
-func (l *Logger) Info(msg string, fields ...interface{})  { l.log.Info().Msg(fmt.Sprintf(msg, fields...)) }
-func (l *Logger) Error(msg string, fields ...interface{}) { l.log.Error().Msg(fmt.Sprintf(msg, fields...)) }
-func (l *Logger) Warn(msg string, fields ...interface{})  { l.log.Warn().Msg(fmt.Sprintf(msg, fields...)) }
-func (l *Logger) Debug(msg string, fields ...interface{}) { l.log.Debug().Msg(fmt.Sprintf(msg, fields...)) }
+func (l *Logger) Info(msg string, fields ...interface{}) {
+	l.log.Info().Msg(fmt.Sprintf(msg, fields...))
+}
+func (l *Logger) Error(msg string, fields ...interface{}) {
+	l.log.Error().Msg(fmt.Sprintf(msg, fields...))
+}
+func (l *Logger) Warn(msg string, fields ...interface{}) {
+	l.log.Warn().Msg(fmt.Sprintf(msg, fields...))
+}
+func (l *Logger) Debug(msg string, fields ...interface{}) {
+	l.log.Debug().Msg(fmt.Sprintf(msg, fields...))
+}
+
+// ErrorCode emits a stable machine-readable code alongside a human-readable
+// message. Never place customer payloads, credentials, or raw tenant values in
+// the message or fields.
+func (l *Logger) ErrorCode(code, msg string, fields ...interface{}) {
+	l.log.Error().Str("code", code).Msg(fmt.Sprintf(msg, fields...))
+}
 
 // TraceSpan represents a tracing span (simplified).
 type TraceSpan struct {

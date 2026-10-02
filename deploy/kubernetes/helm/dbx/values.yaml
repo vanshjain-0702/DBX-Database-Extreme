@@ -33,5 +33,12 @@ resources:
 
 isolationMode: strict
 
+# Optional support capability allowlists. Secret keys are read-token/wake-token
+# in the dbx-support-capabilities Secret. Leave both tenant lists empty to keep
+# the support API disabled.
+support:
+  readTenants: ""
+  wakeTenants: ""
+
 autoscaling:
   enabled: false

@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -102,6 +103,21 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to init manager: %v", err)
 	}
+	supportAuditFile := strings.TrimSpace(os.Getenv("DBX_SUPPORT_AUDIT_FILE"))
+	if supportAuditFile == "" {
+		supportAuditFile = filepath.Join(dataDir, "support-audit.jsonl")
+	}
+	supportAPI, err := orchestrator.NewSupportAPI(
+		manager,
+		os.Getenv("DBX_SUPPORT_READ_TOKEN"),
+		os.Getenv("DBX_SUPPORT_WAKE_TOKEN"),
+		os.Getenv("DBX_SUPPORT_READ_TENANTS"),
+		os.Getenv("DBX_SUPPORT_WAKE_TENANTS"),
+		supportAuditFile,
+	)
+	if err != nil {
+		log.Fatalf("Invalid DBX support capability configuration: %v", err)
+	}
 
 	adminStore, err := orchestrator.NewAdminStore(*adminFile, adminPassword)
 	if err != nil {
@@ -186,6 +202,11 @@ func main() {
 	// Protected Routes Mux
 	protectedMux := http.NewServeMux()
 
+	// Support APIs use distinct, tenant-allowlisted capabilities rather than
+	// inheriting the broad operator JWT.
+	mux.HandleFunc("/api/support/v1/snapshot", supportAPI.Snapshot)
+	mux.HandleFunc("/api/support/v1/tenants/", supportAPI.Wake)
+
 	// Provisioning API
 	protectedMux.HandleFunc("/api/provision", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
@@ -193,9 +214,9 @@ func main() {
 			return
 		}
 		var req struct {
-			ID       string `json:"id"`
-			Name     string `json:"name"`
-			Replicas int    `json:"replicas"`
+			ID             string `json:"id"`
+			Name           string `json:"name"`
+			Replicas       int    `json:"replicas"`
 			VectorEncoding string `json:"vector_encoding"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
