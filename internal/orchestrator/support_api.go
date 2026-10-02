@@ -87,7 +87,7 @@ func parseSupportTenantAllowlist(value string) (map[string]struct{}, error) {
 			return nil, fmt.Errorf("tenant ID %q is a path segment", id)
 		}
 		for _, ch := range id {
-			if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '.' || ch == '_' || ch == '-') {
+			if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != '.' && ch != '_' && ch != '-' {
 				return nil, fmt.Errorf("tenant ID %q contains unsupported characters", id)
 			}
 		}
@@ -211,7 +211,7 @@ func (s *SupportAPI) Wake(w http.ResponseWriter, r *http.Request) {
 
 	if err := s.appendAudit(tenantID, "attempt"); err != nil {
 		s.mu.Lock()
-		if s.lastWake[tenantID] == now {
+		if s.lastWake[tenantID].Equal(now) {
 			delete(s.lastWake, tenantID)
 		}
 		s.mu.Unlock()
