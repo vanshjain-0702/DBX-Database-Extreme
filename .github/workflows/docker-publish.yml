@@ -1,6 +1,8 @@
 name: Docker Publish
 
 on:
+  push:
+    tags: ["v*.*.*"]
   release:
     types: [published]
 
@@ -28,4 +30,29 @@ jobs:
           context: .
           file: ./deploy/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:latest,ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:${{ github.event.release.tag_name }}
+          tags: ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:latest,ghcr.io/${{ github.repository_owner }}/dbx-orchestrator:${{ github.event.release.tag_name || github.ref_name }}
+
+  publish-release:
+    name: Publish release announcement
+    if: github.event_name == 'push'
+    needs: push_to_registry
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Publish versioned release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          test -f "$notes"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --title "DBX ${GITHUB_REF_NAME}" --notes-file "$notes"
+          else
+            gh release create "$GITHUB_REF_NAME" --verify-tag --title "DBX ${GITHUB_REF_NAME}" --notes-file "$notes" --latest
+          fi

@@ -6,7 +6,9 @@
 - Contact: hello@dbxdb.io
 - License: Business Source License 1.1 (Apache 2.0 after four years)
 - Source: https://github.com/vanshjain-0702/DBX-Database-Extreme
-- Version: 1.2.0 (Isolation Kernel + VSEARCH MIN_SCORE/EF/SPACE, VSIM, VFUSE). GHCR: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0. GitHub Release: https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.2.0
+- Version: 1.3.0 (live vector migration, historical search, framework adapters, stronger isolation, encrypted replication, scoped support recovery). GHCR: ghcr.io/vanshjain-0702/dbx-orchestrator:v1.3.0. GitHub Release: https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.3.0
+- Announcement: https://dbxdb.co.in/posts.html#v1-3-0-2026-10-02
+- Release notes and upgrade steps: https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/releases/v1.3.0.md
 
 ## What it is
 
@@ -37,7 +39,17 @@ Public site source: website/.
 Live: https://dbxdb.co.in/
 Incubation pitch: https://dbxdb.co.in/pitch.html
 Local preview: `make site`. Public host: dbxdb.co.in.
-Docker: deploy/Dockerfile. GHCR ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0 (and :latest on GitHub Release). Image defaults to DBX_ISOLATION_MODE=strict; docker run requires DBX_KEK (64 hex) or -e DBX_ISOLATION_MODE=inprocess. Compose: cp .env.example .env (repo root, include KEK), then docker compose --env-file .env -f deploy/docker-compose.yml up --build (or make docker-up). Python: pip install -e sdk/python before `from dbx import DBXClient`. SDK version 1.2.0.
+Docker: deploy/Dockerfile. GHCR ghcr.io/vanshjain-0702/dbx-orchestrator:v1.3.0 (and :latest on version tags or GitHub Releases). Image defaults to DBX_ISOLATION_MODE=strict; docker run requires DBX_KEK (64 hex) or -e DBX_ISOLATION_MODE=inprocess. Compose: cp .env.example .env (repo root, include KEK), then docker compose --env-file .env -f deploy/docker-compose.yml up --build (or make docker-up). Python: pip install -e sdk/python before `from dbx import DBXClient`. SDK version 1.3.0; LangChain and LlamaIndex optional extras are available.
+
+Support extension 0.4.0 is included separately with DBX 1.3.0. It is manually
+started and uses support-specific, tenant-allowlisted read and optional wake
+capabilities. Wake requires a durable audit and is rate-limited; client post-checks
+verify recovery. It cannot repair arbitrary bugs, restore/delete customer data,
+or change security/configuration. Coverage: 31 casebook entries, 43 support tests,
+and 1,340 synthetic diagnosis/recovery-policy drills; no model-weight training.
+WAL replication uses mutual HMAC-SHA256 authentication and per-connection
+AES-256-GCM frames. Strict Linux workers require CGO_ENABLED=0. Vector payload
+rows remain mmap plaintext and need encrypted storage for at-rest confidentiality.
 
 Launch: reader keys cannot SET/VADD/SETEX. Production /metrics needs Bearer. No default
 superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.

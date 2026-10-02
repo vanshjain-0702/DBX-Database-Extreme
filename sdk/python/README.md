@@ -1,7 +1,10 @@
-# Python SDK
+# Python SDK — DBX v1.3.0
 
 RESP client (`DBXClient`) and control-plane helper (`ControlPlane`) for one
-DBX tenant. LangChain adapter: `langchain_dbx.DBXVectorStore`.
+DBX tenant. Framework adapters: `langchain_dbx.DBXVectorStore` and
+`llamaindex_dbx.DBXVectorStore`. This release includes bounded batch ingest and
+optional extras for both integrations. See the
+[v1.3.0 release notes](../../docs/releases/v1.3.0.md).
 
 ```bash
 pip install -e .                 # from sdk/python

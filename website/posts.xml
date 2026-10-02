@@ -3,9 +3,16 @@
   <channel>
     <title>DBX updates</title>
     <link>https://dbxdb.co.in/posts.html</link>
-    <description>What shipped in DBX — v1.2.0 recall, Isolation Kernel, walkthrough. Not a mail list.</description>
+    <description>DBX release announcements: v1.3.0 vector migration, historical search, framework adapters, encrypted replication, and scoped support recovery.</description>
     <language>en-us</language>
-    <lastBuildDate>Sun, 13 Sep 2026 18:00:00 GMT</lastBuildDate>
+    <lastBuildDate>Fri, 02 Oct 2026 00:00:00 +0530</lastBuildDate>
+    <item>
+      <title>DBX v1.3.0 — memory you can evolve and operate</title>
+      <link>https://dbxdb.co.in/posts.html#v1-3-0-2026-10-02</link>
+      <guid isPermaLink="true">https://dbxdb.co.in/posts.html#v1-3-0-2026-10-02</guid>
+      <pubDate>Fri, 02 Oct 2026 00:00:00 +0530</pubDate>
+      <description>Since v1.2.0: WAL-durable live vector migration, historical search over retained WAL, LangChain and LlamaIndex adapters, stronger Linux worker isolation, authenticated encrypted replication, and opt-in scoped support diagnostics with audited tenant wake. Includes dashboard and reliability improvements, Legal Auditor and Jurix examples, 43 support tests, and 1,340 synthetic drills. Upgrade steps and the full comparison are linked in the announcement.</description>
+    </item>
     <item>
       <title>Vector upgrades: migrate live, inspect history</title>
       <link>https://dbxdb.co.in/posts.html#vector-upgrades-2026-09-13</link>

@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  var POSTS_HEAD = "v1-2-0-2026-09-10";
+  var POSTS_HEAD = "v1-3-0-2026-10-02";
   var POSTS_KEY = "dbx-posts-seen";
 
   function $(sel, root) {

@@ -58,11 +58,15 @@
           <li><code>VADD</code> / <code>VADD_BATCH</code> — optional <code>SPACE name</code></li>
           <li><code>VDEL</code> — generation tombstone; optional <code>SPACE</code></li>
           <li><code>VCOMPACT</code> — tenant-admin; rewrite active rows and rebuild HNSW</li>
-          <li><code>VSEARCH</code> — cosine, top-k last. Flags: <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>, <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code></li>
+          <li><code>VSEARCH</code> — cosine, top-k last. Flags: <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>, <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>, <code>AS_OF</code></li>
+          <li><code>VMIGRATE START/ADD/SWAP/CANCEL</code> — WAL-durable shadow-index lifecycle; supply re-embedded vectors and promote a non-empty target</li>
           <li><code>VSIM</code> — neighbors of a stored id (self excluded); same flags as <code>VSEARCH</code></li>
           <li><code>VFUSE</code> — late-fusion across named spaces (<code>SPACE s floats…</code> repeated, optional <code>WEIGHTS w1,w2</code>)</li>
         </ul>
         <p>There is no <code>VGET</code> or <code>VSET</code>. Recall and latency gates are on the <a href="../performance.html">performance</a> page.</p>
+        <h2 id="support">Support capability API — v1.3.0</h2>
+        <p><code>GET /api/support/v1/snapshot</code> returns allowlisted tenant summaries using a dedicated read token. Optional <code>POST /api/support/v1/tenants/{id}/wake</code> requires a separate wake token, an exact tenant allowlist, a hibernated tenant, and durable audit. The server enforces a five-minute cooldown per tenant and process.</p>
+        <p>Configure <code>DBX_SUPPORT_READ_TOKEN</code> and <code>DBX_SUPPORT_READ_TENANTS</code>; optional wake uses <code>DBX_SUPPORT_WAKE_TOKEN</code> and <code>DBX_SUPPORT_WAKE_TENANTS</code>. The support API is disabled by default. <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/api-reference.md">Full contract</a> · <a href="../posts.html#v1-3-0-2026-10-02">Release announcement</a>.</p>
         <h2>Metrics</h2>
         <p><code>GET /t/{tenantID}/metrics</code> — JSON command/latency/memory snapshot. Orchestrator <code>GET /metrics</code> is Prometheus text with per-tenant labels. Production requires <code>Authorization: Bearer</code> (operator JWT or <code>DBX_INTERNAL_API_TOKEN</code>). <code>-insecure-http</code> leaves it open for local scrapes. Tenant engines also expose <code>/usage</code> and <code>/metrics/prometheus</code> to the internal token.</p>
       </article>

@@ -285,7 +285,7 @@ export default function LoginPage() {
         >
           <div className="flex items-center gap-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.25)' }}>
             <Database size={11} />
-            <span>DBX v1.2.0 — per-tenant memory engine</span>
+            <span>DBX v1.3.0 — per-tenant memory engine</span>
           </div>
           <div
             className="text-[10px] font-mono px-2 py-0.5 rounded"

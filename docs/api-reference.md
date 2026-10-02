@@ -28,6 +28,9 @@ Get a JWT token.
 
 ## DBX Support Capability API
 
+Added in DBX v1.3.0. See the [release notes](releases/v1.3.0.md) for the
+vector, integration, replication, and deployment changes since v1.2.0.
+
 This API is disabled unless its environment variables are configured. It uses
 separate bearer capabilities rather than operator JWTs:
 

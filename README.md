@@ -24,7 +24,7 @@
   <a href="https://dbxdb.co.in/demo.html"><img src="https://img.shields.io/badge/demo-watch%20video-0a66c2" alt="Show demo video" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSL%201.1-orange.svg" alt="License" /></a>
   <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases"><img src="https://img.shields.io/github/v/release/vanshjain-0702/DBX-Database-Extreme" alt="Release" /></a>
-  <img src="https://img.shields.io/badge/version-1.2.0-0a66c2" alt="Version 1.2.0" />
+  <img src="https://img.shields.io/badge/version-1.3.0-0a66c2" alt="Version 1.3.0" />
   <img src="https://img.shields.io/badge/go-1.25+-blue.svg" alt="Go Version" />
 </p>
 
@@ -54,17 +54,22 @@ Tenant recall (Semantic / Similar-to-id / Multimodal) on a live engine, then the
 
 ## Release status
 
-**DBX v1.2.0 is the recall cut** on the same single-node production profile as
-v1.1.0: 100 tenants/node, 100k vectors/tenant, durable strings + vectors.
-Isolation Kernel (`strict` idle RSS ~14–17 MiB/worker) is unchanged. Certified
-ANN p50 is still 2.304 ms. What is new: `VSEARCH` `MIN_SCORE` / `EF` / `SPACE`,
-`VSIM` (neighbors of a stored id), `VFUSE` (weighted cosine sum, not a
-multimodal model), Python helpers, playground tabs, and the public site that
-demonstrates them. This is a better product an agent can call, not a faster
-kernel.
+**DBX v1.3.0 brings memory you can evolve and operate.** Since v1.2.0, DBX
+adds WAL-durable live vector migration, historical search over retained WAL,
+LangChain and LlamaIndex adapters, stronger Linux worker seals, authenticated
+encrypted replication, and opt-in scoped support diagnostics with audited wake.
+The dashboard, query API, and WAL recovery/concurrency paths also received
+updates. Read the [v1.3.0 release notes and upgrade steps](docs/releases/v1.3.0.md),
+[repository changelog](CHANGELOG.md), or
+[official announcement](https://dbxdb.co.in/posts.html#v1-3-0-2026-10-02).
+
+The supported single-node profile remains 100 tenants/node, 100k vectors/tenant,
+and durable strings + vectors. Published performance figures refer to the
+documented certification host and workload; this release adds no new measured
+performance claim.
 
 Linux CI enforces race detection, coverage floors, noisy-neighbor isolation, and
-the 100k-vector harness. Optional async WAL replicas can be provisioned without
+the vector smoke harness. Optional async WAL replicas can be provisioned without
 putting writes through Raft; cluster/sharding, tiering, and non-string RESP
 mutation families still fail closed. See the
 [measured certification matrix](scripts/benchmarks/performance_analysis.md).
@@ -224,9 +229,9 @@ customers who each need memory, DBX is built for exactly that shape.
 The Docker image (`deploy/Dockerfile`) embeds the dashboard, puts `dbx-orchestrator`
 and `dbx-server` on `PATH`, and **defaults to `DBX_ISOLATION_MODE=strict`**.
 Missing `DBX_KEK` (64 hex characters) is a boot failure, not plaintext fallback.
-Product version is **1.2.0**, published as
-`ghcr.io/vanshjain-0702/dbx-orchestrator` (`:v1.2.0` and `:latest` track GitHub
-Releases, not every push). Isolation details:
+Product version is **1.3.0**, published as
+`ghcr.io/vanshjain-0702/dbx-orchestrator` (`:v1.3.0` and `:latest` are published
+for version tags or GitHub Releases, rather than every branch push). Isolation details:
 [docs/isolation.md](docs/isolation.md).
 
 ### Option 1: Docker (published image)
@@ -241,7 +246,7 @@ docker run --rm -p 8000:8000 -p 6380:6380 \
   -e DBX_INTERNAL_API_TOKEN='replace-with-a-random-service-token' \
   -e DBX_KEK \
   -e DBX_NODE_MEMORY_BUDGET=8gb \
-  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0
+  ghcr.io/vanshjain-0702/dbx-orchestrator:v1.3.0
 ```
 
 Open **http://localhost:8000** and log in with `admin` / the password you set.

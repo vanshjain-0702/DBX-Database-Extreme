@@ -19,7 +19,7 @@
       <section class="slide is-on cover" data-notes="DBX is a database for software that needs separate memory for every customer. This deck covers its tenant model, database features, operating experience, measured performance, and current boundaries.">
         <div class="cover-grid">
           <div class="cover-copy">
-            <div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">Product overview · v1.2.0</span></div></div>
+            <div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">Product overview · v1.3.0</span></div></div>
             <p class="kicker">A database for multi-tenant products</p>
             <h1>Every customer<br>gets a <em>database.</em></h1>
             <p class="lede">Durable application state and vector memory, organized around the tenant boundary and operated from one self-hosted product.</p>
@@ -109,8 +109,8 @@
           <div class="operation-item"><span class="op-no">02</span><div><h3>Back up</h3><p>Versioned tenant archives carry SHA-256 checksums across KV and vector state.</p></div><span class="op-tag">TENANT ARCHIVE</span></div>
           <div class="operation-item"><span class="op-no">03</span><div><h3>Change safely</h3><p>Build and promote a replacement vector index while the current index remains searchable.</p></div><span class="op-tag">SHADOW MIGRATION</span></div>
           <div class="operation-item"><span class="op-no">04</span><div><h3>Investigate</h3><p>Search retained vector state as of a timestamp for retrieval analysis.</p></div><span class="op-tag">TIME-TRAVEL</span></div>
-          <div class="operation-item"><span class="op-no">05</span><div><h3>Replicate</h3><p>Optional WAL replicas receive changes asynchronously; primary writes acknowledge locally.</p></div><span class="op-tag">ASYNC WAL</span></div>
-          <div class="operation-item"><span class="op-no">06</span><div><h3>Observe</h3><p>Console, explorer, playground, tenant keys, and runtime views ship with the deployment.</p></div><span class="op-tag">OPERATOR UI</span></div>
+          <div class="operation-item"><span class="op-no">05</span><div><h3>Replicate</h3><p>Optional replicas stream authenticated, encrypted WAL; primary writes acknowledge locally.</p></div><span class="op-tag">ENCRYPTED WAL</span></div>
+          <div class="operation-item"><span class="op-no">06</span><div><h3>Support</h3><p>Scoped diagnostics and opt-in audited wake accompany the embedded operator dashboard.</p></div><span class="op-tag">SUPPORT + UI</span></div>
         </div>
         <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>08 / 12</span></div>
       </section>
@@ -141,7 +141,7 @@
       </section>
 
       <section class="slide close-slide" data-notes="Close on DBX's product thesis: tenant as the unit of storage and lifecycle. Point to the DBX website and repository for product details, API references, and benchmark methodology.">
-        <div class="close-copy"><div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">DBX · v1.2.0</span></div></div><p class="kicker">A database boundary for every customer</p><h1>One customer.<br>One <em>database.</em></h1><p class="lede">Durable state, vector memory, and tenant-level operations in one self-hosted database.</p><div class="close-links"><a href="https://dbx-database-extreme.com">dbx-database-extreme.com</a><span>github.com/vanshjain-0702/DBX-Database-Extreme</span></div></div>
+        <div class="close-copy"><div class="cover-brand"><img class="logo-mark lg" src="assets/logo.jpg" alt="DBX"><div class="brand-lockup"><span class="brand-name">DATABASE EXTREME</span><span class="brand-sub">DBX · v1.3.0</span></div></div><p class="kicker">A database boundary for every customer</p><h1>One customer.<br>One <em>database.</em></h1><p class="lede">Durable state, vector memory, and tenant-level operations in one self-hosted database.</p><div class="close-links"><a href="https://dbxdb.co.in">dbxdb.co.in</a><span>github.com/vanshjain-0702/DBX-Database-Extreme</span></div></div>
         <figure class="shot close-shot"><div class="shot-bar"><i></i><i></i><i></i><span>DBX / operator / overview</span></div><img src="assets/product/overview.png" alt="DBX operator dashboard showing database health and key distribution"><figcaption>Inspect the product, API, and measured benchmark methodology</figcaption></figure>
         <div class="slide-index"><span>DBX / DATABASE</span><span>END</span></div>
         <div class="foot"><span class="foot-brand"><img src="assets/logo.jpg" alt="">DBX · Database product deck</span><span>12 / 12</span></div>

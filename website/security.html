@@ -113,6 +113,15 @@
         <p class="muted">v1 is a single-node profile. Raft and cluster mode fail closed. Optional async WAL replicas ack on the primary; replica lag is possible. Details in <a href="docs/architecture.html">architecture</a>.</p>
       </div>
     </section>
+    <section class="section" id="v1-3-0-security">
+      <div class="wrap">
+        <p class="kicker">v1.3.0 · Deployment boundary</p>
+        <h2>Stronger worker seals. Scoped support capabilities.</h2>
+        <p>Linux strict workers now apply Landlock and <code>no_new_privs</code> across worker threads, with seccomp restrictions on socket creation and syscall paths. Build standalone strict workers with <code>CGO_ENABLED=0</code>. WAL replication uses mutual authentication and per-connection AES-256-GCM encryption with tamper and replay rejection.</p>
+        <p>The optional support API uses separate read and wake credentials with exact tenant allowlists. A wake requires a durable pre-action audit, is rate-limited, and is checked by the client. Support credentials grant no restore, deletion, key rotation, or configuration capability.</p>
+        <p><a href="posts.html#v1-3-0-2026-10-02">Release announcement</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/releases/v1.3.0.md">Upgrade steps and storage boundaries</a></p>
+      </div>
+    </section>
   </main>
   <div id="colophon"></div>
   <script src="assets/site.js"></script>

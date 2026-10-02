@@ -61,7 +61,7 @@ vars from the Makefile `run-dev` target and run
 
 Compose: `cp .env.example .env`, fill secrets including 64-hex `DBX_KEK`, then
 `make docker-up` (loads the repo-root `.env`). The published image is
-`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.2.0` and defaults to isolation
+`ghcr.io/vanshjain-0702/dbx-orchestrator:v1.3.0` and defaults to isolation
 `strict`, so `docker run` without `DBX_KEK` exits.
 
 Public site copy is [`website/`](website/), live at

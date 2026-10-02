@@ -1,5 +1,9 @@
 # Support and recovery curriculum
 
+Included in [DBX v1.3.0](releases/v1.3.0.md). The separately installed support
+extension is versioned as `0.4.0`; the DBX release adds the scoped server API
+and deployment wiring used by this curriculum.
+
 The support extension reduces routine diagnostic work and can perform one
 explicitly enabled tenant wake per session. DBX itself already supervises failed
 tenant engines with a bounded restart policy. The extension does not add another

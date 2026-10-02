@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Updates — DBX</title>
-  <meta name="description" content="What shipped in DBX: v1.2.0 recall (VSEARCH, VSIM, VFUSE), Isolation Kernel, the operator walkthrough, and v1. Honest notes, not a changelog dump.">
+  <meta name="description" content="DBX v1.3.0: live vector migration, historical search, LangChain and LlamaIndex adapters, encrypted replication, and scoped support recovery. Changes since v1.2.0.">
   <meta property="og:title" content="Updates — DBX">
-  <meta property="og:description" content="Latest posts on v1.2.0 recall, Isolation Kernel, and the walkthrough. Header badge marks unread posts.">
+  <meta property="og:description" content="DBX v1.3.0 brings memory you can evolve and operate. Read the release announcement and changes since v1.2.0.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.co.in/posts.html">
   <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
@@ -30,16 +30,35 @@
       <div class="wrap">
         <p class="kicker">What changed, in order</p>
         <h1>Updates</h1>
-        <p>Short posts when the engine or the site moves. Newest first: v1.2.0 recall, Isolation Kernel, the public site. Opening this page clears the header badge. There is no mail or push list — <code>hello@dbxdb.io</code> still has no MX. RSS: <a href="posts.xml">posts.xml</a>. Machine-readable history stays on the <a href="changelog.html">changelog</a>.</p>
+        <p>Release announcements and product updates, newest first. DBX v1.3.0 brings live vector migration, historical search, framework integrations, stronger isolation, and scoped support recovery. Opening this page clears the header badge. Follow the <a href="posts.xml">RSS feed</a> or browse the <a href="changelog.html">changelog</a>.</p>
       </div>
     </header>
 
     <section class="section">
       <div class="wrap post-feed">
+        <article class="post-card" id="v1-3-0-2026-10-02">
+          <time datetime="2026-10-02">2 Oct 2026</time>
+          <div>
+            <h2>DBX v1.3.0 — memory you can evolve and operate <span class="new-tag">New</span></h2>
+            <p>Since v1.2.0, DBX has grown from its recall release into a fuller operating toolkit for per-tenant AI memory. You can change embeddings while current search stays available, inspect retained retrieval history, connect application frameworks, and diagnose a tenant through a scoped support interface.</p>
+            <ul>
+              <li><strong>Evolve memory.</strong> <code>VMIGRATE START/ADD/SWAP/CANCEL</code> builds and promotes a shadow index with WAL-durable lifecycle operations. <code>VSEARCH ... AS_OF</code> reconstructs retained vector history for retrieval audits and incident reproduction.</li>
+              <li><strong>Connect your application.</strong> LangChain and LlamaIndex adapters, bounded batch ingest, RAG examples, refreshed dashboard views, and command-string or argument-array HTTP queries.</li>
+              <li><strong>Strengthen the boundary.</strong> Linux worker seals cover all worker threads, seccomp restricts network socket creation, and WAL replicas use mutual authentication and AES-256-GCM encrypted frames.</li>
+              <li><strong>Support one tenant at a time.</strong> A separately installed extension reads allowlisted summaries. An optional, distinct wake capability can wake a hibernated tenant with a durable pre-action audit, cooldown, and independent post-check.</li>
+              <li><strong>Exercise the decisions.</strong> The support curriculum includes 31 casebook entries, 43 fault/contract tests, and 1,340 repeatable synthetic diagnostic and recovery-policy drills.</li>
+              <li><strong>Build on examples.</strong> Legal Auditor and Jurix demonstrate application workflows around tenant-scoped memory and retrieval.</li>
+            </ul>
+            <p>Migration requires application-side re-embedding and temporary storage. Historical search is bounded by retained WAL. Replication remains asynchronous, and migration lifecycle records are not yet a replicated protocol. Support is opt-in and cannot repair arbitrary defects or restore, delete, or reconfigure customer data.</p>
+            <p>The single-node profile remains 100 tenants per node, 100k vectors per tenant, and durable strings plus vectors. Existing performance figures retain their original certification date and workload.</p>
+            <p><a href="changelog.html#v1-3-0">v1.3.0 changelog</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/releases/v1.3.0.md">Release notes and upgrade steps</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.3.0">GitHub Release</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/compare/v1.2.0...v1.3.0">Full comparison</a></p>
+          </div>
+        </article>
+
         <article class="post-card" id="vector-upgrades-2026-09-13">
           <time datetime="2026-09-13">13 Sep 2026</time>
           <div>
-            <h2>Vector upgrades: migrate live, inspect history <span class="new-tag">New</span></h2>
+            <h2>Vector upgrades: migrate live, inspect history</h2>
             <p>DBX now connects two operational needs for per-tenant AI memory: changing embeddings without taking current search offline, and reproducing what a tenant’s vector index looked like at an earlier point in time.</p>
             <ul>
               <li><code>VMIGRATE</code> builds a complete shadow index while the current index remains searchable. Stream caller-generated vectors with <code>VMIGRATE ADD</code>, promote a non-empty target with <code>VMIGRATE SWAP</code>, or cancel without changing the live index.</li>
@@ -53,7 +72,7 @@
         <article class="post-card" id="v1-2-0-2026-09-10">
           <time datetime="2026-09-10">10 Sep 2026</time>
           <div>
-            <h2>v1.2.0 — recall an agent can actually call <span class="new-tag">New</span></h2>
+            <h2>v1.2.0 — recall an agent can actually call</h2>
             <p>v1.1.0 was Isolation Kernel: one worker per tenant, Unix sockets, <code>HELLO</code> / <code>INFO</code>, and a <code>VSEARCH</code>-shaped recall path. v1.2.0 keeps that kernel and finishes the recall surface.</p>
             <ul>
               <li><code>VSEARCH</code> — caller vector, cosine over that tenant’s HNSW. Trailing <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>.</li>

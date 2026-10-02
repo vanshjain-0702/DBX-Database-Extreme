@@ -2,6 +2,12 @@
 
 **Live (custom domain):** [https://dbxdb.co.in/](https://dbxdb.co.in/)
 
+**Current release:** DBX v1.3.0, announced 2 October 2026. The homepage,
+[updates](posts.html#v1-3-0-2026-10-02), [RSS](posts.xml),
+[changelog](changelog.html#v1-3-0), docs, and decks describe the changes since
+v1.2.0. Detailed upgrade steps are in
+[the repository release notes](../docs/releases/v1.3.0.md).
+
 GitHub Pages origin: [https://vanshjain-0702.github.io/DBX-Database-Extreme/](https://vanshjain-0702.github.io/DBX-Database-Extreme/) (redirects here once the custom domain is saved and DNS is live).
 
 **Show demo video:** [Walkthrough](https://dbxdb.co.in/demo.html) (`demo.html` + [`assets/vector-search.mp4`](assets/vector-search.mp4) recall clip + [`assets/demo.mp4`](assets/demo.mp4) product tour). **Updates:** [posts.html](https://dbxdb.co.in/posts.html) (header badge until you open it; RSS [`posts.xml`](posts.xml)). Also linked from the root [README](../README.md).

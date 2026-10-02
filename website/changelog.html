@@ -4,15 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Changelog — DBX</title>
-  <meta name="description" content="DBX v1.2.0 is the recall cut: Isolation Kernel plus VSEARCH MIN_SCORE/EF/SPACE, VSIM, and VFUSE. Certified ANN p50 is still 2.304 ms. Releases on GitHub.">
+  <meta name="description" content="DBX v1.3.0 release notes: live vector migration, historical search, framework adapters, stronger Linux isolation, encrypted replication, and scoped support recovery.">
   <meta property="og:title" content="Changelog — DBX">
-  <meta property="og:description" content="v1.2.0: recall surface, playground, public site. Same Isolation Kernel. Same 2.304 ms ANN p50.">
+  <meta property="og:description" content="v1.3.0: memory you can evolve and operate. Changes since v1.2.0, upgrade steps, and earlier releases.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://dbxdb.co.in/changelog.html">
   <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Changelog — DBX">
-  <meta name="twitter:description" content="v1.2.0: recall surface, playground, public site. Same Isolation Kernel. Same 2.304 ms ANN p50.">
+  <meta name="twitter:description" content="v1.3.0: live migration, historical recall, framework adapters, encrypted replication, and scoped support recovery.">
   <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
   <meta name="theme-color" content="#051c33">
   <link rel="canonical" href="https://dbxdb.co.in/changelog.html">
@@ -31,12 +31,31 @@
       <div class="wrap">
         <p class="kicker">What shipped</p>
         <h1>Changelog</h1>
-        <p>DBX is a per-tenant memory engine. Version 1.2.0 is the recall cut: Isolation Kernel plus <code>VSEARCH</code> <code>MIN_SCORE</code> / <code>EF</code> / <code>SPACE</code>, <code>VSIM</code>, and <code>VFUSE</code>. Certified ANN p50 is still 2.304 ms. Isolation Kernel <code>strict</code> idle RSS is still ~14–17 MiB per worker. The GHCR tag is <code>:v1.2.0</code>. Signed notes live on <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases">GitHub Releases</a>. This page is the public summary, not a substitute for git tags. <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.2.0">GitHub Release v1.2.0</a>.</p>
+        <p>DBX v1.3.0 brings live vector migration, historical search, framework adapters, stronger Linux isolation, encrypted replication, and scoped support recovery to the per-tenant memory engine. Container: <code>ghcr.io/vanshjain-0702/dbx-orchestrator:v1.3.0</code>. Read the <a href="posts.html#v1-3-0-2026-10-02">announcement</a>, <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/releases/v1.3.0.md">upgrade steps</a>, or <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/releases/tag/v1.3.0">GitHub Release v1.3.0</a>.</p>
       </div>
     </header>
     <section class="section">
       <div class="wrap">
         <div class="change-list">
+          <article class="change" id="v1-3-0">
+            <time datetime="2026-10-02">2 Oct 2026</time>
+            <div>
+              <h2>v1.3.0 — memory you can evolve and operate</h2>
+              <p>This release collects the engine, integration, security, and support changes since v1.2.0.</p>
+              <ul>
+                <li><strong>Vector lifecycle and history.</strong> WAL-durable <code>VMIGRATE</code> shadow-index lifecycle, <code>VSEARCH AS_OF</code> over retained WAL, ordered concurrent WAL writes, and tenant-local replay scratch space.</li>
+                <li><strong>SDK and applications.</strong> LangChain and LlamaIndex adapters, optional installation extras, bounded batch ingest, RAG examples, Legal Auditor, and Jurix.</li>
+                <li><strong>Worker isolation.</strong> All-thread Landlock and <code>no_new_privs</code>, Unix-only seccomp networking, and worker memory limits tied to tenant quotas. Strict workers require a build with <code>CGO_ENABLED=0</code>.</li>
+                <li><strong>Replication.</strong> Mutual HMAC-SHA256 authentication and per-connection AES-256-GCM WAL encryption with tamper/replay rejection. Primary acknowledgements remain local.</li>
+                <li><strong>Support.</strong> Tenant-allowlisted diagnostics, separate optional wake credentials, durable audit, cooldown and post-checks, stable WAL/panic log codes, local bundles, 43 support tests, and 1,340 synthetic drills.</li>
+                <li><strong>Operator experience.</strong> Updated dashboard views and navigation, coordinated tenant starts, HTTP command-string/argument-array parsing, deployment wiring, and Linux/Windows support release gates.</li>
+                <li><strong>Version alignment.</strong> Binaries, HELLO/INFO, HTTP info, Python SDK, dashboard, Helm app version, deployment examples, and public site now identify DBX as 1.3.0. The support extension keeps its independent 0.4.0 version.</li>
+              </ul>
+              <p>Migration needs re-embedding and temporary storage; historical search is retention-bound. Migration lifecycle replication, transparent S3 paging, and broad automatic repair remain outside this release. Published benchmark numbers retain their original measurement context.</p>
+              <p><a href="posts.html#v1-3-0-2026-10-02">Release announcement</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/blob/v1.3.0/docs/releases/v1.3.0.md">Upgrade steps</a> · <a href="https://github.com/vanshjain-0702/DBX-Database-Extreme/compare/v1.2.0...v1.3.0">Source comparison</a></p>
+            </div>
+          </article>
+
           <article class="change" id="v1-2-0">
             <time datetime="2026-09-10">10 Sep 2026</time>
             <div>
