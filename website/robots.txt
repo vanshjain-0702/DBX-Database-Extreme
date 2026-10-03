@@ -1,4 +1,14 @@
-User-agent: *
+User-agent: Google-Extended
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-SearchBot
+User-agent: Claude-User
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+Allow: /
+
 Allow: /
 
 Sitemap: https://dbxdb.co.in/sitemap.xml
