@@ -7,7 +7,6 @@ User-agent: Claude-SearchBot
 User-agent: Claude-User
 User-agent: PerplexityBot
 User-agent: Perplexity-User
-Allow: /
 
 Allow: /
 
