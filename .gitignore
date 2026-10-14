@@ -30,6 +30,7 @@ __pycache__/
 sdk/python/.venv/
 *.egg-info/
 .pytest_cache/
+.pytest-security*
 sdk/python/.pytest_cache/
 legal-auditor/data/*.json
 legal-auditor/.venv/
@@ -50,4 +51,10 @@ Thumbs.db
 
 # Local website QA screenshots
 website/assets/_qa/
+.cache/
+jurix/previews/qa/
+jurix/data/
+jurix/deploy/secrets/
+jurix/deploy/backups/
+jurix/deploy/*.pem
 data/

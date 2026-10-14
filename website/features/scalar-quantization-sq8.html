@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SQ8 Scalar Quantization: Memory-Efficient Vector Search | DBX</title>
+  <meta name="description" content="DBX stores vectors as 8-bit scalar-quantized (SQ8) rows in mmap'd files with asymmetric distance computation. ~4x memory savings over float32. Idle tenants in page cache, not resident RAM.">
+  <meta name="keywords" content="scalar quantization vector search, SQ8 vector database, memory efficient vector search, mmap vector storage, quantized HNSW, 8-bit vector quantization, low memory vector database">
+  <meta property="og:title" content="SQ8 Scalar Quantization: Memory-Efficient Vector Search | DBX">
+  <meta property="og:description" content="8-bit scalar-quantized vectors in mmap'd files. ~4x memory savings over float32. Asymmetric distance at query time. Idle tenants in page cache.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/scalar-quantization-sq8.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="SQ8 Scalar Quantization: Memory-Efficient Vector Search | DBX">
+  <meta name="twitter:description" content="8-bit scalar-quantized vectors in mmap'd files. ~4x memory savings over float32. Asymmetric distance at query time.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/scalar-quantization-sq8.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "SQ8 Scalar Quantization: Memory-Efficient Vector Search",
+    "description": "How DBX uses 8-bit scalar quantization with mmap storage and asymmetric distance computation to achieve ~4x memory savings.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/scalar-quantization-sq8.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is SQ8 scalar quantization?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQ8 (Scalar Quantization 8-bit) compresses each float32 vector component into a single uint8 byte, reducing memory footprint to roughly one quarter of the original. DBX applies this quantization at storage time and uses asymmetric distance computation at query time — the query vector stays in float32 while stored vectors remain in uint8."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How much memory does SQ8 save compared to float32?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQ8 reduces vector storage to approximately one quarter of float32 payload. For 100,000 vectors at 1536 dimensions, float32 requires ~600 MB while SQ8 requires ~150 MB. Combined with mmap, idle tenants reside in page cache rather than resident RAM, with approximately 14-17 MiB RSS per idle worker."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does scalar quantization reduce search accuracy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "SQ8 with asymmetric distance computation preserves high recall quality for most workloads. The query vector remains in full float32 precision while only the stored vectors are quantized, which is more accurate than symmetric quantization where both sides are compressed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does mmap help with multi-tenant vector storage?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Memory-mapped (mmap) vector files allow the operating system to manage which tenant data is in RAM. Active tenants are paged in; idle tenants reside on disk in page cache. This makes the cost proportional to active tenants, not total tenants — critical for hosting many small customers on one node."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Storage & density</p>
+        <h1>SQ8 Scalar Quantization: Memory-Efficient Vector Search at Scale</h1>
+        <p>8-bit scalar-quantized vectors in mmap'd files with asymmetric distance computation. ~4x memory savings over float32. Idle tenants live in page cache, not resident RAM.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>Why Memory Density Matters for Multi-Tenant Vector Search</h2>
+            <p>When you host 100 tenants on a single node, each with up to 100,000 vectors, float32 storage becomes prohibitively expensive. At 1536 dimensions (OpenAI's embedding size), float32 requires ~600 MB per tenant — that's 60 GB of RAM for the vectors alone across 100 tenants.</p>
+            <p>Most of those tenants are idle at any moment. Paying for resident RAM for every idle customer's vectors is waste. The metric that matters is <strong>cost per active tenant</strong>, not cost per provisioned tenant.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How SQ8 + mmap Achieves Density</h2>
+            <p>DBX stores vectors as 8-bit scalar-quantized (SQ8) rows in memory-mapped files:</p>
+            <ul>
+              <li><strong>SQ8 quantization</strong> — each float32 component is mapped to a uint8 byte, reducing payload to ~¼ of float32</li>
+              <li><strong>Asymmetric distance</strong> — the query vector stays in float32 while stored vectors are in uint8, preserving better accuracy than symmetric quantization</li>
+              <li><strong>mmap storage</strong> — the OS pages in active tenants and pages out idle ones automatically</li>
+              <li><strong>Page cache residency</strong> — idle tenants sit in the kernel's page cache, evicted under memory pressure without process management</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Measured density</p>
+        <h2>Memory Footprint Numbers</h2>
+        <div class="callout">
+          <table style="width:100%;border-collapse:collapse;font-family:var(--font-mono);font-size:0.88rem">
+            <thead>
+              <tr style="border-bottom:1px solid var(--hairline)">
+                <th style="text-align:left;padding:0.5rem">Metric</th>
+                <th style="text-align:right;padding:0.5rem">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem">Idle worker RSS</td><td style="text-align:right;padding:0.4rem 0.5rem">~14–17 MiB</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem">SQ8 vs float32 payload</td><td style="text-align:right;padding:0.4rem 0.5rem">~¼ size</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem">Certified profile</td><td style="text-align:right;padding:0.4rem 0.5rem">100 tenants / node</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem">Max vectors per tenant</td><td style="text-align:right;padding:0.4rem 0.5rem">100,000</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem">Worst idle GET latency</td><td style="text-align:right;padding:0.4rem 0.5rem">~3–12 ms</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem">ANN p50 latency</td><td style="text-align:right;padding:0.4rem 0.5rem">2.304 ms</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">Measured on the certification host and workload. Production numbers depend on your hardware, dataset, and access patterns. Run <code>make soak</code> on your target hardware.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>How SQ8 Fits Into the Storage Architecture</h2>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">A</div>
+            <div>
+              <h3>Per-tenant data directory</h3>
+              <p>Each tenant's SQ8 vector files, HNSW graph, WAL, and snapshots live in an isolated directory. Backup and delete operate on one customer's files.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">B</div>
+            <div>
+              <h3>Named spaces</h3>
+              <p>Each named <code>SPACE</code> (text, image, code) creates separate mmap/HNSW files in the same tenant directory. All are SQ8. Quota and backup cover all spaces for that tenant.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">C</div>
+            <div>
+              <h3>Encryption boundary</h3>
+              <p>In strict mode, the HNSW graph and WAL are encrypted under a per-tenant key. SQ8 <code>.vec</code> rows stay mmap plaintext so idle tenants remain cheap. Use fscrypt or LUKS for at-rest encryption of vector rows.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Host more tenants on less hardware.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="per-tenant-isolation.html">Per-tenant isolation</a> · <a href="shadow-migration.html">Zero-downtime vector migration</a> · <a href="time-travel-vector-search.html">Historical vector search</a> · <a href="late-fusion-vector-search.html">Late fusion (VFUSE)</a> · <a href="redis-compatible-memory.html">RESP-compatible KV + HNSW</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

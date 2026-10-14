@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Historical Vector Search: Time-Travel for RAG Audit & Compliance | DBX</title>
+  <meta name="description" content="Replay past vector states with VSEARCH AS_OF for RAG incident reproduction, compliance audits, and debugging AI retrieval failures. WAL-based time-travel vector search.">
+  <meta name="keywords" content="historical vector search, time travel vector database, vector search audit, VSEARCH AS_OF, RAG audit, WAL vector replay, vector database compliance, time travel RAG">
+  <meta property="og:title" content="Historical Vector Search: Time-Travel for RAG Audit & Compliance | DBX">
+  <meta property="og:description" content="Reconstruct past retrieval states with VSEARCH AS_OF. Debug RAG hallucinations, audit compliance, reproduce exact vector search results from any point in time.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/time-travel-vector-search.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Historical Vector Search: Time-Travel for RAG Audit & Compliance | DBX">
+  <meta name="twitter:description" content="Reconstruct past retrieval states with VSEARCH AS_OF. Debug RAG hallucinations, audit compliance, reproduce exact vector search results.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/time-travel-vector-search.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Historical Vector Search: Time-Travel for RAG Audit and Compliance",
+    "description": "Replay past vector states with VSEARCH AS_OF for RAG incident reproduction, compliance audits, and debugging AI retrieval failures.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/time-travel-vector-search.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is historical vector search (time-travel)?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Historical vector search allows RAG systems to query retained WAL state as of a specific unix timestamp using VSEARCH ... AS_OF. It reconstructs the vector index at a past point in time to reproduce exact retrieval results for auditing, compliance, or debugging RAG hallucinations."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does VSEARCH AS_OF work?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "VSEARCH AS_OF replays retained vector WAL (write-ahead log) history into a temporary index, reconstructing the state of the tenant's embeddings at the specified unix nanosecond timestamp. It then runs the query against that reconstructed index and returns results as they would have appeared at that point in time."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use time-travel vector search for compliance and audit?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. AS_OF search is designed for compliance investigations, GDPR/CCPA audit trails, and SOC-style evidence gathering. You can prove exactly what context a RAG system retrieved at any past point, which is critical for regulated industries like healthcare and finance."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What are the limitations of historical vector search?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Historical search uses a temporary index, so it costs more than current search. It is bounded by WAL retention — once WAL entries are compacted, that history is no longer available. Performance is slower than current-state queries due to WAL replay."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Operational vector upgrade</p>
+        <h1>Historical Vector Search: Time-Travel for RAG Audit &amp; Compliance</h1>
+        <p>Reconstruct past retrieval states with <code>VSEARCH ... AS_OF</code>. Debug RAG hallucinations, audit compliance requirements, and reproduce exact vector search results from any point in your WAL history.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>Why RAG Systems Need Reproducible Retrieval</h2>
+            <p>When an AI agent produces a wrong answer, the first question is: "What context did the model receive?" In a traditional vector database, the index is mutable — vectors are added, updated, and deleted continuously. By the time you investigate, the index has moved on. You cannot reproduce the exact retrieval.</p>
+            <p>For regulated industries (healthcare, finance, legal), this is a compliance gap. Auditors may need to prove what a system "knew" at a specific time. Without time-travel, that proof is gone.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How AS_OF Reconstructs Past Vector State</h2>
+            <p><code>VSEARCH ... AS_OF &lt;unix-nanoseconds&gt;</code> replays retained vector WAL history into a temporary index, reconstructing the state of the tenant's embeddings at the specified timestamp. It then runs the query against that reconstructed index and returns results exactly as they would have appeared at that point in time.</p>
+            <p>This is per-tenant. Reconstructing Tenant A's past state does not affect Tenant B's live index. The temporary index is discarded after the query.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">RESP wire protocol</p>
+        <h2>Query Past Vector States with VSEARCH AS_OF</h2>
+        <div class="code-panel">
+          <header><span>RESP commands</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre># Search the current index
+VSEARCH docs 0.012 -0.043 0.091 ... 5
+
+# Search the index as it was 24 hours ago
+VSEARCH docs 0.012 -0.043 0.091 ... 5 AS_OF 1728840000000000000
+
+# Search the index as it was at a specific incident timestamp
+VSEARCH docs 0.012 -0.043 0.091 ... 10 AS_OF 1728756000000000000 MIN_SCORE 0.7</pre>
+        </div>
+        <p class="muted">AS_OF accepts unix nanoseconds. Historical search is bounded by WAL retention — compacted entries are no longer available.</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Python SDK</p>
+        <h2>Audit RAG Retrieval with the Python Client</h2>
+        <div class="code-panel">
+          <header><span>Python</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>from dbx import DBXClient
+import time
+
+client = DBXClient("http://localhost:8000", token="$DBX_TOKEN")
+
+# Timestamp of the incident (e.g., when the wrong answer was generated)
+incident_ts = int(time.mktime(time.strptime("2026-10-10 14:30:00", "%Y-%m-%d %H:%M:%S"))) * 10**9
+
+# Reproduce the exact retrieval context from that moment
+results = client.vsearch(
+    tenant="acme-corp",
+    index="docs",
+    query=incident_query_vector,
+    k=10,
+    as_of=incident_ts
+)
+
+# Compare with current results
+current = client.vsearch(
+    tenant="acme-corp",
+    index="docs",
+    query=incident_query_vector,
+    k=10
+)
+
+print(f"Past results:    {[r.id for r in results]}")
+print(f"Current results: {[r.id for r in current]}")</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Use Cases for Time-Travel Vector Search</h2>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">A</div>
+            <div>
+              <h3>RAG incident reproduction</h3>
+              <p>When a customer reports a bad AI response, reproduce the exact documents the model retrieved at the time of the incident. Confirm whether the issue was in retrieval or generation.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">B</div>
+            <div>
+              <h3>Compliance audit trails</h3>
+              <p>Prove what context was available at a specific timestamp for GDPR, CCPA, HIPAA, or internal compliance investigations. Export results with timestamps for audit documentation.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">C</div>
+            <div>
+              <h3>Embedding quality regression detection</h3>
+              <p>Compare retrieval quality before and after an embedding model change. Identify whether a new model improved or degraded recall for specific query patterns.</p>
+            </div>
+          </article>
+        </div>
+        <p class="note">Honest limits: Historical search uses a temporary index, costs more than current search, and is limited by WAL retention. This is not a continuous stream of past states — it is a point-in-time reconstruction.</p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Audit your RAG pipeline with provable history.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="per-tenant-isolation.html">Per-tenant isolation</a> · <a href="shadow-migration.html">Zero-downtime vector migration</a> · <a href="late-fusion-vector-search.html">Late fusion (VFUSE)</a> · <a href="redis-compatible-memory.html">RESP-compatible KV + HNSW</a> · <a href="scalar-quantization-sq8.html">SQ8 quantization</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

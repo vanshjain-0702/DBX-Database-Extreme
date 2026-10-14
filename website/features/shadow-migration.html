@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zero-Downtime Vector Migration: Shadow Index for Live Embeddings | DBX</title>
+  <meta name="description" content="Migrate vector embeddings without downtime using DBX VMIGRATE shadow indexes. Build a target index while the current one serves queries, then swap atomically.">
+  <meta name="keywords" content="zero downtime vector migration, shadow index migration, VMIGRATE, embedding migration, vector index swap, live vector migration, change embeddings without downtime">
+  <meta property="og:title" content="Zero-Downtime Vector Migration: Shadow Index for Live Embeddings | DBX">
+  <meta property="og:description" content="VMIGRATE builds a shadow index on disk while the current index keeps serving reads. Stream new embeddings, then promote with an atomic swap.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/shadow-migration.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Zero-Downtime Vector Migration: Shadow Index for Live Embeddings | DBX">
+  <meta name="twitter:description" content="VMIGRATE builds a shadow index on disk while the current index keeps serving reads. Stream new embeddings, then promote with an atomic swap.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/shadow-migration.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Zero-Downtime Vector Migration with Shadow Indexes",
+    "description": "How to upgrade embedding dimensions and models without downtime using DBX VMIGRATE shadow index migration.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/shadow-migration.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Can you migrate vector embeddings without downtime?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. DBX uses shadow migration (VMIGRATE) to stream new embeddings into an off-line target index while the current index continues serving queries. Once populated, DBX performs an atomic pointer swap. Cancel keeps the current index untouched."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does VMIGRATE handle embedding dimension changes?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "VMIGRATE START accepts a new dimension and optional encoding, so you can change from 768-dim to 1536-dim embeddings or switch from float32 to SQ8 encoding during migration. The shadow index is built with the new parameters while the old index continues serving at its original dimension."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens if the migration is cancelled?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "VMIGRATE CANCEL discards the shadow index and leaves the live index completely untouched. An empty migration (no vectors added to the shadow) is automatically rejected on swap, preventing accidental data loss."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Is VMIGRATE per-tenant or cluster-wide?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "VMIGRATE is per-tenant. Each tenant's migration lifecycle is independent — you can migrate one customer's embeddings while all other tenants continue normal operation on their existing indexes."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Operational vector upgrade</p>
+        <h1>Zero-Downtime Vector Migration for Live AI Embeddings</h1>
+        <p>Change embedding models, dimensions, or encodings without taking your tenant offline. <code>VMIGRATE</code> builds a shadow index while the current one keeps serving queries.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>The Problem: Re-indexing Kills Availability in Shared Clusters</h2>
+            <p>When you upgrade from <code>text-embedding-ada-002</code> to <code>text-embedding-3-large</code>, most vector databases require you to either delete the existing index and rebuild from scratch (total downtime) or stand up a parallel database, re-index into it, and cutover at the DNS level.</p>
+            <p>For per-tenant AI products serving hundreds of customers, neither approach works. You need to migrate each customer's embeddings independently, in place, while their application keeps making queries.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How Shadow Index Migration Works</h2>
+            <p>DBX uses a three-phase migration lifecycle per tenant:</p>
+            <ol>
+              <li><strong>Start</strong> — declare a shadow index with the target dimension and encoding</li>
+              <li><strong>Stream</strong> — add re-embedded vectors to the shadow while the live index keeps serving reads</li>
+              <li><strong>Swap</strong> — atomically promote the shadow index and retire the old one</li>
+            </ol>
+            <p>The migration is WAL-durable. Cancel at any point to keep the live index untouched. An empty shadow is rejected on swap — DBX will not let you accidentally blank out a customer's vector memory.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">RESP wire protocol</p>
+        <h2>Migrate Live Indexes with VMIGRATE</h2>
+        <div class="code-panel">
+          <header><span>RESP commands</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre># 1. Start a shadow index with new dimension (1536-dim, cosine, SQ8)
+VMIGRATE START tenant_docs 1536 cosine
+
+# 2. Stream re-embedded vectors into the shadow
+VMIGRATE ADD tenant_docs doc_001 0.012 -0.043 0.091 ...
+VMIGRATE ADD tenant_docs doc_002 0.008 0.027 -0.055 ...
+VMIGRATE ADD tenant_docs doc_003 -0.031 0.064 0.019 ...
+
+# 3. Promote the shadow — live index swaps atomically
+VMIGRATE SWAP tenant_docs
+
+# Or cancel — live index stays untouched
+VMIGRATE CANCEL tenant_docs</pre>
+        </div>
+        <p class="muted">Re-embedding and transfer remain the caller's work. DBX does not run embedding models. The migration lifecycle is not yet a replicated WAL protocol.</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Python SDK</p>
+        <h2>Automate Migration with the DBX Python Client</h2>
+        <div class="code-panel">
+          <header><span>Python</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>from dbx import DBXClient
+import openai
+
+client = DBXClient("http://localhost:8000", token="$DBX_TOKEN")
+tenant = "acme-corp"
+
+# Start shadow with new dimensions
+client.vmigrate_start(tenant, index="docs", dim=1536, metric="cosine")
+
+# Re-embed and stream each document
+for doc in get_all_documents(tenant):
+    new_vec = openai.embeddings.create(
+        model="text-embedding-3-large",
+        input=doc.text
+    ).data[0].embedding
+    client.vmigrate_add(tenant, index="docs", id=doc.id, vector=new_vec)
+
+# Atomic swap — queries now use the new embeddings
+client.vmigrate_swap(tenant, index="docs")</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Migration Safety Guarantees</h2>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">A</div>
+            <div>
+              <h3>Live reads continue</h3>
+              <p>The current index serves <code>VSEARCH</code>, <code>VSIM</code>, and <code>VFUSE</code> queries throughout the migration. No read downtime, no degraded recall.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">B</div>
+            <div>
+              <h3>Empty swap rejected</h3>
+              <p>Attempting to swap an empty shadow index returns an error. DBX prevents accidentally replacing a populated index with an empty one.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">C</div>
+            <div>
+              <h3>Per-tenant independence</h3>
+              <p>Migration lifecycle is per-tenant. Migrating Tenant A's embeddings has no effect on Tenant B's index or query performance.</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Upgrade your embeddings without downtime.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="per-tenant-isolation.html">Per-tenant isolation</a> · <a href="time-travel-vector-search.html">Historical vector search</a> · <a href="late-fusion-vector-search.html">Late fusion (VFUSE)</a> · <a href="redis-compatible-memory.html">RESP-compatible KV + HNSW</a> · <a href="scalar-quantization-sq8.html">SQ8 quantization</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

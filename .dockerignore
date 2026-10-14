@@ -7,3 +7,14 @@ dashboard/node_modules
 dashboard/dist
 *.exe
 *.exe~
+.cache
+jurix/data
+jurix/deploy/secrets
+jurix/deploy/backups
+jurix/.env
+jurix/frontend/node_modules
+jurix/frontend/dist
+node_modules
+legal-auditor/data
+__pycache__
+.pytest_cache

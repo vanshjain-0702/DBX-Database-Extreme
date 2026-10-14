@@ -1,0 +1,12 @@
+# Direct dependencies verified against official PyPI metadata on 2026-10-03.
+# Runtime only; pytest belongs in the development environment.
+fastapi==0.142.2
+uvicorn==0.54.0
+pydantic==2.13.5
+cryptography==50.0.2
+pypdf==6.19.0
+python-multipart==0.0.32
+httpx==0.28.1
+openai==3.24.0
+redis==8.1.0
+filelock==4.0.9

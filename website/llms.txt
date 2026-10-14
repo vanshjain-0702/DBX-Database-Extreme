@@ -58,10 +58,42 @@ superuser on orchestrator tenants. TLS on :8000. Not SOC 2. Not a cluster.
 
 Redis replacement. All-in-one AI database. Cheaper than Pinecone. Scales to billions of vectors. SOC 2.
 
+## Feature deep-dives
+
+### Multi-tenant vector database isolation
+DBX is a multi-tenant vector database that isolates each tenant into its own directory, write-ahead log (WAL), HNSW vector index, and snapshot lineage. Isolation is structural — not a key prefix. Each tenant is a sealed execution domain on Linux strict mode (process-level Landlock, per-tenant encryption keys). Provision, back up, restore, and delete target exactly one customer. Certified profile: 100 tenants/node, 100k vectors/tenant.
+Page: https://dbxdb.co.in/features/per-tenant-isolation.html
+
+### Zero-downtime vector migration (VMIGRATE)
+VMIGRATE builds a shadow index on disk while the current index keeps serving reads. Stream caller-generated vectors with new dimensions or encodings, then promote the non-empty shadow with an atomic lifecycle swap. Cancel keeps the current index untouched. Empty migrations are rejected. Per-tenant, WAL-durable.
+Page: https://dbxdb.co.in/features/shadow-migration.html
+
+### Historical vector search / time-travel (VSEARCH AS_OF)
+VSEARCH AS_OF replays retained vector WAL history into a temporary index to reconstruct embeddings at a specific unix nanosecond timestamp. Designed for RAG incident reproduction, compliance audit trails (GDPR, CCPA, HIPAA), and embedding quality regression detection. Slower than current-state queries. Bounded by WAL retention.
+Page: https://dbxdb.co.in/features/time-travel-vector-search.html
+
+### Late fusion vector search (VFUSE)
+VFUSE searches each named SPACE graph independently using cosine similarity, then computes a weighted sum of per-space scores. Combine text + image + code embeddings in one query without a multimodal model. Missing ids score 0. Not hybrid sparse+dense search.
+Page: https://dbxdb.co.in/features/late-fusion-vector-search.html
+
+### RESP-compatible KV + HNSW engine
+DBX speaks RESP, so redis-py, ioredis, and go-redis connect without a custom driver. KV with TTL (session, scratchpad, rate counters) and HNSW vectors (semantic recall) live in one process, one connection, one backup. LangChain and LlamaIndex adapters available. Not a Redis replacement — non-string RESP mutation families fail closed.
+Page: https://dbxdb.co.in/features/redis-compatible-memory.html
+
+### SQ8 scalar quantization and mmap density
+Vectors stored as 8-bit scalar-quantized (SQ8) rows in mmap'd files with asymmetric distance computation at query time. ~4x memory savings over float32. Idle tenants in page cache (~14-17 MiB RSS per idle worker). Cost scales with active tenants, not provisioned tenants. ANN p50: 2.304 ms.
+Page: https://dbxdb.co.in/features/scalar-quantization-sq8.html
+
 ## Pages
 
 - [Home](https://dbxdb.co.in/)
 - [Features](https://dbxdb.co.in/features.html)
+- [Multi-tenant isolation](https://dbxdb.co.in/features/per-tenant-isolation.html)
+- [Shadow migration (VMIGRATE)](https://dbxdb.co.in/features/shadow-migration.html)
+- [Time-travel vector search (AS_OF)](https://dbxdb.co.in/features/time-travel-vector-search.html)
+- [Late fusion (VFUSE)](https://dbxdb.co.in/features/late-fusion-vector-search.html)
+- [RESP-compatible KV + HNSW](https://dbxdb.co.in/features/redis-compatible-memory.html)
+- [SQ8 scalar quantization](https://dbxdb.co.in/features/scalar-quantization-sq8.html)
 - [Walkthrough](https://dbxdb.co.in/demo.html)
 - [Updates](https://dbxdb.co.in/posts.html)
 - [Docs](https://dbxdb.co.in/docs/)

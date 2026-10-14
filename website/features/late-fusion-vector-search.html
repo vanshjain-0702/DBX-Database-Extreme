@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Late Fusion Vector Search: Multimodal Retrieval with VFUSE | DBX</title>
+  <meta name="description" content="Fuse cosine results across named embedding spaces with weighted late fusion. Combine text, image, and code embeddings in a single vector query using DBX VFUSE.">
+  <meta name="keywords" content="late fusion vector search, multimodal vector search, VFUSE, multi-space vector retrieval, weighted cosine fusion, reciprocal rank fusion vector database, multi-embedding search">
+  <meta property="og:title" content="Late Fusion Vector Search: Multimodal Retrieval with VFUSE | DBX">
+  <meta property="og:description" content="Fuse cosine hits across named SPACE graphs with caller-defined WEIGHTS. Combine text + image + code embeddings without standing up a second vector DB.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/late-fusion-vector-search.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Late Fusion Vector Search: Multimodal Retrieval with VFUSE | DBX">
+  <meta name="twitter:description" content="Fuse cosine hits across named SPACE graphs with caller WEIGHTS. Combine text + image + code embeddings in one query.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/late-fusion-vector-search.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Late Fusion Vector Search: Multimodal Retrieval with VFUSE",
+    "description": "Fuse cosine results across named embedding spaces with weighted late fusion using DBX VFUSE.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/late-fusion-vector-search.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What is late fusion in vector search?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Late fusion combines search results from multiple embedding spaces after each space has been searched independently. DBX VFUSE runs cosine search across named SPACE graphs and computes a weighted sum of per-space scores for each document, producing a single ranked result set without requiring a multimodal model."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is VFUSE different from hybrid search?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Hybrid search typically combines dense vector search with sparse keyword search (like BM25). VFUSE combines multiple dense vector spaces — for example, text embeddings from MiniLM and image embeddings from CLIP — using caller-defined weights. It is a weighted sum of cosine scores, not a sparse+dense combination."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I search across text and image embeddings in one query?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. Store text embeddings in one named SPACE (e.g., 'text') and image embeddings in another (e.g., 'image'). VFUSE searches both spaces and fuses results with your chosen weights. Missing ids in one space score 0. DBX stores the embeddings you send but does not run CLIP, MiniLM, or any embedding model."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Vector recall</p>
+        <h1>Late Fusion Vector Search: Multimodal Retrieval Across Embedding Spaces</h1>
+        <p>Combine text, image, and code embeddings in a single ranked query using weighted late fusion. No second vector DB. No multimodal model required.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>The Problem: Multiple Embedding Models, Multiple Databases</h2>
+            <p>Modern AI products often embed content with multiple models — MiniLM for text, CLIP for images, CodeBERT for source code. Each produces vectors of different dimensions and semantics. The conventional solution is to run separate vector databases or separate collections per model, then merge results in application code.</p>
+            <p>That adds infrastructure cost, network latency, and application complexity. For per-tenant products, it multiplies by every customer.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How VFUSE Fuses Embedding Spaces</h2>
+            <p><code>VFUSE</code> searches each named <code>SPACE</code> graph independently using cosine similarity, then computes a weighted sum of per-space scores for every candidate document. Missing ids in one space score 0. The fused scores produce a single ranked result set.</p>
+            <p>Named spaces are extra mmap/HNSW files in the same tenant directory — backup, quota, and shred still hit one customer. The embeddings stay with the caller — DBX stores and indexes them but does not run CLIP, MiniLM, SigLIP, or any model.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">RESP wire protocol</p>
+        <h2>Fuse Text + Image Embeddings with VFUSE</h2>
+        <div class="code-panel">
+          <header><span>RESP commands</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre># Store text embeddings in the "text" space
+VADD text doc_001 0.012 -0.043 0.091 ...
+VADD text doc_002 0.008 0.027 -0.055 ...
+
+# Store image embeddings in the "image" space
+VADD image doc_001 0.145 -0.023 0.067 ...
+VADD image doc_002 -0.089 0.112 0.034 ...
+
+# Fuse across spaces with custom weights (70% text, 30% image)
+VFUSE 5 SPACE text 0.012 -0.043 0.091 ... SPACE image 0.145 -0.023 0.067 ... WEIGHTS 0.7 0.3</pre>
+        </div>
+        <p class="muted">VFUSE is a weighted sum of per-space cosine, not a multimodal model. It does not perform sparse+dense hybrid search.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>The Full Recall Surface</h2>
+        <p class="lede">VFUSE completes a three-command recall surface that covers the queries an AI agent actually issues:</p>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">01</div>
+            <div>
+              <h3><code>VSEARCH</code> — semantic query</h3>
+              <p>Caller-provided query vector, cosine over HNSW, top-k. Trailing <code>MIN_SCORE</code>, <code>EF</code>, <code>SPACE</code>, <code>WITHDOCS</code>, <code>FILTER_CONTAINS</code>.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">02</div>
+            <div>
+              <h3><code>VSIM</code> — similar-to-id</h3>
+              <p>"More like this memory" without re-embedding. Load the stored row, exclude self, same ANN. The id already lives in this tenant.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">03</div>
+            <div>
+              <h3><code>VFUSE</code> — late fusion</h3>
+              <p>Fuse cosine hits across named SPACE graphs with caller weights. Missing ids score 0. Send CLIP/SigLIP/MiniLM floats; DBX stores them.</p>
+            </div>
+          </article>
+        </div>
+        <p class="note">Certified ANN p50 on the published profile is 2.304 ms — not sub-millisecond. This is not hybrid sparse+dense search and not a Qdrant/Milvus competitor. It is the recall surface for one customer's working set.</p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Search across all your embedding spaces.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="per-tenant-isolation.html">Per-tenant isolation</a> · <a href="shadow-migration.html">Zero-downtime vector migration</a> · <a href="time-travel-vector-search.html">Historical vector search</a> · <a href="redis-compatible-memory.html">RESP-compatible KV + HNSW</a> · <a href="scalar-quantization-sq8.html">SQ8 quantization</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

@@ -28,6 +28,10 @@ class Records:
             "runs": {},
             "notes": {},
             "exports": [],
+            "reviews": {},
+            "activity": {},
+            "firm_playbooks": {},
+            "billing_runs": {},
         }
         self._load()
 
@@ -87,12 +91,87 @@ class Records:
             row["hibernated"] = hibernated
             self._save()
 
+    def set_policy(self, client_id: str, policy: Dict[str, Any]) -> None:
+        with self._lock:
+            self._load()
+            self._data["matters"][client_id]["policy"] = policy
+            self._save()
+
+    def set_processing(self, client_id: str, enabled: bool, author: str) -> None:
+        with self._lock:
+            self._load()
+            self._data["matters"][client_id].update(external_processing=enabled, processing_author=author, processing_updated_at=time.time())
+            self._save()
+
+    def firm_playbooks(self, owner: str) -> List[Dict[str, Any]]:
+        with self._lock:
+            self._load()
+            return [dict(row) for row in self._data["firm_playbooks"].get(owner, [])]
+
+    def save_firm_playbook(self, owner: str, policy: Dict[str, Any]) -> Dict[str, Any]:
+        with self._lock:
+            self._load()
+            rows = self._data["firm_playbooks"].setdefault(owner, [])
+            if len(rows) >= 100:
+                raise ValueError("firm playbook library limit reached (100 versions)")
+            version = 1 + max((row["version"] for row in rows if row["policy"]["name"] == policy["name"]), default=0)
+            row = {"id": secrets.token_hex(8), "version": version, "policy": policy, "created_at": time.time(), "author": owner}
+            rows.append(row)
+            self._save()
+            return dict(row)
+
+    def save_billing_run(self, client_id: str, result: Dict[str, Any], author: str) -> Dict[str, Any]:
+        with self._lock:
+            self._load()
+            result = {**result, "id": secrets.token_hex(8), "created_at": time.time(), "author": author}
+            self._data["billing_runs"].setdefault(client_id, []).append(result)
+            self._save()
+            return dict(result)
+
+    def billing_runs(self, client_id: str) -> List[Dict[str, Any]]:
+        with self._lock:
+            self._load()
+            return [dict(row) for row in reversed(self._data["billing_runs"].get(client_id, []))]
+
+    def reviews(self, client_id: str) -> Dict[str, Any]:
+        with self._lock:
+            self._load()
+            return dict(self._data["reviews"].get(client_id, {}))
+
+    def activity(self, client_id: str) -> List[Dict[str, Any]]:
+        with self._lock:
+            self._load()
+            return [dict(row) for row in self._data["activity"].get(client_id, [])]
+
+    def set_review(self, client_id: str, item: Dict[str, Any], status: str, note: str, author: str, ran_at: float, suggestion_decision: str = "pending") -> None:
+        from review import normalize_policy
+
+        with self._lock:
+            self._load()
+            run = self._data["runs"].get(client_id) or {}
+            latest_doc = max((d["ingested_at"] for d in self._data["documents"].get(client_id, [])), default=0)
+            policy = normalize_policy(self._data["matters"].get(client_id, {}).get("policy"))
+            doc_ids = [d["id"] for d in self._data["documents"].get(client_id, [])]
+            if run.get("ran_at") != ran_at or latest_doc > ran_at or policy != run.get("policy") or run.get("document_snapshot") != doc_ids:
+                raise ValueError("documents or playbook changed; run the audit again before recording a decision")
+            decision = {"status": status, "note": note, "author": author, "updated_at": time.time(), "fingerprint": item["fingerprint"], "suggestion_decision": suggestion_decision}
+            self._data["reviews"].setdefault(client_id, {})[item["id"]] = decision
+            self._data["activity"].setdefault(client_id, []).append({
+                "id": secrets.token_hex(6), "item_id": item["id"], "status": status,
+                "note": note, "author": author, "created_at": decision["updated_at"],
+                "fingerprint": item["fingerprint"], "policy": run.get("policy"),
+                "evidence": {key: item.get(key) for key in ["doc_id", "doc_name", "quote", "anchor", "state", "finding", "proposed_text", "authority", "provenance", "method"]},
+                "ran_at": ran_at, "suggestion_decision": decision.get("suggestion_decision", "pending"),
+            })
+            self._save()
+
     def add_document(
         self,
         client_id: str,
         doc_name: str,
         text: str,
         chunk_ids: List[str],
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         with self._lock:
             self._load()
@@ -103,6 +182,7 @@ class Records:
                 "chunk_ids": list(chunk_ids),
                 "chunk_count": len(chunk_ids),
                 "ingested_at": time.time(),
+                **(metadata or {}),
             }
             self._data["documents"].setdefault(client_id, []).append(doc)
             self._save()
@@ -112,6 +192,7 @@ class Records:
                 "chunk_ids": doc["chunk_ids"],
                 "chunk_count": doc["chunk_count"],
                 "ingested_at": doc["ingested_at"],
+                **(metadata or {}),
             }
 
     def documents(self, client_id: str) -> List[Dict[str, Any]]:
@@ -121,6 +202,7 @@ class Records:
             for doc in self._data["documents"].get(client_id, []):
                 rows.append(
                     {
+                        **doc,
                         "id": doc["id"],
                         "name": doc["name"],
                         "chunk_ids": list(doc["chunk_ids"]),
@@ -213,4 +295,7 @@ class Records:
             self._data["documents"].pop(client_id, None)
             self._data["runs"].pop(client_id, None)
             self._data["notes"].pop(client_id, None)
+            self._data["reviews"].pop(client_id, None)
+            self._data["activity"].pop(client_id, None)
+            self._data["billing_runs"].pop(client_id, None)
             self._save()

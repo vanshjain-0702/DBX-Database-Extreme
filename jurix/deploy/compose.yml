@@ -1,0 +1,215 @@
+# Run from the repository root with --env-file jurix/.env.
+name: jurix-private
+
+x-jurix-environment: &jurix-environment
+  JURIX_ENV: production
+  JURIX_DATABASE_PATH: /data/jurix.sqlite3
+  JURIX_ENCRYPTION_KEY: ${JURIX_ENCRYPTION_KEY:?Set a distinct random Fernet key in jurix/.env}
+  JURIX_AUDIT_KEY: ${JURIX_AUDIT_KEY:?Set a distinct random base64 32-byte audit key in jurix/.env}
+  JURIX_PUBLIC_ORIGIN: ${JURIX_PUBLIC_ORIGIN:?Set the HTTPS public origin in jurix/.env}
+  JURIX_REGISTRATION_OPEN: ${JURIX_REGISTRATION_OPEN:-false}
+  JURIX_DBX_CA_PATH: /run/secrets/dbx_tls_ca
+  DBX_CONTROL_URL: https://dbx:8000
+  DBX_RESP_HOST: dbx
+  DBX_RESP_PORT: "6380"
+  DBX_ADMIN_USER: admin
+  DBX_ADMIN_PASSWORD: ${DBX_PASSWORD:?Set a unique strong DBX password in jurix/.env}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  JURIX_OPENAI_MODEL: ${JURIX_OPENAI_MODEL:-}
+  JURIX_TRANSCRIPTION_MODEL: ${JURIX_TRANSCRIPTION_MODEL:-whisper-1}
+  JURIX_AZURE_OCR_ENDPOINT: ${JURIX_AZURE_OCR_ENDPOINT:-}
+  JURIX_AZURE_OCR_KEY: ${JURIX_AZURE_OCR_KEY:-}
+
+x-jurix-runtime: &jurix-runtime
+  image: jurix-private-app:${JURIX_IMAGE_TAG:-local}
+  build:
+    context: ../..
+    dockerfile: jurix/Dockerfile
+  init: true
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=256m,uid=10001,gid=10001,mode=0700
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  volumes:
+    - jurix-data:/data
+  secrets: [dbx_tls_ca]
+  restart: unless-stopped
+  stop_grace_period: 40s
+  pids_limit: 128
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  dbx:
+    image: jurix-private-dbx:${JURIX_IMAGE_TAG:-local}
+    build:
+      context: ../..
+      dockerfile: jurix/deploy/DBX.Dockerfile
+    init: true
+    user: "10002:10002"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=10002,gid=10002,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      DBX_PRODUCTION: "1"
+      DBX_ISOLATION_MODE: strict
+      DBX_DATA_DIR: /data
+      DBX_ADMIN_PASSWORD: ${DBX_PASSWORD:?Set a unique strong DBX password in jurix/.env}
+      DBX_DEFAULT_PASSWORD: ${DBX_PASSWORD:?Set a unique strong DBX password in jurix/.env}
+      DBX_JWT_SECRET: ${DBX_JWT_SECRET:?Set a distinct random DBX JWT secret in jurix/.env}
+      DBX_INTERNAL_API_TOKEN: ${DBX_INTERNAL_API_TOKEN:?Set a distinct random internal secret in jurix/.env}
+      DBX_KEK: ${DBX_KEK:?Set a 64-hex-character DBX wrapping key in jurix/.env}
+      DBX_NODE_MEMORY_BUDGET: ${DBX_NODE_MEMORY_BUDGET:-2gb}
+      DBX_REQUIRE_DISK_ENCRYPTION: ${DBX_REQUIRE_DISK_ENCRYPTION:-1}
+    volumes:
+      - dbx-data:/data
+    secrets: [dbx_tls_cert, dbx_tls_key, dbx_tls_ca]
+    networks: [core]
+    # No host port bindings: both APIs remain inside the private Docker network.
+    expose: ["8000", "6380"]
+    healthcheck:
+      test: [CMD, wget, --quiet, --spider, --ca-certificate=/run/secrets/dbx_tls_ca, https://dbx:8000/]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    stop_grace_period: 60s
+    mem_limit: 3g
+    cpus: 2.0
+    pids_limit: 512
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  jurix:
+    <<: *jurix-runtime
+    environment: *jurix-environment
+    depends_on:
+      dbx:
+        condition: service_healthy
+    networks:
+      core: {}
+      proxy:
+        ipv4_address: 172.30.70.3
+      outbound: {}
+    expose: ["8091"]
+    mem_limit: 1g
+    cpus: 1.5
+
+  worker:
+    <<: *jurix-runtime
+    command: [python, jurix/worker.py]
+    environment:
+      <<: *jurix-environment
+      JURIX_WORKER_HEARTBEAT_PATH: /tmp/jurix-worker-heartbeat
+    depends_on:
+      dbx:
+        condition: service_healthy
+      jurix:
+        condition: service_healthy
+    networks: [core, outbound]
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: [CMD, python, jurix/deploy/healthcheck.py, worker]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+  proxy:
+    build:
+      context: ../..
+      dockerfile: jurix/deploy/Caddy.Dockerfile
+    image: jurix-private-proxy:${JURIX_IMAGE_TAG:-local}
+    init: true
+    user: "10003:10003"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m,uid=10003,gid=10003,mode=0700
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      JURIX_HOST: ${JURIX_HOST:?Set the private DNS hostname in jurix/.env}
+    depends_on:
+      jurix:
+        condition: service_healthy
+    ports:
+      - "${JURIX_BIND_IP:-127.0.0.1}:443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      proxy:
+        ipv4_address: 172.30.70.2
+      outbound: {}
+    restart: unless-stopped
+    mem_limit: 256m
+    cpus: 0.5
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  maintenance:
+    <<: *jurix-runtime
+    profiles: [maintenance]
+    command: [python, jurix/deploy/backup.py, --help]
+    environment: *jurix-environment
+    restart: "no"
+    network_mode: none
+    volumes:
+      - jurix-data:/data
+      - dbx-data:/dbx-data
+      - type: bind
+        source: ${JURIX_BACKUP_DIR:?Set an absolute operator backup directory in jurix/.env}
+        target: /backups
+        bind:
+          create_host_path: false
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      disable: true
+
+networks:
+  core:
+    internal: true
+  proxy:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.70.0/24
+  # Allows only services attached here to reach approved external processors/sources.
+  # Docker does not provide domain allowlisting; enforce egress policy at the host.
+  outbound: {}
+
+volumes:
+  jurix-data:
+    name: ${JURIX_DATA_VOLUME:-jurix-data}
+  dbx-data:
+    name: ${DBX_DATA_VOLUME:-jurix-dbx-data}
+  caddy-data:
+    name: jurix-caddy-data
+  caddy-config:
+    name: jurix-caddy-config
+
+secrets:
+  dbx_tls_cert:
+    file: ${DBX_TLS_CERT_FILE:-./secrets/dbx.crt}
+  dbx_tls_key:
+    file: ${DBX_TLS_KEY_FILE:-./secrets/dbx.key}
+  dbx_tls_ca:
+    file: ${DBX_TLS_CA_FILE:-./secrets/dbx-ca.crt}

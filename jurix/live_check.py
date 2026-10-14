@@ -4,8 +4,11 @@ import json
 import time
 import urllib.error
 import urllib.request
+from http.cookiejar import CookieJar
 
 BASE = "http://127.0.0.1:8091"
+COOKIES = CookieJar()
+HTTP = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(COOKIES))
 
 
 def call(method, path, body=None, token=None):
@@ -14,8 +17,12 @@ def call(method, path, body=None, token=None):
     req.add_header("Content-Type", "application/json")
     if token:
         req.add_header("Authorization", "Bearer " + token)
+    if method not in {"GET", "HEAD", "OPTIONS"}:
+        csrf = next((cookie.value for cookie in COOKIES if cookie.name == "jurix_csrf"), "")
+        if csrf:
+            req.add_header("X-CSRF-Token", csrf)
     try:
-        with urllib.request.urlopen(req, timeout=90) as resp:
+        with HTTP.open(req, timeout=90) as resp:
             text = resp.read().decode()
             return json.loads(text or "{}")
     except urllib.error.HTTPError as exc:
@@ -24,15 +31,16 @@ def call(method, path, body=None, token=None):
 
 def main() -> None:
     health = call("GET", "/api/health")
-    print("health", health["dbx"]["ok"], (health["dbx"].get("detail") or "")[:240])
-    assert health["dbx"]["ok"], health
+    assert health["status"] == "ok", health
     email = f"a.okonkwo.{int(time.time())}@halemercer.test"
     reg = call(
         "POST",
         "/api/register",
-        {"email": email, "password": "password123", "firm_name": "Hale and Mercer"},
+        {"email": email, "password": "jurix-live-check-only", "firm_name": "Hale and Mercer"},
     )
-    token = reg["token"]
+    token = reg.get("token")
+    readiness = call("GET", "/api/readiness", token=token)
+    assert readiness["dbx"]["ok"], readiness
     print("user", reg["user"]["firm_name"], reg["user"]["firm_code"])
     created = call(
         "POST",
@@ -95,7 +103,7 @@ def main() -> None:
         token,
     )
     exported = call("POST", f"/api/matters/{atlas}/export", None, token)
-    assert "Indemnity cap" in exported["body"]
+    assert "Liability cap" in exported["body"]
     assert "Ask Harborline" in exported["body"]
     print("memo", len(exported["body"]))
 

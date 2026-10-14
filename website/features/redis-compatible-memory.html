@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Redis-Compatible Vector Database: KV + HNSW in One Process | DBX</title>
+  <meta name="description" content="DBX speaks RESP, so redis-py, ioredis, and go-redis connect without a custom driver. KV with TTL and HNSW vectors live in one process, one connection, one backup.">
+  <meta name="keywords" content="redis compatible vector database, RESP vector search, kv and vector store, redis protocol vector database, single binary database, self-hosted vector database, in-process kv and hnsw">
+  <meta property="og:title" content="Redis-Compatible Vector Database: KV + HNSW in One Process | DBX">
+  <meta property="og:description" content="KV (session, scratchpad, rate counters) and HNSW vectors (semantic recall) in the same process. redis-py, ioredis, and go-redis connect without a custom driver.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/redis-compatible-memory.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Redis-Compatible Vector Database: KV + HNSW in One Process | DBX">
+  <meta name="twitter:description" content="KV and HNSW vectors in the same process. redis-py, ioredis, go-redis connect without a custom driver.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/redis-compatible-memory.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Redis-Compatible Vector Database: KV + HNSW in One Process",
+    "description": "DBX speaks RESP so redis-py, ioredis, and go-redis connect without a custom driver. KV with TTL and HNSW vectors in one process.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/redis-compatible-memory.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Is DBX a Redis replacement?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. DBX speaks the RESP protocol so existing Redis clients (redis-py, ioredis, go-redis) can connect without a custom driver. This lowers the cost of trying DBX. It is not a substitute for a tuned Redis cluster and does not support all Redis commands."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I use KV and vector search in the same database?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. DBX combines KV with TTL (for session state, scratchpads, rate counters) and HNSW vector search (for semantic recall) in the same process, behind one connection, in one data directory, and inside one backup archive. An agent's session and its recall cannot drift apart."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What Redis commands does DBX support?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "DBX supports string commands (GET, SET, SETEX, DEL, KEYS, EXISTS, TTL, EXPIRE, PERSIST, RENAME, MGET, MSET, INCR, DECR, APPEND, STRLEN) and adds vector commands (VADD, VSEARCH, VSIM, VFUSE, VCOUNT, VDELETE, VMIGRATE). Non-string RESP mutation families fail closed."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Do I need a custom client SDK to use DBX?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No. Any RESP-compatible Redis client works for KV operations. The AUTH command uses tenant_id:key_id as the username and the secret as the password. Vector commands (VSEARCH, VADD, VFUSE, VSIM) are sent as raw RESP commands through the same connection. A Python SDK is also available."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Protocol & integration</p>
+        <h1>Redis-Compatible Vector Database: KV + HNSW in One Process</h1>
+        <p>Session state and vector memory in the same engine, behind one connection. Your existing <code>redis-py</code>, <code>ioredis</code>, and <code>go-redis</code> clients connect without a custom driver.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>The Problem: Two Databases for One Agent</h2>
+            <p>AI agents need two kinds of memory: <strong>working state</strong> (session tokens, scratchpads, rate counters with TTL) and <strong>semantic recall</strong> (vector embeddings for RAG, personalization, memory). Conventional stacks use Redis for the first and Pinecone/Qdrant/Milvus for the second.</p>
+            <p>Two databases means two backup schedules, two failure domains, two billing meters, and a consistency gap — the agent's session and its recall can drift apart if one system is down while the other accepts writes.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How DBX Combines KV and Vectors</h2>
+            <p>KV with TTL (session, scratchpad, rate counters) and HNSW vectors (semantic recall) live in the same process, behind one connection, in one data directory, and inside one backup archive. An agent's session and its recall cannot drift apart — there is no second system to drift from.</p>
+            <p>The authenticated RESP data plane runs on port <code>6380</code>. The first command is <code>AUTH tenant_id:key_id secret</code>. After that, the same connection handles both <code>SET</code>/<code>GET</code> and <code>VADD</code>/<code>VSEARCH</code>.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">KV operations</p>
+        <h2>Session State with Standard Redis Clients</h2>
+        <div class="code-panel">
+          <header><span>Python (redis-py)</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>import redis
+
+# Connect with any RESP client — no custom driver needed
+r = redis.Redis(host="localhost", port=6380,
+                username="acme-corp:key_001",
+                password="your-256-bit-secret")
+
+# Standard KV with TTL
+r.setex("session:user_42", 3600, "active")
+r.set("scratchpad:draft", "Meeting notes from 2pm call")
+r.incr("rate:api_calls")
+
+# TTL and expiry work as expected
+r.ttl("session:user_42")  # 3599</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Vector operations on the same connection</p>
+        <h2>Semantic Recall via RESP</h2>
+        <div class="code-panel">
+          <header><span>RESP commands</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre># Same authenticated connection — KV and vectors share one wire
+AUTH acme-corp:key_001 your-256-bit-secret
+
+# Store a vector
+VADD docs doc_001 0.012 -0.043 0.091 ...
+
+# Semantic search
+VSEARCH docs 0.012 -0.043 0.091 ... 5
+
+# Similar-to-id (no re-embedding needed)
+VSIM docs doc_001 5
+
+# Set session state on the same connection
+SET session:user_42 active EX 3600</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <h2>Framework Integrations</h2>
+        <p class="lede">DBX v1.3.0 includes LangChain and LlamaIndex adapters. The Python SDK (<code>pip install dbx</code>) wraps both KV and vector operations.</p>
+        <div class="usp-list">
+          <article class="usp">
+            <div class="usp-num">A</div>
+            <div>
+              <h3>LangChain RAG</h3>
+              <p>The <code>dbx[langchain]</code> extra provides a vector store adapter and a cache backend. Use DBX as the retriever in a LangChain RAG chain with per-tenant isolation. See <code>examples/langchain-rag</code>.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">B</div>
+            <div>
+              <h3>LlamaIndex</h3>
+              <p>The <code>dbx[llamaindex]</code> extra provides a vector store and storage context adapter. Each tenant's documents are indexed into an isolated DBX engine.</p>
+            </div>
+          </article>
+          <article class="usp">
+            <div class="usp-num">C</div>
+            <div>
+              <h3>Next.js cache</h3>
+              <p>Use <code>SETEX</code> via ioredis for Next.js page caching. The same tenant connection handles both cache writes and vector recall. See <code>examples/nextjs-cache</code>.</p>
+            </div>
+          </article>
+        </div>
+        <p class="note">RESP compatibility lowers the cost of trying DBX. It is not a reason to choose DBX, and it is not a claim that DBX is a substitute for a tuned Redis cluster. Non-string RESP mutation families fail closed.</p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>One connection for state and memory.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="per-tenant-isolation.html">Per-tenant isolation</a> · <a href="shadow-migration.html">Zero-downtime vector migration</a> · <a href="time-travel-vector-search.html">Historical vector search</a> · <a href="late-fusion-vector-search.html">Late fusion (VFUSE)</a> · <a href="scalar-quantization-sq8.html">SQ8 quantization</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

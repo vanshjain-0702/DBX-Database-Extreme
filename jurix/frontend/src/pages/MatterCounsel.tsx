@@ -1,122 +1,59 @@
-import { useState, useRef, useEffect } from 'react';
-import { useOutletContext } from 'react-router-dom';
-import { MessageSquare, Send } from 'lucide-react';
-
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Search, FileText, ArrowUpRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useMatter } from './MatterLayout';
+import { api, json, message, type DocumentContent } from '../lib/api';
+import { Loading, ErrorNotice, EmptyState } from '../components/Feedback';
+interface Hit {
+    id?: string;
+    doc_id?: string;
+    doc_name: string;
+    text: string;
+    index?: number;
+    citation?: string;
+    score?: number;
+}
 export default function MatterCounsel() {
-  const { matter } = useOutletContext<{matter: any}>();
-  
-  const [chatLog, setChatLog] = useState<{role: 'user'|'system', text: string}[]>([]);
-  const [chatInput, setChatInput] = useState('');
-  const chatBottomRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (chatBottomRef.current) {
-      chatBottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    const { matter } = useMatter();
+    const [query, setQuery] = useState('');
+    const [searched, setSearched] = useState('');
+    const [hits, setHits] = useState<Hit[]>([]);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState('');
+    const [source, setSource] = useState<DocumentContent | null>(null);
+    const [sourceBusy, setSourceBusy] = useState(false);
+    const [sourceError, setSourceError] = useState('');
+    const readRequest = useRef(0);
+    useEffect(() => () => { readRequest.current++; }, []);
+    async function search(event: FormEvent) { event.preventDefault(); if (!query.trim())
+        return; setBusy(true); setError(''); readRequest.current++; setSource(null); setSourceBusy(false); setSourceError(''); setSearched(query.trim()); try {
+        const data = await api<{
+            hits: Hit[];
+        }>(`/api/matters/${matter.id}/search`, { method: 'POST', body: json({ query: query.trim() }) });
+        setHits(data.hits || []);
     }
-  }, [chatLog]);
-
-  const [isSearching, setIsSearching] = useState(false);
-
-  const handleAskCounsel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isSearching) return;
-    
-    setChatLog(prev => [...prev, { role: 'user', text: chatInput }]);
-    const query = chatInput;
-    setChatInput('');
-    setIsSearching(true);
-    
-    try {
-      const token = localStorage.getItem('jurix_token');
-      const res = await fetch(`/api/matters/${matter?.id}/search`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ query })
-      });
-
-      if (!res.ok) throw new Error('Search failed');
-      const data = await res.json();
-      
-      let answerText = `I searched the DBX tenant and found ${data.hits?.length || 0} relevant passages for "${query}".\n\n`;
-      if (data.hits && data.hits.length > 0) {
-        data.hits.forEach((hit: any, idx: number) => {
-          answerText += `[${idx+1}] "...${hit.text}..." (Source: ${hit.doc_name})\n\n`;
-        });
-      }
-
-      setChatLog(prev => [...prev, { role: 'system', text: answerText }]);
-    } catch (err) {
-      setChatLog(prev => [...prev, { role: 'system', text: `Error connecting to DBX tenant. Please try again.` }]);
-    } finally {
-      setIsSearching(false);
+    catch (error) {
+        setError(message(error));
     }
-  };
-
-  const handlePromptClick = (prompt: string) => {
-    setChatInput(prompt);
-  };
-
-  return (
-    <div className="bg-black/40 backdrop-blur-xl rounded-2xl border border-[#C4A574]/20 shadow-[0_10px_30px_rgba(0,0,0,0.5)] overflow-hidden h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="p-6 border-b border-[#C4A574]/20 bg-black/60 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#C4A574]/10 text-[#C4A574] rounded-lg"><MessageSquare size={20} /></div>
-          <div>
-            <h2 className="text-xl font-serif text-white">Counsel AI</h2>
-            <p className="text-xs text-gray-400">Secure chat with {matter?.tenant_id} vectors only.</p>
-          </div>
-        </div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
-        {chatLog.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
-            <MessageSquare size={48} className="text-[#C4A574]" />
-            <p className="text-gray-300 max-w-sm">Ask any question about the ingested documents. Counsel will exclusively query this matter's sealed DBX tenant.</p>
-          </div>
-        )}
-        {chatLog.map((msg, i) => (
-          <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`p-4 rounded-2xl max-w-[70%] text-sm shadow-md ${msg.role === 'user' ? 'bg-[#C4A574] text-[#0a0806] font-medium rounded-tr-sm' : 'bg-[#1a1614] text-gray-200 rounded-tl-sm border border-[#C4A574]/20'}`}>
-              {msg.text}
-            </div>
-          </div>
-        ))}
-        <div ref={chatBottomRef} />
-      </div>
-
-      <div className="p-6 bg-black/60 border-t border-[#C4A574]/20 shrink-0">
-        <div className="flex flex-wrap gap-2 mb-4 justify-center">
-            {['Indemnity cap?', 'Governing law?', 'Renewal notice?'].map(prompt => (
-              <button 
-                key={prompt}
-                onClick={() => handlePromptClick(prompt)}
-                className="text-[10px] uppercase tracking-wider bg-white/5 hover:bg-white/10 text-gray-300 px-3 py-1.5 rounded-full border border-white/10 transition-colors"
-              >
-                {prompt}
-              </button>
-            ))}
-        </div>
-        <form onSubmit={handleAskCounsel} className="relative max-w-4xl mx-auto">
-          <input 
-            type="text" 
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            placeholder="Ask Counsel a legal question..."
-            className="w-full bg-[#0a0806] border border-[#C4A574]/30 rounded-xl pl-5 pr-14 py-4 focus:outline-none focus:ring-1 focus:ring-[#C4A574] text-white text-sm shadow-inner"
-          />
-          <button 
-            type="submit"
-            disabled={!chatInput.trim()}
-            className="absolute right-3 top-3 p-2 bg-[#C4A574] text-black rounded-lg disabled:opacity-50 hover:bg-[#d8b884] transition-all shadow-[0_0_10px_rgba(196,165,116,0.3)]"
-          >
-            <Send size={18} />
-          </button>
-        </form>
-      </div>
-    </div>
-  );
+    finally {
+        setBusy(false);
+    } }
+    async function read(hit: Hit) { const requestId = ++readRequest.current; setSource(null); setSourceBusy(true); setSourceError(''); try {
+        const docId = hit.doc_id || matter.documents?.find(doc => doc.name === hit.doc_name)?.id;
+        if (!docId)
+            throw new Error('Source document could not be identified. Open it in Documents.');
+        const data = await api<DocumentContent>(`/api/matters/${matter.id}/document?doc_id=${encodeURIComponent(docId)}`);
+        if (requestId === readRequest.current) setSource(data);
+    }
+    catch (error) {
+        if (requestId === readRequest.current) setSourceError(message(error));
+    }
+    finally {
+        if (requestId === readRequest.current) setSourceBusy(false);
+    } }
+    return <section className="surface document-search"><div className="section-heading counsel-heading"><div><p className="eyebrow">FIND THE SOURCE</p><h2>Document search</h2></div></div><p className="muted">Find passages in this matter’s documents. Results are source text for your review.</p>
+    <form onSubmit={search} className="document-search-form"><label className="sr-only" htmlFor="document-query">Search contract text</label><input id="document-query" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search for liability, renewal or a specific obligation…"/><button className="button primary" disabled={busy || !query.trim() || !matter.doc_count}><Search size={16}/>Search</button></form><div className="suggested-searches"><span className="mini-label">TRY</span>{['Liability cap', 'Governing law', 'Renewal notice', 'Return customer data'].map(value => <button className="text-button" key={value} onClick={() => setQuery(value)}>{value}</button>)}</div><ErrorNotice error={error}/>
+    {busy ? <Loading text="Searching document passages…"/> : !matter.doc_count ? <EmptyState title="No documents to search" text="Add contract text to this matter first."><Link className="button subtle" to="../documents">Add documents<ArrowUpRight size={15}/></Link></EmptyState> : searched && !error ? hits.length ? <div className="search-results"><p className="mini-label">{hits.length} PASSAGES FOR “{searched}”</p>{hits.map((hit, index) => <article key={hit.id || index}><span className="step-number">{String(index + 1).padStart(2, '0')}</span><div><p>{hit.text}</p><footer><FileText size={13}/>{hit.doc_name}{hit.citation ? ` · ${hit.citation}` : ''}</footer><button className="text-button" disabled={sourceBusy} onClick={() => read(hit)}>Read source document<ArrowUpRight size={14}/></button></div></article>)}</div> : <EmptyState title="No matching passages" text="Try a shorter phrase or check the document’s wording."/> : <EmptyState title="Start with a phrase or a clause" text="Search the document corpus and open the original text for context."/>}
+    <ErrorNotice error={sourceError}/>{sourceBusy ? <Loading text="Reading source…"/> : source && <div className="search-source"><div className="section-heading"><h3>{source.name}</h3><button className="text-button" onClick={() => { readRequest.current++; setSource(null); setSourceBusy(false); }}>Close source</button></div>{source.chunks.map(chunk => <section key={chunk.id} className="source-chunk"><span className="mini-label">PASSAGE {chunk.index + 1}</span><p>{chunk.text}</p></section>)}</div>}
+  </section>;
 }

@@ -10,7 +10,7 @@ PLAYBOOK_NAME = "Commercial MSA v7"
 PLAYBOOK: List[Dict[str, str]] = [
     {
         "key": "indemnity",
-        "item": "Indemnity cap",
+        "item": "Liability cap",
         "playbook": "Floor 12 months fees",
         "query": "supplier aggregate liability cap fees paid months preceding the claim indemnity",
     },
@@ -188,7 +188,7 @@ def _result(
     }
 
 
-def score_indemnity(text: str) -> Dict[str, Any]:
+def score_indemnity(text: str, floor_months: int = 12) -> Dict[str, Any]:
     scoped = " ".join(_matching_sentences(text, r"liabilit|indemn|fees"))
     if not re.search(r"liabilit|indemn", text, re.IGNORECASE):
         return _result(
@@ -219,7 +219,7 @@ def score_indemnity(text: str) -> Dict[str, Any]:
         mark = word + " months" if "month" in quote.lower() else word
     elif str(months_n) in quote:
         mark = str(months_n)
-    if months_n < 12:
+    if months_n < floor_months:
         return _result(
             state="high",
             finding=f"Cap is {months_n} months",
@@ -240,7 +240,7 @@ def score_indemnity(text: str) -> Dict[str, Any]:
     )
 
 
-def score_renewal(text: str) -> Dict[str, Any]:
+def score_renewal(text: str, notice_days: int = 30) -> Dict[str, Any]:
     if not re.search(r"renew", text, re.IGNORECASE):
         return _result(
             state="missing",
@@ -277,7 +277,7 @@ def score_renewal(text: str) -> Dict[str, Any]:
             if number == days_n and word in quote.lower():
                 mark = word
                 break
-    if days_n > 30:
+    if days_n > notice_days:
         return _result(
             state="medium",
             finding=f"{days_n}-day notice",
@@ -298,28 +298,32 @@ def score_renewal(text: str) -> Dict[str, Any]:
     )
 
 
-def score_law(text: str) -> Dict[str, Any]:
-    if re.search(r"delaware", text, re.IGNORECASE):
-        quote = focus_quote(text, ["delaware", "governed"])
+def score_law(text: str, accepted_laws: Sequence[str] = ("Delaware",)) -> Dict[str, Any]:
+    scoped = " ".join(s for s in _sentences(text) if re.search(r"governed|governing|laws of", s, re.IGNORECASE))
+    law_pattern = r"laws of (?:the )?(?:State of )?([A-Za-z][A-Za-z ]*?)(?:[.;,]|$| without | excluding | and )"
+    places = list(dict.fromkeys(place.strip() for place in re.findall(law_pattern, scoped, re.IGNORECASE)))
+    accepted = next((law for law in accepted_laws if len(places) == 1 and law.casefold() == places[0].casefold()), None)
+    if accepted:
+        quote = focus_quote(scoped, [accepted, "governed"])
         return _result(
             state="clear",
-            finding="Delaware",
+            finding=accepted,
             quote=quote,
-            mark="Delaware",
+            mark=accepted,
             lead="Playbook accepts",
             tail="matches",
             absent=False,
         )
     match = re.search(
-        r"laws of (?:the )?(?:State of )?([A-Z][A-Za-z]+)",
-        text,
+        law_pattern,
+        scoped, re.IGNORECASE,
     )
     if match:
-        place = match.group(1)
+        place = match.group(1).strip()
         quote = focus_quote(text, [place, "governed"])
         return _result(
             state="medium",
-            finding=place,
+            finding=place if len(places) <= 1 else "Multiple governing laws require review",
             quote=quote,
             mark=place,
             lead="Playbook accepts",
@@ -347,21 +351,22 @@ def score_law(text: str) -> Dict[str, Any]:
     )
 
 
-def score_breach(text: str) -> Dict[str, Any]:
+def score_breach(text: str, notice_hours: int = 72) -> Dict[str, Any]:
+    text = " ".join(s for s in _sentences(text) if re.search(r"breach|security incident|security|incident", s, re.IGNORECASE))
     security = bool(re.search(r"breach|security incident|security|incident", text, re.IGNORECASE))
     hours = find_unit(text, "hours?")
     if hours and security:
-        hours_n = min(hours)
+        hours_n = max(hours)
         quote = focus_quote(text, ["hours", "incident", "breach"])
         mark = str(hours_n) if str(hours_n) in quote else ""
-        if hours_n <= 72:
+        if hours_n <= notice_hours:
             return _result(
                 state="clear",
                 finding=f"{hours_n}-hour notice",
                 quote=quote,
                 mark=mark or f"{hours_n} hours",
                 lead="Playbook requires",
-                tail=f"{hours_n}-hour notice meets 72",
+                tail=f"{hours_n}-hour notice meets {notice_hours}",
                 absent=False,
             )
         return _result(
@@ -392,6 +397,31 @@ _SCORERS = {
     "breach": score_breach,
 }
 
+EXTRA_CHECKS = [
+    {"key": "confidentiality", "item": "Confidentiality", "playbook": "Confidentiality duties require review", "query": "confidential confidentiality disclosure information survive"},
+    {"key": "termination", "item": "Termination rights", "playbook": "Termination and cure rights require review", "query": "termination terminate cure material breach notice"},
+    {"key": "assignment", "item": "Assignment", "playbook": "Assignment consent requires review", "query": "assign assignment transfer consent change control"},
+    {"key": "data_return", "item": "Data return and deletion", "playbook": "Exit data handling requires review", "query": "return delete deletion destroy customer personal data termination"},
+]
+ALL_CHECKS = PLAYBOOK + EXTRA_CHECKS
+_PRESENCE_PATTERNS = {
+    "confidentiality": r"\bconfidential(?:ity)?\b|non-disclosure",
+    "termination": r"\bterminat(?:e|ion|ing)\b",
+    "assignment": r"\bassign(?:ment|ed)?\b",
+    "data_return": r"\b(?:return|delet(?:e|ion)|destroy)\b.{0,100}\b(?:data|information|records)\b|\b(?:data|information|records)\b.{0,100}\b(?:return|delet(?:e|ion)|destroy)\b",
+}
+
+
+def _presence_score(key: str, text: str) -> Dict[str, Any]:
+    pattern = _PRESENCE_PATTERNS[key]
+    found = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+    return _result(
+        state="medium" if found else "missing",
+        finding="Matching language located; scope requires review" if found else "No matching provision located",
+        quote=focus_quote(text, [found.group(0)]) if found else "",
+        mark="", lead="Reviewer must confirm", tail="Scope and enforceability require counsel review", absent=not bool(found),
+    )
+
 
 def select_chunk(
     query: str,
@@ -421,12 +451,58 @@ def select_chunk(
 def evaluate(
     chunks: Sequence[Dict[str, Any]],
     recalls: Dict[str, Sequence[Dict[str, Any]]],
+    policy: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
-    for index, spec in enumerate(PLAYBOOK, start=1):
+    checks = [s for s in ALL_CHECKS if s["key"] in policy["enabled_checks"]] if policy else PLAYBOOK
+    for index, spec in enumerate(checks, start=1):
         key = spec["key"]
-        chosen = select_chunk(spec["query"], chunks, recalls.get(key) or [])
-        scored = _SCORERS[key](str(chosen.get("text") or ""))
+        query = spec["query"]
+        standard = spec["playbook"]
+        if policy:
+            if key == "law":
+                query = "governed governing laws jurisdiction " + " ".join(policy["accepted_laws"])
+                standard = "Accepted law: " + ", ".join(policy["accepted_laws"])
+            elif key == "indemnity":
+                standard = f"Floor {policy['liability_floor_months']} months fees"
+            elif key == "renewal":
+                standard = f"Prefer {policy['renewal_notice_days']}-day notice"
+            elif key == "breach":
+                standard = f"{policy['breach_notice_hours']}-hour notice required"
+        # Prefer a matching provision before relying on broad semantic recall.
+        patterns = {"indemnity": r"liabilit|indemn", "renewal": r"renew", "law": r"governed|governing|laws of", "breach": r"security|breach|incident", **_PRESENCE_PATTERNS}
+        matching = [c for c in chunks
+            if re.search(patterns[key], str(c.get("text") or ""), re.IGNORECASE | re.DOTALL)
+            and not re.fullmatch(r"Article\s+\d+\s*[—:-][^\n.!?]{0,100}", str(c.get("text") or "").strip(), re.IGNORECASE)]
+        candidates = matching or chunks
+        chosen = select_chunk(query, candidates, recalls.get(key) or [])
+
+        def score_text(text: str) -> Dict[str, Any]:
+            if key not in _SCORERS:
+                return _presence_score(key, text)
+            if policy and key == "indemnity":
+                return score_indemnity(text, policy["liability_floor_months"])
+            if policy and key == "renewal":
+                return score_renewal(text, policy["renewal_notice_days"])
+            if policy and key == "law":
+                return score_law(text, policy["accepted_laws"])
+            if policy and key == "breach":
+                return score_breach(text, policy["breach_notice_hours"])
+            return _SCORERS[key](text)
+
+        scored = score_text(str(chosen.get("text") or ""))
+        # A retrieved compliant clause must not hide a conflicting provision in
+        # another passage of this document. Prefer the worst located result.
+        located = [(chunk, score_text(str(chunk.get("text") or ""))) for chunk in matching]
+        located = [(chunk, result) for chunk, result in located if not result["absent"]]
+        if located:
+            ranks = {"clear": 0, "medium": 1, "high": 2}
+            worst_chunk, scored = max(located, key=lambda row: (ranks[row[1]["state"]], overlap(query, str(row[0].get("text") or ""))))
+            via = "vector" if any(hit.get("id") == worst_chunk["id"] for hit in recalls.get(key, [])) else "read"
+            chosen = {**worst_chunk, "via": via}
+        # An absent provision has no supporting quotation or source citation.
+        if scored["absent"]:
+            scored["quote"] = ""
         chunk_index = int(chosen.get("index") or 0)
         label = section_for(chunks, str(chosen.get("id") or ""), str(scored.get("quote") or ""))
         items.append(
@@ -434,8 +510,8 @@ def evaluate(
                 "key": key,
                 "number": f"{index:02d}",
                 "item": spec["item"],
-                "playbook": spec["playbook"],
-                "query": spec["query"],
+                "playbook": standard,
+                "query": query,
                 "state": scored["state"],
                 "finding": scored["finding"],
                 "quote": scored["quote"],
@@ -443,10 +519,10 @@ def evaluate(
                 "lead": scored["lead"],
                 "tail": scored["tail"],
                 "absent": scored["absent"],
-                "chunk_id": chosen.get("id") or "",
+                "chunk_id": "" if scored["absent"] else chosen.get("id") or "",
                 "chunk_index": chunk_index,
                 "section": label,
-                "citation": f"{label} · chunk {chunk_index}",
+                "citation": "Not located in document" if scored["absent"] else f"{label} · chunk {chunk_index}",
                 "doc_name": chosen.get("doc_name") or "",
                 "doc_id": chosen.get("doc_id") or "",
                 "via": chosen.get("via") or "none",

@@ -1,205 +1,53 @@
-import { useState, useEffect } from 'react';
+﻿import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FileText, Plus, FolderLock, ArrowRight, Loader2, X } from 'lucide-react';
-
+import { Plus, ArrowUpRight, Search, X, ArrowDownUp, RefreshCw } from 'lucide-react';
+import { api, json, message, dateTime, type Matter } from '../lib/api';
+import { useSession } from '../lib/session';
+import { Loading, ErrorNotice, EmptyState } from '../components/Feedback';
+type Sort = 'matter' | 'reviewer' | 'documents' | 'review' | 'updated';
 export default function MattersPage() {
-  const [matters, setMatters] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [showNewMatter, setShowNewMatter] = useState(false);
-
-  const [newClient, setNewClient] = useState('');
-  const [newMatter, setNewMatterName] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [creating, setCreating] = useState(false);
-  
-  const navigate = useNavigate();
-
-  async function fetchMatters() {
-    try {
-      const token = localStorage.getItem('jurix_token');
-      const res = await fetch('/api/matters', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) throw new Error('Failed to load matters');
-      const data = await res.json();
-      setMatters(data.matters || []);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const {user} = useSession();
+    const [matters, setMatters] = useState<Matter[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+    const [query, setQuery] = useState('');
+    const [filter, setFilter] = useState('all');
+    const [sort, setSort] = useState<Sort>('updated');
+    const [descending, setDescending] = useState(true);
+    const [showCreate, setShowCreate] = useState(false);
+    const [client, setClient] = useState('');
+    const [name, setName] = useState('');
+    const [creating, setCreating] = useState(false);
+    const [createError, setCreateError] = useState('');
+    const navigate = useNavigate();
+    async function load() {
+        setLoading(true); setError('');
+        try { setMatters((await api<{matters: Matter[]}>('/api/matters')).matters); }
+        catch (error) { setError(message(error)); } finally { setLoading(false); }
     }
-  }
-
-  useEffect(() => {
-    fetchMatters();
-  }, []);
-
-  const handleCreateMatter = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newClient.trim() || !newMatter.trim()) return;
-    
-    setCreating(true);
-    try {
-      const token = localStorage.getItem('jurix_token');
-      const res = await fetch('/api/matters', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}` 
-        },
-        body: JSON.stringify({
-          name: newClient.trim(),
-          matter: newMatter.trim(),
-          description: newDesc.trim()
-        })
-      });
-
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.error || d.detail || 'Failed to create matter');
-      }
-
-      const created = await res.json();
-      setShowNewMatter(false);
-      setNewClient('');
-      setNewMatterName('');
-      setNewDesc('');
-      
-      // Navigate straight to the new matter
-      if (created && created.id) {
-        navigate(`/matters/${created.id}`);
-      } else {
-        fetchMatters();
-      }
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setCreating(false);
+    useEffect(() => { void load(); }, []);
+    async function create(event: FormEvent) {
+        event.preventDefault(); setCreating(true); setCreateError('');
+        try {
+            const data = await api<{matter: Matter}>('/api/matters', { method: 'POST', body: json({ name: client.trim(), matter: name.trim() }) });
+            navigate(`/matters/${data.matter.id}/documents`);
+        } catch (error) { setCreateError(message(error)); } finally { setCreating(false); }
     }
-  };
-
-  return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
-      <div className="flex justify-between items-end border-b border-[#C4A574]/30 pb-4">
-        <div>
-          <h1 className="text-4xl font-serif text-white mb-2 tracking-tight drop-shadow-md">Matters</h1>
-          <p className="text-[#C4A574] font-medium tracking-wide">Sealed client memory spaces on DBX.</p>
-        </div>
-        <button 
-          onClick={() => setShowNewMatter(true)}
-          className="bg-[#C4A574] hover:bg-[#d8b884] text-[#0a0806] px-5 py-2.5 rounded-xl font-bold tracking-wide flex items-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-[0_0_15px_rgba(196,165,116,0.3)]"
-        >
-          <Plus size={18} />
-          New Matter
-        </button>
-      </div>
-
-      {loading ? (
-        <div className="flex justify-center items-center py-20 text-[#C4A574]">
-          <Loader2 className="animate-spin" size={40} />
-        </div>
-      ) : error ? (
-        <div className="bg-red-900/40 text-red-200 p-4 rounded-xl border border-red-500/50 backdrop-blur-md">
-          {error}
-        </div>
-      ) : matters.length === 0 ? (
-        <div className="text-center py-24 bg-black/40 rounded-2xl border border-dashed border-[#C4A574]/40 backdrop-blur-md">
-          <FolderLock size={64} className="mx-auto text-[#C4A574] mb-6 opacity-60" />
-          <h3 className="text-2xl font-serif text-white mb-3">No active matters</h3>
-          <p className="text-gray-400 max-w-sm mx-auto">Create a new matter to provision a sealed DBX tenant for your client's documents.</p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {matters.map((matter) => (
-            <Link key={matter.id} to={`/matters/${matter.id}`} className="block bg-black/40 backdrop-blur-xl rounded-2xl border border-[#C4A574]/20 p-6 shadow-xl hover:shadow-[0_10px_30px_rgba(196,165,116,0.15)] hover:border-[#C4A574]/60 transition-all duration-300 group cursor-pointer relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-[#C4A574] opacity-0 group-hover:opacity-100 transition-opacity duration-300 shadow-[0_0_10px_#C4A574]" />
-              
-              <div className="flex justify-between items-start mb-6">
-                <div className="p-3 bg-gradient-to-br from-[#C4A574]/20 to-transparent rounded-xl text-[#C4A574] border border-[#C4A574]/30 group-hover:rotate-6 transition-transform">
-                  <FolderLock size={24} />
-                </div>
-                <span className="text-[10px] font-mono bg-black/50 border border-gray-700 text-gray-400 px-2 py-1 rounded shadow-inner">
-                  {matter.id.substring(0, 8)}
-                </span>
-              </div>
-              
-              <h3 className="text-xl font-serif font-bold text-white mb-2 group-hover:text-[#C4A574] transition-colors">{matter.matter || matter.name}</h3>
-              <p className="text-sm text-gray-400 mb-8 line-clamp-2 leading-relaxed">{matter.description || `Client: ${matter.client}`}</p>
-              
-              <div className="flex justify-between items-center text-sm font-medium border-t border-[#C4A574]/20 pt-5 mt-auto">
-                <span className="flex items-center gap-2 text-gray-400">
-                  <FileText size={16} className="text-[#C4A574]" />
-                  {matter.doc_count || 0} docs
-                </span>
-                <span className="text-[#C4A574] flex items-center gap-1 group-hover:translate-x-2 transition-transform duration-300 uppercase tracking-widest text-[10px]">
-                  Open <ArrowRight size={14} />
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Animated Dialogue Box */}
-      {showNewMatter && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#12100E] border border-[#C4A574]/30 rounded-3xl p-8 max-w-md w-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] animate-in zoom-in-95 slide-in-from-bottom-10 duration-500 ease-out">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-serif text-white">Create New Matter</h2>
-              <button 
-                onClick={() => setShowNewMatter(false)}
-                className="text-gray-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 p-2 rounded-full"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleCreateMatter} className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Client</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newClient}
-                  onChange={e => setNewClient(e.target.value)}
-                  className="w-full bg-black/50 border border-[#C4A574]/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C4A574] text-white transition-all placeholder-gray-600"
-                  placeholder="e.g. Acme Corp"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Matter Name</label>
-                <input 
-                  type="text" 
-                  required
-                  value={newMatter}
-                  onChange={e => setNewMatterName(e.target.value)}
-                  className="w-full bg-black/50 border border-[#C4A574]/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C4A574] text-white transition-all placeholder-gray-600"
-                  placeholder="e.g. Project Alpha"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Description (Optional)</label>
-                <textarea 
-                  value={newDesc}
-                  onChange={e => setNewDesc(e.target.value)}
-                  className="w-full bg-black/50 border border-[#C4A574]/20 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#C4A574] text-white transition-all placeholder-gray-600 h-24 resize-none"
-                  placeholder="Matter details..."
-                />
-              </div>
-              
-              <button 
-                type="submit"
-                disabled={creating}
-                className="w-full bg-[#C4A574] hover:bg-[#d8b884] text-[#0a0806] font-bold py-3.5 rounded-xl transition-all shadow-lg mt-2 disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {creating && <Loader2 size={18} className="animate-spin" />}
-                Provision Sealed Tenant
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    const outstanding = (matter: Matter) => matter.review_open ?? matter.open ?? 0;
+    const shown = matters.filter(matter => `${matter.name} ${matter.matter} ${matter.reviewer_name}`.toLowerCase().includes(query.toLowerCase()) && (filter === 'all' || (filter === 'stale' ? matter.stale : filter === 'not_started' ? !matter.has_run : outstanding(matter) > 0))).sort((a,b) => {
+        const value = sort === 'matter' ? a.matter.localeCompare(b.matter) : sort === 'reviewer' ? (a.reviewer_name || '').localeCompare(b.reviewer_name || '') : sort === 'documents' ? a.doc_count - b.doc_count : sort === 'review' ? outstanding(a) - outstanding(b) : (a.ran_at || 0) - (b.ran_at || 0);
+        return descending ? -value : value;
+    });
+    function order(value: Sort) { if (sort === value) setDescending(!descending); else { setSort(value); setDescending(false); } }
+    const heading = (value: Sort, label: string) => <th scope="col" aria-sort={sort === value ? descending ? 'descending' : 'ascending' : 'none'}><button onClick={() => order(value)}>{label}<ArrowDownUp size={13}/></button></th>;
+    return <div className="page-enter">
+        <div className="page-heading"><div><p className="eyebrow">FIRM WORKSPACE</p><h1>The matter docket</h1><p className="muted">Contracts, source evidence and the decisions that follow.</p></div><div className="inline-actions"><button className="button subtle" disabled={loading} onClick={load} aria-label="Refresh matters"><RefreshCw size={16}/></button>{user?.role !== 'viewer' && <button className="button primary" onClick={() => setShowCreate(!showCreate)}><Plus size={17}/>New matter</button>}</div></div>
+        <div className="docket-summary" aria-label="Workspace totals"><span><strong>{loading ? '…' : error ? '—' : matters.length}</strong> matters</span><span><strong>{loading ? '…' : error ? '—' : matters.filter(m => m.has_run && outstanding(m) > 0).length}</strong> awaiting decisions</span><span><strong>{loading ? '…' : error ? '—' : matters.filter(m => m.stale).length}</strong> need a fresh audit</span></div>
+        {showCreate && <section className="surface create-matter"><div className="section-heading"><h2>Create a matter</h2><button className="icon-button" aria-label="Close new matter form" onClick={() => setShowCreate(false)}><X size={18}/></button></div><form onSubmit={create} className="form-stack"><ErrorNotice error={createError}/><div className="form-grid"><div><label htmlFor="new-client">Client name</label><input id="new-client" autoFocus required maxLength={200} value={client} onChange={e => setClient(e.target.value)} placeholder="Acme Corporation"/></div><div><label htmlFor="new-matter">Matter name</label><input id="new-matter" required maxLength={200} value={name} onChange={e => setName(e.target.value)} placeholder="Commercial services agreement"/></div></div><button className="button primary" disabled={creating || !client.trim() || !name.trim()}>{creating ? 'Creating…' : 'Create & add documents'}<ArrowUpRight size={16}/></button></form></section>}
+        <section className="surface docket">
+            <div className="toolbar"><div className="search-field"><Search size={17}/><label htmlFor="matter-search" className="sr-only">Search matters</label><input id="matter-search" placeholder="Search client, matter or reviewer" value={query} onChange={e => setQuery(e.target.value)}/></div><label className="sr-only" htmlFor="matter-filter">Matter status</label><select id="matter-filter" value={filter} onChange={e => setFilter(e.target.value)}><option value="all">All matters</option><option value="open">Review outstanding</option><option value="not_started">Not audited</option><option value="stale">Needs a new audit</option></select></div>
+            {loading ? <Loading/> : error ? <ErrorNotice error={error} retry={load}/> : !shown.length ? <EmptyState title={matters.length ? 'No matching matters' : 'Your first matter starts here'} text={matters.length ? 'Try a different search or status filter.' : 'Create a matter and add the source contract to begin.'}/> : <div className="table-scroll docket-scroll" role="region" aria-label="Matter docket"><table className="matter-table"><thead><tr>{heading('matter', 'Client / matter')}{heading('reviewer', 'Reviewer')}{heading('documents', 'Documents')}{heading('review', 'Review status')}{heading('updated', 'Last audit')}<th scope="col"><span className="sr-only">Open matter</span></th></tr></thead><tbody>{shown.map(matter => <tr key={matter.id}><th scope="row"><Link to={`/matters/${matter.id}/dashboard`} className="docket-title"><small>{matter.name}</small><strong>{matter.matter}</strong><span className="matter-id">{matter.id.slice(0,8).toUpperCase()}</span></Link></th><td data-label="Reviewer">{matter.reviewer_name || 'Unassigned'}</td><td data-label="Documents">{matter.doc_count || 0}</td><td data-label="Review status"><span className={`badge ${matter.stale ? 'missing' : !matter.has_run ? 'neutral' : outstanding(matter) ? 'medium' : 'clear'}`}>{matter.stale ? 'Audit out of date' : matter.has_run ? `${outstanding(matter)} to review` : 'Not audited'}</span></td><td data-label="Last audit" className="docket-date">{dateTime(matter.ran_at)}</td><td className="docket-open"><Link className="icon-button" to={`/matters/${matter.id}/dashboard`} aria-label={`Open ${matter.matter}`}><ArrowUpRight size={18}/></Link></td></tr>)}</tbody></table></div>}
+            {!loading && !error && <p className="table-footnote">{shown.length} of {matters.length} matters · Only your firm's workspace</p>}
+        </section>
+    </div>;
 }

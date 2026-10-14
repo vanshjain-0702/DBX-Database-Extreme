@@ -2,3 +2,11 @@ User-agent: *
 Allow: /
 
 Sitemap: https://dbxdb.co.in/sitemap.xml
+
+# Feature hub pages
+Allow: /features/per-tenant-isolation.html
+Allow: /features/shadow-migration.html
+Allow: /features/time-travel-vector-search.html
+Allow: /features/late-fusion-vector-search.html
+Allow: /features/redis-compatible-memory.html
+Allow: /features/scalar-quantization-sq8.html

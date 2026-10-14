@@ -1,77 +1,41 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link, Outlet, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, LayoutDashboard, CheckSquare, FileText, MessageSquare } from 'lucide-react';
-
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useParams, Link, Outlet, NavLink, useOutletContext } from 'react-router-dom';
+import { ArrowLeft, LayoutDashboard, CheckSquare, FileText, Search, Receipt } from 'lucide-react';
+import { api, message, type Matter } from '../lib/api';
+import { Loading, ErrorNotice } from '../components/Feedback';
+import ProcessingConsent from '../components/ProcessingConsent';
+export interface MatterContext {
+    matter: Matter;
+    refreshMatter: () => Promise<Matter>;
+    setMatter: Dispatch<SetStateAction<Matter | null>>;
+}
+export const useMatter = () => useOutletContext<MatterContext>();
 export default function MatterLayout() {
-  const { id } = useParams();
-  const location = useLocation();
-  const [matter, setMatter] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadMatter() {
-      try {
-        const token = localStorage.getItem('jurix_token');
-        const res = await fetch(`/api/matters/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
+    const { id } = useParams();
+    const [matter, setMatterState] = useState<Matter | null>(null);
+    const currentId = useRef(id);
+    currentId.current = id;
+    const setMatter: Dispatch<SetStateAction<Matter | null>> = useCallback(next => {
+        setMatterState(previous => {
+            const value = typeof next === 'function' ? next(previous) : next;
+            return value && value.id !== currentId.current ? previous : value;
         });
-        if (res.ok) {
-          const data = await res.json();
-          setMatter(data);
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    loadMatter();
-  }, [id]);
-
-  if (loading) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-[#C4A574]" size={40} /></div>;
-  if (!matter) return <div className="p-8 text-white font-serif text-2xl text-center">Matter not found.</div>;
-
-  const tabs = [
-    { name: 'Dashboard', path: 'dashboard', icon: LayoutDashboard },
-    { name: 'Findings', path: 'findings', icon: CheckSquare },
-    { name: 'Documents', path: 'documents', icon: FileText },
-    { name: 'Counsel AI', path: 'counsel', icon: MessageSquare },
-  ];
-
-  return (
-    <div className="space-y-6 animate-in fade-in duration-500 h-full flex flex-col">
-      <Link to="/matters" className="flex items-center gap-2 text-sm text-gray-400 hover:text-[#C4A574] transition-colors w-fit">
-        <ArrowLeft size={16} /> Back to Matters
-      </Link>
-      
-      <div className="flex justify-between items-end border-b border-[#C4A574]/30 pb-6 shrink-0">
-        <div>
-          <div className="text-xs font-mono bg-black/50 border border-gray-700 text-gray-400 px-3 py-1.5 rounded inline-block mb-3 shadow-inner">
-            Tenant: {matter.tenant_id}
-          </div>
-          <h1 className="text-4xl font-serif text-white mb-2 drop-shadow-md">{matter.matter || 'Matter'}</h1>
-          <p className="text-[#C4A574] font-medium">Reviewer: {matter.reviewer_name}</p>
-        </div>
-      </div>
-
-      <div className="flex gap-2 border-b border-white/10 pb-4 shrink-0">
-        {tabs.map(tab => {
-          const isActive = location.pathname.includes(tab.path);
-          const Icon = tab.icon;
-          return (
-            <Link 
-              key={tab.path}
-              to={tab.path}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-medium transition-all ${isActive ? 'bg-[#C4A574]/10 text-[#C4A574] border border-[#C4A574]/30' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}
-            >
-              <Icon size={18} />
-              {tab.name}
-            </Link>
-          );
-        })}
-      </div>
-
-      <div className="pt-4 flex-1 min-h-0">
-        <Outlet context={{ matter }} />
-      </div>
-    </div>
-  );
+    }, []);
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(true);
+    const refreshMatter = useCallback(async () => { const data = await api<Matter>(`/api/matters/${id}`); setMatter(data); return data; }, [id]);
+    useEffect(() => { let active = true; setLoading(true); setError(''); api<Matter>(`/api/matters/${id}`).then(data => { if (active)
+        setMatter(data); }).catch(error => { if (active)
+        setError(message(error)); }).finally(() => { if (active)
+        setLoading(false); }); return () => { active = false; }; }, [id]);
+    if (loading)
+        return <Loading />;
+    if (error || !matter)
+        return <ErrorNotice error={error || 'Matter not found.'} retry={() => { setLoading(true); refreshMatter().then(() => setError('')).catch(error => setError(message(error))).finally(() => setLoading(false)); }}/>;
+    return <div className="page-enter"><Link to="/matters" className="back-link"><ArrowLeft size={15}/> All matters</Link>
+    <div className="matter-heading"><div><p className="eyebrow">{matter.name}</p><h1>{matter.matter}</h1><p className="muted">Reviewer: {matter.reviewer_name || 'Unassigned'}</p></div><span className="matter-id">MATTER / {matter.id.slice(0, 8).toUpperCase()}</span></div>
+    <nav className="matter-tabs" aria-label="Matter navigation">{[{ name: 'Overview', path: 'dashboard', icon: LayoutDashboard }, { name: 'Findings', path: 'findings', icon: CheckSquare }, { name: 'Documents', path: 'documents', icon: FileText }, { name: 'Document search', path: 'counsel', icon: Search }, { name: 'Pre-bill review', path: 'billing', icon: Receipt }].map(({ name, path, icon: Icon }) => <NavLink key={path} to={path} className={({ isActive }) => isActive ? 'active' : ''}><Icon size={16}/>{name}</NavLink>)}</nav>
+    <ProcessingConsent matter={matter} refreshMatter={refreshMatter}/>
+    <Outlet context={{ matter, refreshMatter, setMatter } satisfies MatterContext}/>
+  </div>;
 }

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Multi-Tenant Vector Database: Isolated Index Per Customer | DBX</title>
+  <meta name="description" content="DBX isolates each tenant into its own directory, WAL, and HNSW vector index. No key prefixes, no shared clusters, zero cross-tenant leakage. Self-hosted single binary.">
+  <meta name="keywords" content="multi-tenant vector database, per-tenant isolation, isolated vector index, tenant-isolated database, multi-tenant HNSW, per-customer vector store, tenant isolation database">
+  <meta property="og:title" content="Multi-Tenant Vector Database: Isolated Index Per Customer | DBX">
+  <meta property="og:description" content="One isolated engine per customer — its own directory, WAL, HNSW index, and snapshot lineage. Isolation is structural, not a naming convention.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://dbxdb.co.in/features/per-tenant-isolation.html">
+  <meta property="og:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Multi-Tenant Vector Database: Isolated Index Per Customer | DBX">
+  <meta name="twitter:description" content="One isolated engine per customer — its own directory, WAL, HNSW index, and snapshot lineage. Isolation is structural, not a naming convention.">
+  <meta name="twitter:image" content="https://dbxdb.co.in/assets/og-image.jpg">
+  <meta name="theme-color" content="#051c33">
+  <link rel="canonical" href="https://dbxdb.co.in/features/per-tenant-isolation.html">
+  <link rel="apple-touch-icon" href="../assets/logo.jpg">
+  <link rel="icon" href="../assets/logo.jpg" type="image/jpeg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/site.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    "headline": "Multi-Tenant Vector Database: Isolated Index Per Customer",
+    "description": "DBX isolates each tenant into its own directory, WAL, and HNSW vector index. No key prefixes, no shared clusters, zero cross-tenant leakage.",
+    "author": { "@type": "Organization", "name": "DBX", "url": "https://dbxdb.co.in/" },
+    "datePublished": "2026-10-14",
+    "dateModified": "2026-10-14",
+    "mainEntityOfPage": "https://dbxdb.co.in/features/per-tenant-isolation.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What does per-tenant isolation mean in a vector database?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Per-tenant isolation means each customer gets their own dedicated data directory, write-ahead log (WAL), HNSW vector index, and snapshot lineage. Unlike key-prefix multi-tenancy used by shared clusters, one tenant's operations cannot observe, corrupt, or performance-starve another tenant."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How is DBX different from key-prefix multi-tenancy?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Key-prefix multi-tenancy stores all tenants in a single shared index and uses naming conventions to separate them. A missing prefix exposes cross-tenant data. DBX uses structural isolation: each tenant is a separate process (on Linux strict mode), a separate directory, a separate WAL, and a separate HNSW graph. There is no shared keyspace to sweep."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How many tenants can DBX support per node?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The certified v1 single-node profile supports 100 tenants per node, each with up to 100,000 vectors. Idle tenants reside in page cache rather than resident RAM, thanks to SQ8 scalar-quantized mmap storage, keeping memory cost proportional to active tenants."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I provision, back up, and delete a single tenant without affecting others?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes. POST /api/provision creates an isolated engine. Backup archives exactly one customer's data with a SHA-256 manifest. Delete with purge=true erases that tenant's directory and nothing else. Every lifecycle operation targets one tenant."
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body data-root=".." data-page="features">
+  <a class="skip" href="#content">Skip to content</a>
+  <div id="masthead"></div>
+
+  <main id="content">
+    <header class="page-band">
+      <div class="wrap">
+        <p class="kicker">Feature deep-dive</p>
+        <h1>Multi-Tenant Vector Database with True Per-Customer Isolation</h1>
+        <p>DBX gives every customer their own directory, WAL, HNSW index, and snapshot lineage. Isolation is structural — not a key prefix you hope nobody forgets.</p>
+      </div>
+    </header>
+
+    <section class="section">
+      <div class="wrap">
+        <article class="usp">
+          <div class="usp-num">01</div>
+          <div>
+            <h2>Why Key-Prefix Multi-Tenancy Fails for AI Products</h2>
+            <p>Most vector databases store every customer's embeddings in a single shared index. They separate tenants by prepending a key prefix — <code>acme:</code>, <code>harbor:</code> — to every record. If a developer omits or misconfigures the prefix, one tenant can read another's data. Performance isolation is equally fragile: a large indexing job by Tenant A can starve Tenant B's queries.</p>
+            <p>For AI products holding customer-specific memory (conversation histories, RAG context, personalization vectors), this risk is unacceptable. You need isolation that is enforced by the database engine, not by the application developer's discipline.</p>
+          </div>
+        </article>
+
+        <article class="usp">
+          <div class="usp-num">02</div>
+          <div>
+            <h2>How DBX Isolates Each Tenant Structurally</h2>
+            <p><code>POST /api/provision</code> creates a live, isolated engine for one customer. That engine gets:</p>
+            <ul>
+              <li><strong>Its own data directory</strong> — files on disk belong to one tenant</li>
+              <li><strong>Its own write-ahead log (WAL)</strong> — crash recovery replays only that customer's mutations</li>
+              <li><strong>Its own HNSW vector index</strong> — ANN search operates over a single tenant's embeddings</li>
+              <li><strong>Its own snapshot lineage</strong> — backups and restores target exactly one customer</li>
+              <li><strong>Process-level state</strong> — on Linux strict mode, each tenant runs in a sealed execution domain with Landlock filesystem restrictions</li>
+            </ul>
+            <p>There is no cross-tenant scan. There is no shared keyspace. Provision, back up, restore, and delete operate on exactly one customer.</p>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Provision in seconds</p>
+        <h2>Create an Isolated Tenant Engine</h2>
+        <div class="code-panel">
+          <header><span>HTTP</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre>curl -X POST http://localhost:8000/api/provision \
+  -H "Authorization: Bearer $DBX_TOKEN" \
+  -d '{"id": "acme-corp", "name": "Acme Corp"}'</pre>
+        </div>
+        <p class="muted">One call creates a fully isolated engine. The tenant is live immediately — ready for KV operations and vector search via authenticated RESP on port <code>6380</code>.</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Lifecycle operations target one tenant</p>
+        <h2>Back Up, Restore, and Delete One Customer at a Time</h2>
+        <div class="code-panel">
+          <header><span>Backup</span><button class="copy-btn" type="button">Copy</button></header>
+          <pre># Back up one customer — SHA-256 checksummed archive
+curl -X POST http://localhost:8000/api/tenants/backup \
+  -H "Authorization: Bearer $DBX_TOKEN" \
+  -d '{"id": "acme-corp"}'
+
+# Delete one customer — purge erases the tenant directory
+curl -X POST http://localhost:8000/api/tenants/delete \
+  -H "Authorization: Bearer $DBX_TOKEN" \
+  -d '{"id": "acme-corp", "purge": true}'</pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap">
+        <p class="kicker">Density at scale</p>
+        <h2>100 Tenants Per Node, Cost Scales with Active Tenants</h2>
+        <p>Vectors are stored as 8-bit scalar-quantized (SQ8) rows in an mmap'd file, with asymmetric distance computation at query time. Payload is roughly a quarter of float32. An idle tenant lives in page cache rather than resident RAM — approximately 14–17 MiB RSS per idle worker.</p>
+        <p>This is what makes hosting many small tenants viable. The metric is cost per active tenant, not the count of tenants you have signed.</p>
+      </div>
+    </section>
+
+    <section class="section-tight">
+      <div class="wrap">
+        <p class="kicker">Linux strict mode</p>
+        <h2>Isolation Kernel: Process-Level Tenant Seals</h2>
+        <p>On Linux production, a tenant is a sealed execution domain: its own process, a Landlock-restricted view of the filesystem, and Unix sockets that only the orchestrator can open. The WAL, checkpoints, vector ids, and the HNSW graph are encrypted under a per-tenant key derived from <code>DBX_KEK</code>.</p>
+        <p class="note">Honest limits: SQ8 vector rows stay memory-mapped and unencrypted so idle tenants remain cheap — use fscrypt or LUKS for those. Data in use is plaintext inside the worker. Re-measured density under strict: ~14–17 MiB RSS per idle worker, worst idle GET ~3–12 ms.</p>
+      </div>
+    </section>
+
+    <section class="cta-band">
+      <div class="wrap">
+        <h2>Run it locally in 15 minutes.</h2>
+        <div class="btn-row">
+          <a class="btn" href="../start.html">Get started</a>
+          <a class="btn btn-ghost" href="../features.html">All features</a>
+        </div>
+        <p class="muted" style="margin-top:1rem">Related: <a href="shadow-migration.html">Zero-downtime vector migration</a> · <a href="time-travel-vector-search.html">Historical vector search</a> · <a href="late-fusion-vector-search.html">Late fusion (VFUSE)</a> · <a href="redis-compatible-memory.html">RESP-compatible KV + HNSW</a> · <a href="scalar-quantization-sq8.html">SQ8 quantization</a></p>
+      </div>
+    </section>
+  </main>
+
+  <div id="colophon"></div>
+  <script src="../assets/site.js"></script>
+</body>
+</html>

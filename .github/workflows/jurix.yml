@@ -1,0 +1,49 @@
+name: Jurix validation
+
+on:
+  push:
+    paths: ["jurix/**", "legal-auditor/**", "sdk/python/**", ".github/workflows/jurix.yml"]
+  pull_request:
+    paths: ["jurix/**", "legal-auditor/**", "sdk/python/**", ".github/workflows/jurix.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jurix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: jurix/frontend/package-lock.json
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: jurix/requirements*.txt
+      - name: Install isolated backend dependencies
+        run: python -m pip install -r jurix/requirements-dev.txt
+      - name: Test Jurix API, account isolation and evidence workflows
+        run: |
+          python -m pip check
+          python -m pytest jurix --basetemp .cache/jurix-ci-tests
+      - name: Install frontend dependencies from the lockfile
+        working-directory: jurix/frontend
+        run: npm ci --no-fund --no-audit
+      - name: Build production frontend
+        working-directory: jurix/frontend
+        run: npm run build
+      - name: Check frontend dependency advisories
+        working-directory: jurix/frontend
+        run: npm audit --audit-level=high
+      - name: Build the production application container
+        run: docker build --file jurix/Dockerfile --tag jurix-validation .

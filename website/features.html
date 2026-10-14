@@ -41,6 +41,7 @@
             <h2>Tenant is a first-class object</h2>
             <p><code>POST /api/provision</code> creates a live isolated engine: its own data directory, write-ahead log, HNSW index, snapshot lineage, and process-level state. Isolation is structural, not a naming convention.</p>
             <p>Provision, back up, restore, and delete operate on exactly one customer. There is no cross-tenant scan and no shared keyspace to sweep.</p>
+            <p><a href="features/per-tenant-isolation.html">Multi-tenant isolation deep dive →</a></p>
           </div>
         </article>
         <article class="usp">
@@ -50,6 +51,7 @@
             <p>KV with TTL (session, scratchpad, rate counters) and HNSW vectors (semantic recall) live in the same process, behind one connection, in one data directory, and inside one backup archive. An agent’s session and its recall cannot drift apart — there is no second system to drift from.</p>
             <p>Recall on that tenant is three commands: <code>VSEARCH</code> (query vector), <code>VSIM</code> (neighbors of a stored id, self excluded), and <code>VFUSE</code> (late-fusion across named <code>SPACE</code> graphs). Optional <code>MIN_SCORE</code> and per-query <code>EF</code> stay on the same wire. Embeddings stay with the caller; DBX does not run CLIP or MiniLM.</p>
             <p class="note">Honest limits: the periodic <code>.rdb</code> snapshot still serializes KV only. The tenant backup archive is the point-in-time unit: checksummed <code>.rdb</code> plus vector files, bound by seals that recovery verifies before WAL replay. Do not read that as “vectors live inside the <code>.rdb</code>.” <code>VFUSE</code> is a weighted sum of per-space cosine, not a multimodal model. Named spaces are extra mmap/HNSW files in the same tenant directory — backup, quota, and shred still hit one customer.</p>
+            <p><a href="features/redis-compatible-memory.html">RESP-compatible KV + HNSW deep dive →</a> · <a href="features/late-fusion-vector-search.html">VFUSE late fusion deep dive →</a></p>
           </div>
         </article>
         <article class="usp">
@@ -58,6 +60,7 @@
             <h2>Cost scales with active tenants</h2>
             <p>Vectors are stored as 8-bit scalar-quantized (SQ8) rows in an mmap’d file, with asymmetric distance computation at query time. Payload is roughly a quarter of float32. An idle tenant lives in page cache rather than resident RAM.</p>
             <p>That is what makes hosting many small tenants viable. The metric is cost per active tenant — not the count of tenants you have signed.</p>
+            <p><a href="features/scalar-quantization-sq8.html">SQ8 quantization and mmap density deep dive →</a></p>
           </div>
         </article>
         <article class="usp">
@@ -89,6 +92,7 @@
               <h3>Shadow migration</h3>
               <p><code>VMIGRATE</code> builds a target index on disk while the current index keeps serving reads. Stream caller-generated vectors, then promote the non-empty shadow index with an atomic lifecycle boundary. Cancel keeps the current index.</p>
               <p class="note">Re-embedding and transfer remain the caller’s work. The migration lifecycle is not yet a replicated WAL protocol.</p>
+              <p><a href="features/shadow-migration.html">Zero-downtime migration deep dive →</a></p>
             </div>
           </article>
           <article class="usp">
@@ -97,6 +101,7 @@
               <h3>Historical vector search</h3>
               <p><code>VSEARCH ... AS_OF</code> reconstructs retained vector WAL state for audit trails, RAG incident reproduction, and compliance investigations.</p>
               <p class="note">Historical search uses a temporary index, costs more than current search, and is limited by WAL retention.</p>
+              <p><a href="features/time-travel-vector-search.html">Time-travel vector search deep dive →</a></p>
             </div>
           </article>
         </div>

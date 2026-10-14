@@ -1,0 +1,30 @@
+{
+    admin off
+    auto_https disable_redirects
+    https_port 8443
+    http_port 8080
+}
+
+{$JURIX_HOST} {
+    # Private PKI: install the Caddy root certificate in authorized client trust stores.
+    tls internal
+    encode zstd gzip
+    @operator path /api/ready
+    respond @operator 404
+    request_body {
+        max_size 21MB
+    }
+    header {
+        Strict-Transport-Security "max-age=31536000"
+        X-Content-Type-Options nosniff
+        Referrer-Policy same-origin
+        -Server
+    }
+    reverse_proxy jurix:8091 {
+        header_up X-Forwarded-Proto https
+        transport http {
+            dial_timeout 5s
+            response_header_timeout 120s
+        }
+    }
+}

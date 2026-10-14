@@ -1,127 +1,52 @@
-import { FormEvent, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, Scale, Loader2 } from 'lucide-react';
-import MotionBackground from '../components/MotionBackground';
-
+import { useState, type FormEvent } from 'react';
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Scale, ArrowRight, Loader2 } from 'lucide-react';
+import { useSession } from '../lib/session';
+import { api, json, message } from '../lib/api';
+import { ErrorNotice } from '../components/Feedback';
 export default function LoginPage() {
-  const [username, setUsername] = useState('admin@alpha.com');
-  const [password, setPassword] = useState('adminadminadmin');
+  const [params] = useSearchParams();
+  const inviteToken = params.get('invite') || '';
+  const [registering, setRegistering] = useState(!!inviteToken);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [firm, setFirm] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (localStorage.getItem('jurix_token')) {
-      navigate('/');
-    }
-  }, [navigate]);
-
-  const handleLogin = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!username.trim() || !password.trim()) {
-      setError('Username and password are required.');
-      return;
-    }
-
-    setLoading(true);
+  const { user, loading, reload } = useSession();
+  if (!loading && user) return <Navigate to={inviteToken ? `/firm?invite=${encodeURIComponent(inviteToken)}` : '/matters'} replace />;
+  async function submit(event: FormEvent) {
+    event.preventDefault();
     setError('');
-
+    setBusy(true);
     try {
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: username.trim(), password }),
-      });
-
-      const text = await res.text();
-      let data: any = null;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        // text is fallback
-      }
-
-      if (!res.ok) {
-        throw new Error(data?.detail || data?.error || 'Login failed');
-      }
-
-      if (!data?.token) {
-        throw new Error('Server did not return a session token.');
-      }
-
-      localStorage.setItem('jurix_token', data.token);
-      navigate('/');
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
-    } finally {
-      setLoading(false);
+      await api(registering ? '/api/register' : '/api/login', { method: 'POST', body: json({ email: email.trim(), password, ...(registering ? { firm_name: firm.trim(), ...(inviteToken ? { invite_token: inviteToken } : {}) } : {}) }) }, false);
+      localStorage.removeItem('jurix_token');
+      await reload();
+      navigate(!registering && inviteToken ? `/firm?invite=${encodeURIComponent(inviteToken)}` : '/matters');
     }
-  };
-
-  return (
-    <div className="min-h-screen w-full relative flex flex-col items-center justify-center bg-[#0a0806] overflow-hidden text-[#FDFCF8]">
-      
-      <MotionBackground />
-
-      {/* Top Left Logo */}
-      <div className="z-10 absolute top-8 left-10 text-2xl font-serif tracking-widest text-[#C4A574] flex items-center gap-3 animate-in slide-in-from-top-4 fade-in duration-700">
-        <Scale size={32} />
-        JURIX
-      </div>
-
-      {/* Center Login Card */}
-      <div className="z-10 w-full max-w-md mx-auto px-6 animate-in slide-in-from-bottom-8 fade-in duration-1000 ease-out">
-        <div className="bg-[#12100E]/70 backdrop-blur-2xl p-10 rounded-3xl border border-[#C4A574]/30 shadow-[0_30px_60px_rgba(0,0,0,0.5)]">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-serif mb-3 tracking-tight">Chambers</h1>
-            <p className="text-sm text-[#C4A574] font-medium tracking-wide uppercase">Secure Firm Access</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-6">
-            {error && (
-              <div className="p-4 bg-red-900/30 text-red-200 text-sm rounded-xl border border-red-500/50 flex items-start gap-2">
-                <ShieldCheck size={18} className="shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Work email</label>
-                <input
-                  type="email"
-                  required
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="w-full bg-black/40 border border-[#C4A574]/20 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#C4A574] focus:border-transparent transition-all text-white placeholder-gray-600"
-                  placeholder="email@firm.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-400 mb-1.5 ml-1">Password</label>
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-black/40 border border-[#C4A574]/20 rounded-xl px-5 py-3.5 focus:outline-none focus:ring-2 focus:ring-[#C4A574] focus:border-transparent transition-all font-mono text-white placeholder-gray-600"
-                  placeholder="••••••••••••"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#C4A574] text-[#0a0806] rounded-xl px-4 py-4 font-bold tracking-wide hover:bg-[#d8b884] transition-all flex items-center justify-center gap-2 mt-4 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />}
-              {loading ? 'Authenticating...' : 'Enter Chambers'}
-            </button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
+    catch (error) {
+      setError(message(error));
+    }
+    finally {
+      setBusy(false);
+    }
+  }
+  return <div className="login-page">
+    <div className="login-backdrop"><img src="/img/desk.jpg" alt="" /></div>
+    <div className="login-brand"><Scale size={28} /> JURIX</div>
+    <div className="login-composition"><div className="login-intro"><p className="eyebrow">THE REVIEWER’S WORKSPACE</p><h1>Every clause.<br />{' '}A clearer view.</h1><p>Bring the contract, the evidence and your firm’s playbook into one considered review.</p><span className="intro-rule" /></div>
+      <section className="login-panel" aria-labelledby="login-heading"><p className="eyebrow">FIRM ACCESS</p><h2 id="login-heading">{registering ? 'Establish your workspace' : 'Welcome to chambers'}</h2><p className="muted">{registering ? 'Create an account for your firm.' : 'Sign in to continue your contract review.'}</p>
+        <form onSubmit={submit} className="form-stack"><ErrorNotice error={error} />
+          {params.get('joined') && <p className="notice success">Invitation accepted. Sign in again to access your new firm.</p>}{inviteToken && <p className="notice">Your invitation will connect this account to the inviting firm.</p>}
+          {registering && !inviteToken && <div><label htmlFor="firm-name">Firm name</label><input id="firm-name" value={firm} onChange={event => setFirm(event.target.value)} required autoComplete="organization" /></div>}
+          <div><label htmlFor="login-email">Work email</label><input id="login-email" type="email" value={email} onChange={event => setEmail(event.target.value)} required autoComplete="username" placeholder="you@firm.com" /></div>
+          <div><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={event => setPassword(event.target.value)} required minLength={registering ? 12 : undefined} autoComplete={registering ? 'new-password' : 'current-password'} />{registering && <p className="field-help">At least 12 characters.</p>}</div>
+          <button className="button primary full-width" disabled={busy || loading}>{busy ? <Loader2 className="spin" size={18} /> : <ArrowRight size={18} />}{busy ? 'Please wait…' : registering ? inviteToken ? 'Join invited firm' : 'Create firm account' : 'Enter workspace'}</button>
+        </form>
+        <button className="text-button login-switch" type="button" disabled={busy} onClick={() => { setRegistering(!registering); setError(''); }}>{registering ? 'Already have an account? Sign in' : 'New to Jurix? Create an account'}</button>
+      </section></div>
+    <p className="login-footer">Contract diligence, guided by your judgment.</p>
+  </div>;
 }
