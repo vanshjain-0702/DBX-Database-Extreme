@@ -35,6 +35,7 @@ jobs:
       - name: Test Jurix API, account isolation and evidence workflows
         run: |
           python -m pip check
+          mkdir -p .cache/jurix-ci-tests
           python -m pytest jurix --basetemp .cache/jurix-ci-tests
       - name: Install frontend dependencies from the lockfile
         working-directory: jurix/frontend
